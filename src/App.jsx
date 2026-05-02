@@ -1719,49 +1719,13 @@ function DataGuruView({ teachers, setTeachers }) {
   const handleEditSubmit = (e) => {
     e.preventDefault();
     setIsSaving(true); // Mengaktifkan efek loading
-    
-    const formData = new FormData(e.target);
-    const newData = {
-      name: formData.get('name'),
-      nipy: formData.get('nipy'),
-      gender: formData.get('gender'),
-      pob: formData.get('pob'),
-      dob: formData.get('dob'),
-      education: formData.get('education'),
-      status: formData.get('status'),
-      position: formData.get('position'),
-      tmt: formData.get('tmt'),
-      bankName: formData.get('bankName'),
-      bankAccount: formData.get('bankAccount'),
-      family: {
-        wife: Number(formData.get('wife')),
-        children: Number(formData.get('children'))
-      }
-    };
-    
-    // Memberikan jeda (delay) visual 600ms agar efek micro-interaction terlihat profesional
+    // Simulasi delay jaringan (bisa dihapus nanti, hanya untuk visual UX)
     setTimeout(() => {
+      // Data yang diperbarui
+      const newData = { ...formData };
+      
       if (modal.type === 'add') {
-        const newId = generateUniqueId('G-');
-        const calcYear = new Date(newData.tmt).getFullYear() || new Date().getFullYear();
-        const newTeacher = {
-          id: newId,
-          ...newData,
-          payroll: {
-            tahunMasaKerja: calcYear,
-            tunjanganMasaKerjaManual: TENURE_RATES[calcYear] || 0,
-            jabatans: [{ kategori: 'Guru', detail: newData.position, kinerja: 'Baik', nominal: 0 }],
-            pendidikan: { tingkat: newData.education, nominalOverride: EDU_RATES[newData.education] || 0 },
-            kompetensi: [],
-            disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
-            insentifTambahan: [],
-            potonganLainnya: [],
-            jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000 },
-            isNotified: false,
-            isConfirmed: false
-          }
-        };
-        setTeachers(prev => [...prev, newTeacher]);
+        setTeachers(prev => [{ ...newData, id: generateUniqueId('G-'), payroll: defaultPayrollData }, ...prev]);
       } else {
         setTeachers(prev => prev.map(t => t.id === modal.data.id ? { ...t, ...newData } : t));
       }
@@ -1771,109 +1735,138 @@ function DataGuruView({ teachers, setTeachers }) {
   };
 
   const handleExportCSV = () => {
-    // PERBAIKAN: Menggunakan titik koma (;) agar rapi di Excel format Indonesia
     const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'Pendidikan', 'Status', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
-    const csvRows = [headers.join(';')];
+    
+    // Pembersih agar CSV tidak bentrok dengan Excel
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      let str = String(val);
+      // Bungkus dengan tanda kutip jika teks mengandung koma, titik koma, atau enter
+      if (str.includes(',') || str.includes(';') || str.includes('\n') || str.includes('"')) {
+         return `"${str.replace(/"/g, '""')}"`;
+      }
+      // Tambahkan tanda petik tunggal ' agar angka 0 di awal NIPY tidak hilang di Excel
+      if (/^[0-9\-]+$/.test(str) && str.length >= 5) {
+         return `'${str}`; 
+      }
+      return str;
+    };
+
+    const csvRows = [headers.join(';')]; // Pakai titik koma (;) standar Indonesia
     
     teachers.forEach(t => {
       const row = [
-        `"=""${t.id}"""`, // Force string agar ID tidak terpotong
-        `"${t.name}"`, 
-        `"=""${t.nipy}"""`, // Force string agar NIPY dengan awalan 0 tidak hilang
-        `"${t.gender}"`, 
-        `"${t.pob}"`, 
-        `"=""${t.dob}"""`, // Force string agar format YYYY-MM-DD tidak diubah oleh Excel menjadi format lokal
-        `"${t.education}"`, 
-        `"${t.status}"`, 
-        `"${t.position}"`, 
-        `"=""${t.tmt}"""`, // Force string YYYY-MM-DD
+        t.id, 
+        t.name, 
+        t.nipy, 
+        t.gender, 
+        t.pob, 
+        t.dob, 
+        t.education, 
+        t.status, 
+        t.position, 
+        t.tmt, 
         (t.family?.wife || 0), 
         (t.family?.children || 0)
-      ];
+      ].map(escapeCSV);
       csvRows.push(row.join(';'));
     });
     
-    // Tambahkan BOM (Byte Order Mark) agar karakter UTF-8 terbaca sempurna oleh Excel
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
     const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Data_Pegawai_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Profil_Dasar_Pegawai_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-const handleImportCSV = (e) => {
+  const handleImportCSV = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    // TAMBALAN CERDAS: Parser Tanggal Universal (Mengatasi format Excel bahasa Indonesia & Inggris)
+
+    // Parser Tanggal Super Pintar
     const parseDateSmart = (dateStr) => {
       if (!dateStr) return '';
       let str = dateStr.trim().toLowerCase();
-      
-      // 1. Jika sudah YYYY-MM-DD
       if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
 
-      // 2. Format DD/MM/YYYY atau DD-MM-YYYY
       const regexSlash = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
       const matchSlash = str.match(regexSlash);
       if (matchSlash) {
-         let d = matchSlash[1].padStart(2, '0');
-         let m = matchSlash[2].padStart(2, '0');
-         let y = matchSlash[3];
-         return `${y}-${m}-${d}`;
+         return `${matchSlash[3]}-${matchSlash[2].padStart(2, '0')}-${matchSlash[1].padStart(2, '0')}`;
       }
 
-      // 3. Format Excel Text Indonesia (Contoh: 31-des-83 atau 06-mar-1975)
       const bulanMap = { 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mei': '05', 'jun': '06', 'jul': '07', 'agu': '08', 'sep': '09', 'okt': '10', 'nov': '11', 'des': '12', 'oct': '10', 'dec': '12' };
       const regexIndo = /^(\d{1,2})-(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|oct|nov|des|dec)-(\d{2,4})$/;
       const matchIndo = str.match(regexIndo);
       if (matchIndo) {
-        let d = matchIndo[1].padStart(2, '0');
-        let m = bulanMap[matchIndo[2]];
         let y = matchIndo[3];
-        if (y.length === 2) y = parseInt(y) > 30 ? `19${y}` : `20${y}`; // Asumsi thn 19xx vs 20xx
-        return `${y}-${m}-${d}`;
+        if (y.length === 2) y = parseInt(y) > 30 ? `19${y}` : `20${y}`;
+        return `${y}-${bulanMap[matchIndo[2]]}-${matchIndo[1].padStart(2, '0')}`;
       }
 
-      // 4. Fallback bawaan Javascript
       const parsedDate = new Date(str);
-      if (!isNaN(parsedDate.getTime())) {
-        return parsedDate.toISOString().split('T')[0];
-      }
-      return dateStr; // Kembalikan apa adanya jika gagal
+      if (!isNaN(parsedDate.getTime())) return parsedDate.toISOString().split('T')[0];
+      return dateStr; 
     };
 
-    // TAMBALAN CERDAS: Pembersih nilai cell yang lebih kuat
-    const cleanCellValue = (val) => {
-      if (!val) return '';
-      let cleaned = val.trim();
-      if (cleaned.startsWith('"') && cleaned.endsWith('"')) cleaned = cleaned.substring(1, cleaned.length - 1);
-      if (cleaned.startsWith('="') && cleaned.endsWith('"')) cleaned = cleaned.substring(2, cleaned.length - 1);
-      return cleaned.replace(/""/g, '"').trim();
+    // ALGORITMA PARSER CSV SEJATI (Tahan banting dari format Excel)
+    const parseCSVLine = (line, delimiter) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                  current += '"';
+                  i++; // Lewati escaped quote
+              } else {
+                  inQuotes = !inQuotes;
+              }
+          } else if (char === delimiter && !inQuotes) {
+              result.push(current);
+              current = '';
+          } else {
+              current += char;
+          }
+      }
+      result.push(current);
+      return result.map(val => {
+          let cln = val.trim();
+          // Bersihkan trik Excel sebelumnya yang mungkin tersisa
+          if (cln.startsWith('="') && cln.endsWith('"')) cln = cln.substring(2, cln.length - 1);
+          if (cln.startsWith("'")) cln = cln.substring(1); 
+          return cln;
+      });
     };
 
     const reader = new FileReader();
     reader.onload = (evt) => {
       const text = evt.target.result;
-      const lines = text.split('\n');
-      if(lines.length < 2) return;
+      const lines = text.split(/\r?\n/); // Dukung format Windows & Mac
+      if(lines.length < 2) {
+         alert("Format file kosong atau tidak valid.");
+         return;
+      }
       
-      // Deteksi pemisah koma atau titik koma secara cerdas
-      const separator = lines[0].includes(';') ? ';' : ',';
+      // Deteksi otomatis separator (Koma, Titik Koma, atau Tab)
+      let separator = ',';
+      if (lines[0].includes(';')) separator = ';';
+      else if (lines[0].includes('\t')) separator = '\t';
       
       const importedTeachers = [];
+      let successCount = 0;
+
       for(let i = 1; i < lines.length; i++) {
         if(!lines[i].trim()) continue; // Abaikan baris kosong
         
-        // Memisahkan nilai dengan mengabaikan separator di dalam tanda kutip
-        const regex = new RegExp(`${separator}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
-        const values = lines[i].split(regex).map(cleanCellValue);
+        const values = parseCSVLine(lines[i], separator);
         
-        // Pastikan baris memiliki minimal data Nama (values[1]) untuk menghindari error NaN
+        // Pastikan kolom Nama (index 1) ada isinya untuk keamanan
         if (values.length >= 10 && values[1] !== "") {
            const impId = values[0];
            const impName = values[1];
@@ -1884,7 +1877,7 @@ const handleImportCSV = (e) => {
            const childrenCount = values.length >= 12 && values[11] !== "" ? Number(values[11]) : 0;
 
            const teacherObj = existingId ? { ...existingId } : { 
-             id: impId && impId !== '""' ? impId : generateUniqueId('G-'),
+             id: impId && impId !== '' ? impId : generateUniqueId('G-'),
              family: { wife: wifeStatus, children: childrenCount },
              payroll: {
                 tahunMasaKerja: new Date().getFullYear(),
@@ -1895,7 +1888,7 @@ const handleImportCSV = (e) => {
                 disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
                 insentifTambahan: [],
                 potonganLainnya: [],
-                jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000 },
+                jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
                 isNotified: false,
                 isConfirmed: false
              } 
@@ -1916,6 +1909,7 @@ const handleImportCSV = (e) => {
            }
            
            importedTeachers.push(teacherObj);
+           successCount++;
         }
       }
 
@@ -1925,9 +1919,7 @@ const handleImportCSV = (e) => {
         return Array.from(map.values());
       });
       
-      // Peringatan penting untuk User
-      alert(`Berhasil membaca ${importedTeachers.length} data pegawai.\n\nPENTING: Data ini baru masuk ke layar. Jika di aplikasi ada tombol "Simpan ke Database" atau ikon "Sync", JANGAN LUPA DIKLIK agar tersimpan permanen ke Google Sheets!`);
-      
+      alert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Tunggu indikator Cloud menjadi "Tersimpan" agar masuk ke Google Sheet.`);
       e.target.value = null;
     };
     reader.readAsText(file);
@@ -2184,7 +2176,10 @@ const handleImportCSV = (e) => {
               {filtered.map(t => (
                 <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
                   <td className="p-4">
-                    {/* PERBAIKAN: Menambahkan indikator umur dengan failsafe */}
+                    <div className="font-bold text-slate-800 dark:text-slate-200">{t.name}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{t.nipy}</div>
+                  </td>
+                  <td className="p-4">
                     <div className="text-slate-700 dark:text-slate-300 font-medium">
                       {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({!isNaN(new Date(t.dob).getTime()) ? new Date().getFullYear() - new Date(t.dob).getFullYear() : '?'} thn)</span>
                     </div>
@@ -2204,28 +2199,6 @@ const handleImportCSV = (e) => {
                   <td className="p-4">
                     <div className="text-slate-700 dark:text-slate-300 font-medium">{formatDateId(t.tmt)}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{!isNaN(new Date(t.tmt).getTime()) ? new Date().getFullYear() - new Date(t.tmt).getFullYear() : '?'} Tahun</div>
-                  </td>
-                  <td className="p-4">
-                    {/* PERBAIKAN: Menambahkan indikator umur */}
-                    <div className="text-slate-700 dark:text-slate-300 font-medium">
-                      {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({new Date().getFullYear() - new Date(t.dob).getFullYear()} thn)</span>
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5">Gender: {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                      {t.status}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="font-medium text-slate-700 dark:text-slate-300">{t.position}</div>
-                  </td>
-                  <td className="p-4 text-slate-700 dark:text-slate-300 font-medium">
-                    {t.education}
-                  </td>
-                  <td className="p-4">
-                    <div className="text-slate-700 dark:text-slate-300 font-medium">{formatDateId(t.tmt)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{new Date().getFullYear() - new Date(t.tmt).getFullYear()} Tahun</div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
