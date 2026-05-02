@@ -6536,7 +6536,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                 <TrendingUp size={16} className="text-indigo-500" /> Tren Take Home Pay Anda
               </h4>
               <div className="h-40 w-full relative">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="300%">
                   <LineChart data={[...riwayatAsli].reverse().slice(-6)} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.3} />
                     <XAxis dataKey="periode" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} dy={10} />
