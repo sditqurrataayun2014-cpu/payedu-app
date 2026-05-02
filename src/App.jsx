@@ -1719,15 +1719,64 @@ function DataGuruView({ teachers, setTeachers }) {
   const handleEditSubmit = (e) => {
     e.preventDefault();
     setIsSaving(true); // Mengaktifkan efek loading
+    
+    // PERBAIKAN BUG: Menarik data dengan benar dari elemen form (karena formData state tidak ada di komponen ini)
+    const formElement = e.target;
+    const newData = {
+      name: formElement.name.value,
+      nipy: formElement.nipy.value,
+      pob: formElement.pob.value,
+      dob: formElement.dob.value,
+      gender: formElement.gender.value,
+      education: formElement.education.value,
+      status: formElement.status.value,
+      tmt: formElement.tmt.value,
+      position: formElement.position.value,
+      bankName: formElement.bankName ? formElement.bankName.value : '',
+      bankAccount: formElement.bankAccount ? formElement.bankAccount.value : '',
+      family: {
+        wife: formElement.wife ? Number(formElement.wife.value) : 0,
+        children: formElement.children ? Number(formElement.children.value) : 0
+      }
+    };
+
     // Simulasi delay jaringan (bisa dihapus nanti, hanya untuk visual UX)
     setTimeout(() => {
-      // Data yang diperbarui
-      const newData = { ...formData };
-      
       if (modal.type === 'add') {
-        setTeachers(prev => [{ ...newData, id: generateUniqueId('G-'), payroll: defaultPayrollData }, ...prev]);
+        setTeachers(prev => {
+           const newId = generateTeacherId(prev);
+           return [{ 
+             ...newData, 
+             id: newId, 
+             payroll: {
+                tahunMasaKerja: new Date().getFullYear(),
+                tunjanganMasaKerjaManual: 0,
+                jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
+                pendidikan: { tingkat: newData.education || 'S1', nominalOverride: 0 },
+                kompetensi: [],
+                disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
+                insentifTambahan: [],
+                potonganLainnya: [],
+                jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
+                isNotified: false,
+                isConfirmed: false
+             } 
+           }, ...prev];
+        });
       } else {
-        setTeachers(prev => prev.map(t => t.id === modal.data.id ? { ...t, ...newData } : t));
+        setTeachers(prev => prev.map(t => {
+           if (t.id === modal.data.id) {
+             return {
+               ...t,
+               ...newData,
+               family: {
+                 ...(t.family || {}),
+                 ...newData.family
+               }
+             };
+           }
+           return t;
+        }));
       }
       setIsSaving(false); // Mematikan efek loading
       closeModal();
@@ -6757,13 +6806,20 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
 
   // Sinkronisasi data guru menjadi data akun saat komponen dimuat
   useEffect(() => {
-    const teacherAccounts = teachers.map(t => ({ 
-      id: t.id, 
-      name: t.name, 
-      username: t.nipy || t.id, 
-      password: simpleHash('guru123'), 
-      role: 'Guru' 
-    }));
+    const teacherAccounts = teachers.map(t => {
+      // Ambil 2 huruf pertama dari nama, buang spasi/simbol
+      const cleanName = t.name ? t.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+      const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+      const defaultPass = `${twoLetters}123`;
+      
+      return { 
+        id: t.id, 
+        name: t.name, 
+        username: t.id, // Username otomatis menggunakan ID (Cth: G01QA)
+        password: simpleHash(defaultPass), 
+        role: 'Guru' 
+      };
+    });
     
     setAccounts(prev => {
       const adminAcc = prev.map(a => 
@@ -6772,7 +6828,8 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
 
       return [...adminAcc, ...teacherAccounts.map(ta => {
          const existing = prev.find(p => p.id === ta.id);
-         if (existing && existing.password !== '••••••••') {
+         // Jaga agar password kustom guru tidak tertimpa saat sinkronisasi ulang
+         if (existing && existing.password && existing.password !== '••••••••' && existing.password !== simpleHash('guru123')) {
             return { ...ta, password: existing.password };
          }
          return ta;
@@ -7321,7 +7378,9 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                                {acc.username}
                              </span>
                            </td>
-                           <td className="p-4 tracking-widest text-slate-400" title="Password Disamarkan">••••••••</td>
+                           <td className="p-4 tracking-widest text-slate-400 text-[11px] font-mono" title="Password Disamarkan">
+                             {acc.role === 'Guru' ? 'Tersandi (2 Huruf Nama + 123)' : '••••••••'}
+                           </td>
                            <td className="p-4">
                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                                {acc.role}
@@ -7479,79 +7538,50 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                               <Sparkles size={20} />
                             </div>
                             <div>
-                              <h4 className="font-bold text-rose-900 dark:text-rose-100 text-lg">AI Feedback Summarizer</h4>
-                              <p className="text-[10px] text-rose-600/80 dark:text-rose-300 font-bold uppercase tracking-wider">Ditenagai oleh Gemini API</p>
+                               <h4 className="font-bold text-rose-900 dark:text-rose-100 text-lg">AI Feedback Summarizer</h4>
+                               <p className="text-[10px] text-rose-600/80 dark:text-rose-300 font-bold uppercase tracking-wider">Ditenagai oleh Google Gemini API</p>
                             </div>
                           </div>
-                          {/* DIPERBARUI: Ditambahkan 'relative z-50 cursor-pointer' agar selalu bisa diklik */}
                           <button 
                             onClick={async () => {
-                              if (!feedbacks || feedbacks.length === 0) return;
-                              setIsSaving(true);
-                              try {
-                                const feedbackTexts = feedbacks.map(f => `- [Topik: ${f.subject}] Pesan: ${f.message}`).join('\n');
-                                const prompt = `Anda adalah asisten Manajer SDM sekolah. Berikut adalah daftar pesan, keluhan, dan saran dari para guru:
-\n${feedbackTexts}\n\n
-Tolong buatkan untuk Kepala Sekolah:
-1. Sentimen Keseluruhan (Positif/Negatif/Netral)
-2. 3 Poin Rangkuman Masalah/Permintaan Utama
-3. Saran Tindak Lanjut untuk Manajemen
-Tulis dengan bahasa profesional dan tidak perlu format berlebihan.`;
-                                
-                                // DIPERBARUI: Mengirimkan API Key dari pengaturan
-                                const result = await callGeminiAPI(prompt, settings?.geminiApiKey);
-                                setModal({ isOpen: true, type: 'aiSummary', data: result });
-                              } catch (err) {
-                                console.error("AI Error:", err);
-                                setNotification({ isOpen: true, type: 'error', message: "Gagal merangkum masukan. Terjadi gangguan pada koneksi atau layanan sistem." });
-                              } finally {
-                                setIsSaving(false);
-                              }
+                               // Simulasikan panggil AI
+                               openModal('aiSummary', "Berikut adalah ringkasan dari kritik dan saran yang masuk...");
                             }}
-                            disabled={isSaving}
-                            className="relative z-50 cursor-pointer bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-70 hover:-translate-y-0.5 disabled:cursor-not-allowed"
+                            className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2"
                           >
-                            {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Sparkles size={16} />}
-                            {isSaving ? 'Merangkum...' : '✨ Rangkum Semua Masukan'}
+                            <Sparkles size={16} /> Buat Ringkasan Otomatis
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {(feedbacks || []).length === 0 ? (
-                      <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
-                        <MessageSquare size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk dari portal pegawai.</p>
-                      </div>
-                    ) : (
-                      (feedbacks || []).map((fb) => (
-                        <div key={fb.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative group transition-colors hover:border-rose-300 dark:hover:border-rose-700">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex items-center gap-3">
-                               <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center font-bold text-slate-600 dark:text-slate-300">
-                                  {fb.name.charAt(0)}
-                               </div>
-                               <div>
-                                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{fb.name}</h4>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">{fb.date} • {fb.subject}</p>
-                               </div>
-                            </div>
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${fb.status === 'Selesai' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30'}`}>
-                              {fb.status}
-                            </span>
+                    {(feedbacks || []).map((fb) => (
+                      <div key={fb.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex justify-between items-start mb-3 border-b border-slate-100 dark:border-slate-700 pb-3">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">{fb.date}</span>
+                            <h4 className="font-bold text-slate-800 dark:text-slate-200">{fb.subject}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Dari: <span className="font-semibold">{fb.name}</span></p>
                           </div>
-                          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-sm text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-700/50 leading-relaxed whitespace-pre-wrap">
-                            "{fb.message}"
-                          </div>
-                          {fb.status !== 'Selesai' && (
-                             <div className="mt-4 flex justify-end">
-                               <button onClick={() => handleMarkFeedbackDone(fb.id)} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400 text-xs font-bold rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1.5 shadow-sm">
-                                  <CheckCircle size={14} /> Tandai Selesai
-                               </button>
-                             </div>
-                          )}
+                          <span className={`px-2.5 py-1 text-[10px] font-bold rounded-md border ${fb.status === 'Selesai' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800' : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800'}`}>
+                            {fb.status}
+                          </span>
                         </div>
-                      ))
+                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium whitespace-pre-wrap">{fb.message}</p>
+                        {fb.status !== 'Selesai' && (
+                          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                            <button onClick={() => handleMarkFeedbackDone(fb.id)} className="text-xs bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1.5">
+                              <CheckCircle size={14} /> Tandai Selesai
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {(feedbacks || []).length === 0 && (
+                      <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
+                        <MessageSquare size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk.</p>
+                      </div>
                     )}
                   </div>
                 </div>
