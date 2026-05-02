@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'PayEdu - Portal Penggajian',
-        short_name: 'PayEdu',
+        name: 'Sistem Penggajian',
+        short_name: 'Gajian SD-IT QA',
         description: 'Sistem Informasi SDM dan Finansial Sekolah',
         theme_color: '#2563eb', // Warna header di peramban HP
         background_color: '#f8fafc',
