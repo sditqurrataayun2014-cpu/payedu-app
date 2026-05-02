@@ -316,10 +316,26 @@ export default function App() {
       const data = JSON.parse(text);
       
       if (data.status === 'success') {
-        // PERBAIKAN BUG GHOSTING: Menangani saat Google Sheet dihapus manual (kosong)
-        const serverSettings = data.data?.settings && Object.keys(data.data.settings).length > 0 
-            ? data.data.settings 
-            : defaultGeneralSettings;
+        // PERBAIKAN BUG: Melindungi Pengaturan Sistem agar tidak terhapus jika Google Sheet dikosongkan manual
+        let serverSettings = defaultGeneralSettings;
+        
+        if (data.data?.settings && Object.keys(data.data.settings).length > 0) {
+            serverSettings = data.data.settings;
+        } else {
+            // Jika server kehilangan data pengaturan, pulihkan dari memori lokal (Failsafe Cerdas)
+            const localSettingsStr = localStorage.getItem('payedu_settings');
+            if (localSettingsStr) {
+                const parsedLocal = JSON.parse(localSettingsStr);
+                if (parsedLocal && parsedLocal.appName) {
+                    serverSettings = parsedLocal;
+                    // Kirim ulang ke server secara diam-diam agar JSON Google Sheet kembali normal
+                    fetch(GOOGLE_SHEETS_API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
+                    }).catch(e => console.error("Failsafe save settings error:", e));
+                }
+            }
+        }
         
         // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
         // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
@@ -6912,7 +6928,18 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
      if (confirmResetDb.keyword === 'RESET PEGAWAI') {
         setTeachers([]);
         setConfirmResetDb({ isOpen: false, keyword: '' });
-        setTimeout(() => alert("Proses eksekusi berhasil. Seluruh data pegawai telah dibersihkan dari database."), 300);
+        
+        // TAMBALAN CERDAS: Memaksa penyimpanan ulang settings sesaat setelah reset
+        // Mencegah bug di mana backend Google Apps Script secara tidak sengaja menghapus setting saat array guru kosong
+        setTimeout(() => {
+           const payloadWithTime = { ...settings, lastModified: Date.now() };
+           fetch(GOOGLE_SHEETS_API_URL, {
+             method: 'POST',
+             body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
+           }).catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
+        }, 500);
+
+        setTimeout(() => alert("Proses eksekusi berhasil. Seluruh data pegawai telah dibersihkan dari database, namun Pengaturan Logo & Sekolah tetap aman!"), 300);
      } else {
         alert("Reset dibatalkan. Konfirmasi ketikan tidak sesuai.");
      }
