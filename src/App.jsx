@@ -108,8 +108,10 @@ const formatRp = (angka) => {
 
 const formatDateId = (dateString) => {
   if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return dateString; // Failsafe untuk mencegah Invalid Date merusak UI
   const options = { day: 'numeric', month: 'long', year: 'numeric' };
-  return new Date(dateString).toLocaleDateString('id-ID', options);
+  return d.toLocaleDateString('id-ID', options);
 };
 
 // Fungsi Hash Sederhana untuk menyamarkan password di LocalStorage
@@ -314,22 +316,25 @@ export default function App() {
       const data = JSON.parse(text);
       
       if (data.status === 'success') {
-        // ... (Logika Update Master Data seperti sebelumnya) ...
+        // PERBAIKAN BUG GHOSTING: Menangani saat Google Sheet dihapus manual (kosong)
+        const serverSettings = data.data?.settings && Object.keys(data.data.settings).length > 0 
+            ? data.data.settings 
+            : defaultGeneralSettings;
         
-        // 3. UPDATE PENGATURAN SISTEM & CEK VERSI
-        if (data.data?.settings && Object.keys(data.data.settings).length > 0) {
-          // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
-          if (isBackgroundSync) {
-            if (data.data.settings.lastModified > generalSettings.lastModified) {
-               setHasConflict(true); // Kunci Auto-Save!
-               return; // Hentikan proses penimpaan state lokal
-            }
-          } else {
-            setGeneralSettings(data.data.settings);
-            // Update state lain jika ini fetch manual (bukan background)
-            if (data.data?.teachers) setTeachers(data.data.teachers);
-            setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
+        // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
+        // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
+        const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
+        
+        // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
+        if (isBackgroundSync) {
+          if (serverSettings.lastModified > generalSettings.lastModified) {
+             setHasConflict(true); // Kunci Auto-Save!
+             return; // Hentikan proses penimpaan state lokal
           }
+        } else {
+          setGeneralSettings(serverSettings);
+          setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
+          setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
         }
       }
     } catch (err) {
@@ -1756,16 +1761,16 @@ function DataGuruView({ teachers, setTeachers }) {
     
     teachers.forEach(t => {
       const row = [
-        `"${t.id}"`, 
+        `"=""${t.id}"""`, // Force string agar ID tidak terpotong
         `"${t.name}"`, 
         `"=""${t.nipy}"""`, // Force string agar NIPY dengan awalan 0 tidak hilang
         `"${t.gender}"`, 
         `"${t.pob}"`, 
-        `"${t.dob}"`, 
+        `"=""${t.dob}"""`, // Force string agar format YYYY-MM-DD tidak diubah oleh Excel menjadi format lokal
         `"${t.education}"`, 
         `"${t.status}"`, 
         `"${t.position}"`, 
-        `"${t.tmt}"`, 
+        `"=""${t.tmt}"""`, // Force string YYYY-MM-DD
         (t.family?.wife || 0), 
         (t.family?.children || 0)
       ];
@@ -1788,6 +1793,53 @@ const handleImportCSV = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
+    // TAMBALAN CERDAS: Parser Tanggal Universal (Mengatasi format Excel bahasa Indonesia & Inggris)
+    const parseDateSmart = (dateStr) => {
+      if (!dateStr) return '';
+      let str = dateStr.trim().toLowerCase();
+      
+      // 1. Jika sudah YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+      // 2. Format DD/MM/YYYY atau DD-MM-YYYY
+      const regexSlash = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+      const matchSlash = str.match(regexSlash);
+      if (matchSlash) {
+         let d = matchSlash[1].padStart(2, '0');
+         let m = matchSlash[2].padStart(2, '0');
+         let y = matchSlash[3];
+         return `${y}-${m}-${d}`;
+      }
+
+      // 3. Format Excel Text Indonesia (Contoh: 31-des-83 atau 06-mar-1975)
+      const bulanMap = { 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mei': '05', 'jun': '06', 'jul': '07', 'agu': '08', 'sep': '09', 'okt': '10', 'nov': '11', 'des': '12', 'oct': '10', 'dec': '12' };
+      const regexIndo = /^(\d{1,2})-(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|oct|nov|des|dec)-(\d{2,4})$/;
+      const matchIndo = str.match(regexIndo);
+      if (matchIndo) {
+        let d = matchIndo[1].padStart(2, '0');
+        let m = bulanMap[matchIndo[2]];
+        let y = matchIndo[3];
+        if (y.length === 2) y = parseInt(y) > 30 ? `19${y}` : `20${y}`; // Asumsi thn 19xx vs 20xx
+        return `${y}-${m}-${d}`;
+      }
+
+      // 4. Fallback bawaan Javascript
+      const parsedDate = new Date(str);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate.toISOString().split('T')[0];
+      }
+      return dateStr; // Kembalikan apa adanya jika gagal
+    };
+
+    // TAMBALAN CERDAS: Pembersih nilai cell yang lebih kuat
+    const cleanCellValue = (val) => {
+      if (!val) return '';
+      let cleaned = val.trim();
+      if (cleaned.startsWith('"') && cleaned.endsWith('"')) cleaned = cleaned.substring(1, cleaned.length - 1);
+      if (cleaned.startsWith('="') && cleaned.endsWith('"')) cleaned = cleaned.substring(2, cleaned.length - 1);
+      return cleaned.replace(/""/g, '"').trim();
+    };
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       const text = evt.target.result;
@@ -1803,7 +1855,7 @@ const handleImportCSV = (e) => {
         
         // Memisahkan nilai dengan mengabaikan separator di dalam tanda kutip
         const regex = new RegExp(`${separator}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
-        const values = lines[i].split(regex).map(v => v.replace(/^"|"$/g, '').replace(/^=""|"""$/g, '').replace(/^"|"$/g, '').trim());
+        const values = lines[i].split(regex).map(cleanCellValue);
         
         // Pastikan baris memiliki minimal data Nama (values[1]) untuk menghindari error NaN
         if (values.length >= 10 && values[1] !== "") {
@@ -1812,8 +1864,8 @@ const handleImportCSV = (e) => {
            
            const existingId = teachers.find(t => t.id === impId || t.name.toLowerCase() === impName?.toLowerCase());
            
-           const wifeStatus = values.length >= 12 ? Number(values[10]) : 0;
-           const childrenCount = values.length >= 12 ? Number(values[11]) : 0;
+           const wifeStatus = values.length >= 12 && values[10] !== "" ? Number(values[10]) : 0;
+           const childrenCount = values.length >= 12 && values[11] !== "" ? Number(values[11]) : 0;
 
            const teacherObj = existingId ? { ...existingId } : { 
              id: impId && impId !== '""' ? impId : generateUniqueId('G-'),
@@ -1837,11 +1889,11 @@ const handleImportCSV = (e) => {
            teacherObj.nipy = values[2] || '-';
            teacherObj.gender = values[3] || 'L';
            teacherObj.pob = values[4] || '-';
-           teacherObj.dob = values[5] || '';
+           teacherObj.dob = parseDateSmart(values[5]);
            teacherObj.education = values[6] || '-';
            teacherObj.status = values[7] || '-';
            teacherObj.position = values[8] || '-';
-           teacherObj.tmt = values[9] || '';
+           teacherObj.tmt = parseDateSmart(values[9]);
            
            if(existingId) {
              teacherObj.family = { wife: wifeStatus, children: childrenCount };
@@ -2116,10 +2168,26 @@ const handleImportCSV = (e) => {
               {filtered.map(t => (
                 <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
                   <td className="p-4">
-                    <div>
-                      <div className="font-bold text-slate-800 dark:text-slate-200">{t.name}</div>
-                      <div className="text-xs text-slate-500">NIPY: {t.nipy}</div>
+                    {/* PERBAIKAN: Menambahkan indikator umur dengan failsafe */}
+                    <div className="text-slate-700 dark:text-slate-300 font-medium">
+                      {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({!isNaN(new Date(t.dob).getTime()) ? new Date().getFullYear() - new Date(t.dob).getFullYear() : '?'} thn)</span>
                     </div>
+                    <div className="text-xs text-slate-500 mt-0.5">Gender: {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+                  </td>
+                  <td className="p-4">
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="font-medium text-slate-700 dark:text-slate-300">{t.position}</div>
+                  </td>
+                  <td className="p-4 text-slate-700 dark:text-slate-300 font-medium">
+                    {t.education}
+                  </td>
+                  <td className="p-4">
+                    <div className="text-slate-700 dark:text-slate-300 font-medium">{formatDateId(t.tmt)}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{!isNaN(new Date(t.tmt).getTime()) ? new Date().getFullYear() - new Date(t.tmt).getFullYear() : '?'} Tahun</div>
                   </td>
                   <td className="p-4">
                     {/* PERBAIKAN: Menambahkan indikator umur */}
