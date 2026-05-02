@@ -277,7 +277,7 @@ export default function App() {
   
   const [teachers, setTeachers] = useState(() => {
     const saved = localStorage.getItem('payedu_teachers');
-    return saved ? JSON.parse(saved) : initialTeachers;
+    return saved ? JSON.parse(saved) : [];
   });
 
   // State Global untuk Pengaturan Aplikasi dengan LocalStorage
@@ -1784,7 +1784,7 @@ function DataGuruView({ teachers, setTeachers }) {
     document.body.removeChild(link);
   };
 
-  const handleImportCSV = (e) => {
+const handleImportCSV = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
@@ -1799,20 +1799,19 @@ function DataGuruView({ teachers, setTeachers }) {
       
       const importedTeachers = [];
       for(let i = 1; i < lines.length; i++) {
-        if(!lines[i].trim()) continue;
+        if(!lines[i].trim()) continue; // Abaikan baris kosong
         
-        // Memisahkan nilai dengan mengabaikan separator yang berada di dalam tanda kutip
+        // Memisahkan nilai dengan mengabaikan separator di dalam tanda kutip
         const regex = new RegExp(`${separator}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
         const values = lines[i].split(regex).map(v => v.replace(/^"|"$/g, '').replace(/^=""|"""$/g, '').replace(/^"|"$/g, '').trim());
         
-        if (values.length >= 10) {
+        // Pastikan baris memiliki minimal data Nama (values[1]) untuk menghindari error NaN
+        if (values.length >= 10 && values[1] !== "") {
            const impId = values[0];
            const impName = values[1];
            
-           // FITUR BARU: Deteksi Cerdas berdasarkan ID atau Nama Lengkap
            const existingId = teachers.find(t => t.id === impId || t.name.toLowerCase() === impName?.toLowerCase());
            
-           // Parsing Family Data dari CSV jika ada (Kolom ke 10 dan 11)
            const wifeStatus = values.length >= 12 ? Number(values[10]) : 0;
            const childrenCount = values.length >= 12 ? Number(values[11]) : 0;
 
@@ -1820,10 +1819,10 @@ function DataGuruView({ teachers, setTeachers }) {
              id: impId && impId !== '""' ? impId : generateUniqueId('G-'),
              family: { wife: wifeStatus, children: childrenCount },
              payroll: {
-                tahunMasaKerja: new Date(values[9]).getFullYear() || new Date().getFullYear(),
-                tunjanganMasaKerjaManual: TENURE_RATES[new Date(values[9]).getFullYear()] || 0,
-                jabatans: [{ kategori: 'Guru', detail: values[8], kinerja: 'Baik', nominal: 0 }],
-                pendidikan: { tingkat: values[6], nominalOverride: EDU_RATES[values[6]] || 0 },
+                tahunMasaKerja: new Date().getFullYear(),
+                tunjanganMasaKerjaManual: 0,
+                jabatans: [{ kategori: 'Guru', detail: values[8] || '', kinerja: 'Baik', nominal: 0 }],
+                pendidikan: { tingkat: values[6] || '', nominalOverride: 0 },
                 kompetensi: [],
                 disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
                 insentifTambahan: [],
@@ -1835,14 +1834,15 @@ function DataGuruView({ teachers, setTeachers }) {
            };
 
            teacherObj.name = impName;
-           teacherObj.nipy = values[2];
-           teacherObj.gender = values[3];
-           teacherObj.pob = values[4];
-           teacherObj.dob = values[5];
-           teacherObj.education = values[6];
-           teacherObj.status = values[7];
-           teacherObj.position = values[8];
-           teacherObj.tmt = values[9];
+           teacherObj.nipy = values[2] || '-';
+           teacherObj.gender = values[3] || 'L';
+           teacherObj.pob = values[4] || '-';
+           teacherObj.dob = values[5] || '';
+           teacherObj.education = values[6] || '-';
+           teacherObj.status = values[7] || '-';
+           teacherObj.position = values[8] || '-';
+           teacherObj.tmt = values[9] || '';
+           
            if(existingId) {
              teacherObj.family = { wife: wifeStatus, children: childrenCount };
            }
@@ -1856,12 +1856,15 @@ function DataGuruView({ teachers, setTeachers }) {
         importedTeachers.forEach(t => map.set(t.id, t));
         return Array.from(map.values());
       });
-      alert(`Berhasil mengimpor dan memperbarui ${importedTeachers.length} data pegawai.`);
+      
+      // Peringatan penting untuk User
+      alert(`Berhasil membaca ${importedTeachers.length} data pegawai.\n\nPENTING: Data ini baru masuk ke layar. Jika di aplikasi ada tombol "Simpan ke Database" atau ikon "Sync", JANGAN LUPA DIKLIK agar tersimpan permanen ke Google Sheets!`);
+      
       e.target.value = null;
     };
     reader.readAsText(file);
   };
-
+  
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
