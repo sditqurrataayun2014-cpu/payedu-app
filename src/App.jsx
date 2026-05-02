@@ -666,7 +666,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin }) 
         onLogin(authUser);
       } else {
         recordLogin(username || 'Unknown', 'Unknown', 'Gagal (Password Salah)');
-        setError('Username atau password salah! (Coba: admin/admin123, kepsek/kepsek123, atau G001/guru123)');
+        setError('Username atau password salah! (kalau lupa bisa tanya Pa Akbar)');
         setIsLoading(false);
       }
     }, 800); // Delay 800ms
