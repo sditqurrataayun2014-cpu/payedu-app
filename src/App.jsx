@@ -645,10 +645,10 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin }) 
          authUser = { role: acc.role === 'Admin' ? 'admin' : acc.role, name: acc.name, id: acc.id || username };
       }
       // 2. Fallback Hardcoded
-      else if (username === 'admin' && password === 'admin123') {
+      else if (username === 'Akbar' && password === 'Boy2014') {
         recordLogin('Administrator System', 'Admin', 'Sukses');
         authUser = { role: 'admin', name: 'Administrator System' };
-      } else if (username === 'kepsek' && password === 'kepsek123') {
+      } else if (username === 'kepsek' && password === 'Ilwani2010') {
         recordLogin('Kepala Sekolah', 'Kepala Sekolah', 'Sukses');
         authUser = { role: 'Kepala Sekolah', name: 'Kepala Sekolah' };
       } else if (username.startsWith('G') && password === 'guru123') {
@@ -6675,8 +6675,8 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
     const saved = localStorage.getItem('payedu_accounts');
     if (saved) return JSON.parse(saved);
     return [
-      { id: 'admin-1', name: 'Administrator System', username: 'admin', password: simpleHash('admin123'), role: 'Admin' },
-      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('kepsek123'), role: 'Kepala Sekolah' }
+      { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
     ];
   });
 
@@ -6707,7 +6707,7 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
     
     setAccounts(prev => {
       const adminAcc = prev.map(a => 
-         a.password === '••••••••' ? { ...a, password: simpleHash(a.username === 'admin' ? 'admin123' : 'kepsek123') } : a
+         a.password === '••••••••' ? { ...a, password: simpleHash(a.username === 'admin' ? 'Boy2014' : 'Ilwani2010') } : a
       ).filter(a => a.role !== 'Guru');
 
       return [...adminAcc, ...teacherAccounts.map(ta => {
