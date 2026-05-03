@@ -708,6 +708,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
       pob: formElement.pob.value,
       dob: formElement.dob.value,
       gender: formElement.gender.value,
+      phone: formElement.phone.value, // TAMBAHAN: Menyimpan Nomor WA
       education: formElement.education.value,
       status: formElement.status.value,
       tmt: formElement.tmt.value,
@@ -786,6 +787,11 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
                       <option value="L">Laki-laki</option>
                       <option value="P">Perempuan</option>
                     </select>
+                  </div>
+                  {/* TAMBAHAN: Kolom Nomor WA di Form Daftar */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">No. WhatsApp Aktif</label>
+                    <input type="tel" name="phone" className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500" required placeholder="Cth: 081234567890" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Pendidikan</label>
@@ -1327,25 +1333,28 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
      return { lateTeachers, totalUnpaidLoans };
   }, [teachers]);
 
-  // TAMBAHAN: Integrasi Data Grafik dari Arsip Asli (Bukan Dummy Lagi)
+  // PERBAIKAN: Menghapus data dummy dan murni menggunakan data riil (Arsip + Proyeksi Bulan Ini)
   const chartData = useMemo(() => {
+     const currentMonthStr = getFormattedPeriod(settings?.payrollPeriod);
+     const currentMonthData = {
+         bulan: currentMonthStr.substring(0, 8), // Potong teks bulan agar tidak kepanjangan di grafik
+         total: stats.totalGaji
+     };
+
      if (!archives || archives.length === 0) {
-        // Data Simulasi Proyeksi Jika Belum Pernah Tutup Buku
-        return [
-          { bulan: 'Jan 2026', total: 145000000 },
-          { bulan: 'Feb 2026', total: 148000000 },
-          { bulan: 'Mar 2026', total: 147500000 },
-          { bulan: 'Apr 2026', total: 151000000 },
-          { bulan: 'Mei 2026', total: 150000000 },
-          { bulan: 'Jun 2026', total: stats.totalGaji } // Proyeksi real-time bulan ini
-        ];
+        // Jika belum ada arsip (Tutup Buku), tampilkan HANYA 1 titik data riil bulan ini
+        return [currentMonthData]; 
      }
-     // Mengambil riwayat arsip, dibalik agar urutan tanggalnya dari lama ke terbaru, maksimal 12 bulan terakhir
-     return [...archives].reverse().slice(-12).map(arc => ({
-         bulan: arc.periode.substring(0, 8), // Memendekkan string nama bulan
+
+     // Jika sudah ada arsip, ambil riwayatnya (maksimal 11 bulan terakhir) dari yang terlama ke terbaru
+     const historyData = [...archives].reverse().slice(-11).map(arc => ({
+         bulan: arc.periode.substring(0, 8),
          total: arc.totalGaji
      }));
-  }, [archives, stats.totalGaji]);
+
+     // Gabungkan data arsip historis dengan proyeksi riil bulan ini
+     return [...historyData, currentMonthData];
+  }, [archives, stats.totalGaji, settings?.payrollPeriod]);
 
   const currentMonthYear = getFormattedPeriod(settings?.payrollPeriod);
 
@@ -1851,9 +1860,8 @@ function DataGuruView({ teachers, setTeachers }) {
 
   const handleEditSubmit = (e) => {
     e.preventDefault();
-    setIsSaving(true); // Mengaktifkan efek loading
+    setIsSaving(true); 
     
-    // PERBAIKAN BUG: Menarik data dengan benar dari elemen form (karena formData state tidak ada di komponen ini)
     const formElement = e.target;
     const newData = {
       name: formElement.name.value,
@@ -1861,6 +1869,7 @@ function DataGuruView({ teachers, setTeachers }) {
       pob: formElement.pob.value,
       dob: formElement.dob.value,
       gender: formElement.gender.value,
+      phone: formElement.phone ? formElement.phone.value : '', // TAMBAHAN: Menyimpan Nomor WA
       education: formElement.education.value,
       status: formElement.status.value,
       tmt: formElement.tmt.value,
@@ -1917,24 +1926,22 @@ function DataGuruView({ teachers, setTeachers }) {
   };
 
   const handleExportCSV = () => {
-    const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'Pendidikan', 'Status', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
+    // TAMBAHAN: Memasukkan No WA ke dalam export CSV
+    const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'No WA', 'Pendidikan', 'Status', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
     
-    // Pembersih agar CSV tidak bentrok dengan Excel
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
       let str = String(val);
-      // Bungkus dengan tanda kutip jika teks mengandung koma, titik koma, atau enter
       if (str.includes(',') || str.includes(';') || str.includes('\n') || str.includes('"')) {
          return `"${str.replace(/"/g, '""')}"`;
       }
-      // Tambahkan tanda petik tunggal ' agar angka 0 di awal NIPY tidak hilang di Excel
       if (/^[0-9\-]+$/.test(str) && str.length >= 5) {
          return `'${str}`; 
       }
       return str;
     };
 
-    const csvRows = [headers.join(';')]; // Pakai titik koma (;) standar Indonesia
+    const csvRows = [headers.join(';')]; 
     
     teachers.forEach(t => {
       const row = [
@@ -1944,6 +1951,7 @@ function DataGuruView({ teachers, setTeachers }) {
         t.gender, 
         t.pob, 
         t.dob, 
+        (t.phone || '-'), // Data WA
         t.education, 
         t.status, 
         t.position, 
@@ -2144,6 +2152,8 @@ function DataGuruView({ teachers, setTeachers }) {
                           <tr><td className="py-1.5 text-slate-500 w-32">Jenis Kelamin</td><td className="font-medium dark:text-slate-200">: {modal.data.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Tempat Lahir</td><td className="font-medium dark:text-slate-200">: {modal.data.pob}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Tanggal Lahir</td><td className="font-medium dark:text-slate-200">: {formatDateId(modal.data.dob)} <span className="text-blue-500 font-bold ml-1">({new Date().getFullYear() - new Date(modal.data.dob).getFullYear()} Thn)</span></td></tr>
+                          {/* TAMBAHAN: Detail No WA */}
+                          <tr><td className="py-1.5 text-slate-500">No. WhatsApp</td><td className="font-medium dark:text-slate-200">: {modal.data.phone || '-'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Pendidikan</td><td className="font-medium dark:text-slate-200">: {modal.data.education}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Rekening Bank</td><td className="font-medium dark:text-slate-200">: {modal.data.bankName ? `${modal.data.bankName} - ${modal.data.bankAccount}` : '-'}</td></tr>
                         </tbody>
@@ -2189,6 +2199,11 @@ function DataGuruView({ teachers, setTeachers }) {
                         <option value="L">Laki-laki</option>
                         <option value="P">Perempuan</option>
                       </select>
+                    </div>
+                    {/* TAMBAHAN: Form No WA saat Edit/Tambah */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">No. WhatsApp Aktif</label>
+                      <input type="tel" name="phone" defaultValue={modal.data?.phone || ''} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required placeholder="Cth: 081234567890" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Pendidikan</label>
@@ -2365,7 +2380,7 @@ function DataGuruView({ teachers, setTeachers }) {
                     <div className="text-slate-700 dark:text-slate-300 font-medium">
                       {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({!isNaN(new Date(t.dob).getTime()) ? new Date().getFullYear() - new Date(t.dob).getFullYear() : '?'} thn)</span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">Gender: {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Gender: {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'} • WA: {t.phone || '-'}</div>
                   </td>
                   <td className="p-4">
                     <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
@@ -6876,12 +6891,20 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
   // PERBAIKAN CERDAS: Sinkronisasi data guru menjadi data akun dengan pelindung (Failsafe) Anti-Crash
   useEffect(() => {
     setAccounts(prev => {
-      const validPrev = Array.isArray(prev) ? prev : [];
+      const validPrev = Array.isArray(prev) && prev.length > 0 ? prev : [
+        { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+        { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+      ];
 
-      // 1. Ambil akun Admin & Yayasan (selain Guru)
-      const adminAcc = validPrev.map(a => 
-         a.password === '••••••••' ? { ...a, password: simpleHash(a.username === 'admin' ? 'Boy2014' : 'Ilwani2010') } : a
-      ).filter(a => a?.role !== 'Guru' && a?.role !== 'guru');
+      let adminAcc = validPrev.filter(a => a?.role !== 'Guru' && a?.role !== 'guru');
+      
+      // PERBAIKAN STRUKTUR: Menambahkan kembali kurung penutup yang sebelumnya terpotong
+      if (adminAcc.length === 0) {
+         adminAcc = [
+           { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+           { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+         ];
+      }
 
       // 2. Buat ulang akun Guru berdasarkan data 'teachers' terkini secara aman
       const teacherAccounts = (teachers || []).map(t => {
@@ -6904,11 +6927,11 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
           username: t.id || generateUniqueId('G-'), 
           password: finalPassword, 
           role: 'Guru',
-          status: t.status || 'Aktif'
+          status: t.status || 'Aktif',
+          phone: t.phone || '' // TAMBAHAN: Mengalirkan data WA ke data Akun
         };
       });
       
-      // 3. Gabungkan dan pastikan ID mutlak unik agar tabel tidak error
       const merged = [...adminAcc, ...teacherAccounts];
       const uniqueAccounts = Array.from(new Map(merged.map(item => [item.id, item])).values());
       return uniqueAccounts;
@@ -7484,6 +7507,38 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                            </td>
                            <td className="p-4 text-center">
                              <div className="flex items-center justify-center gap-2">
+                               {/* TAMBAHAN: Tombol Kirim Akses via WhatsApp */}
+                               <button 
+                                 onClick={() => {
+                                   if (!acc.phone && acc.role === 'Guru') {
+                                      alert("Gagal: Nomor WA belum diisi di Data Pegawai!");
+                                      return;
+                                   }
+                                   let waNum = acc.phone ? acc.phone.replace(/[^0-9]/g, '') : '';
+                                   if (waNum.startsWith('0')) waNum = '62' + waNum.slice(1);
+                                   if (acc.role !== 'Guru' && !waNum) waNum = ''; // Biarkan kosong untuk diketik manual di HP admin
+
+                                   let passText = "Tersandi (Rahasia)";
+                                   if (acc.role === 'Guru') {
+                                      const cleanName = acc.name.replace(/[^a-zA-Z]/g, '');
+                                      const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+                                      passText = `${twoLetters}123`;
+                                   } else if (acc.role === 'Admin') {
+                                      passText = "Boy2014";
+                                   } else if (acc.role === 'Kepala Sekolah') {
+                                      passText = "Ilwani2010";
+                                   }
+
+                                   const msg = `Assalamu'alaikum Bapak/Ibu ${acc.name},\n\nBerikut adalah akses login Anda untuk *Aplikasi Penggajian SD-IT QA*:\n\n*Username:* ${acc.username}\n*Password:* ${passText}\n\nSilakan login melalui tautan aplikasi kita. Harap simpan pesan ini dengan aman agar tidak lupa.\n\nTerima kasih.`;
+                                   const waUrl = `https://api.whatsapp.com/send?phone=${waNum}&text=${encodeURIComponent(msg)}`;
+                                   window.open(waUrl, '_blank');
+                                 }} 
+                                 className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors" 
+                                 title="Kirim Akses via WhatsApp"
+                               >
+                                 <Send size={14} />
+                               </button>
+
                                <button onClick={() => openModal('edit', acc)} className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-md transition-colors" title="Edit Akun">
                                  <Edit size={14} />
                                </button>
