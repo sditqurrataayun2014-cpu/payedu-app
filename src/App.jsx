@@ -900,8 +900,8 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
             )}
           </button>
 
-          {/* FITUR BARU: Tombol Pendaftaran Akun */}
-          <button type="button" onClick={() => setShowRegisterModal(true)} disabled={isLoading} className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold py-3.5 rounded-xl transition-all duration-300 text-sm tracking-widest uppercase flex justify-center items-center gap-2 mt-2 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-1">
+          {/* FITUR BARU: Tombol Pendaftaran Akun dengan Warna Biru Elegan */}
+          <button type="button" onClick={() => setShowRegisterModal(true)} disabled={isLoading} className="w-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-bold py-3.5 rounded-xl transition-all duration-300 text-sm tracking-widest uppercase flex justify-center items-center gap-2 mt-2 border border-blue-200 dark:border-blue-800/50 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-1">
             <UserCircle size={18} /> Daftar Pegawai Baru
           </button>
 
