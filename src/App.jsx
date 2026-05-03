@@ -321,6 +321,22 @@ export default function App() {
             }
         }
         
+        // TAMBALAN CERDAS: Auto-Recovery Teks Portal Guru
+        // Jika sistem mendeteksi teks informasi rusak atau terpotong menjadi "...",
+        // sistem akan otomatis memulihkannya ke teks asli dan menyimpannya kembali ke server.
+        if (!serverSettings.payrollInfoText || serverSettings.payrollInfoText.includes('...')) {
+            serverSettings.payrollInfoText = defaultGeneralSettings.payrollInfoText;
+            
+            // Simpan paksa ke memori lokal
+            safeStorageSet('payedu_settings', JSON.stringify(serverSettings));
+            
+            // Simpan paksa ke Google Sheets agar database di baris JSON_SETTINGS kembali normal
+            fetch(GOOGLE_SHEETS_API_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
+            }).catch(e => console.error("Auto-recovery text error:", e));
+        }
+        
         // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
         // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
         const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
