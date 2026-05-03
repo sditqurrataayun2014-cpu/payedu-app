@@ -2527,6 +2527,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     document.body.removeChild(link);
   };
 
+  // PERBAIKAN: Fungsi Import sekarang menyerap data Tgl 1 sampai Tgl 31 secara presisi
   const handleImportExcel = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2547,6 +2548,12 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
       const nameIdx = headers.findIndex(h => h.includes('nama'));
       const totalIdx = headers.findIndex(h => h === 'total' || h.includes('realisasi'));
 
+      // Deteksi indeks untuk kolom Tgl 1 sampai Tgl 31
+      const dailyIndices = [];
+      for (let i = 1; i <= 31; i++) {
+         dailyIndices.push(headers.findIndex(h => h === `tgl ${i}`));
+      }
+
       if (nameIdx === -1 || totalIdx === -1) {
          alert('Format kolom tidak dikenali. Pastikan ada judul kolom "Nama Guru" dan "Total".');
          return;
@@ -2564,6 +2571,14 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
          const teacherName = values[nameIdx];
          const jamVal = parseInt(values[totalIdx], 10);
 
+         // Ekstrak data harian (Tgl 1 - 31) dari baris ini
+         const harianData = Array(31).fill('');
+         for (let d = 0; d < 31; d++) {
+            if (dailyIndices[d] !== -1 && values[dailyIndices[d]]) {
+               harianData[d] = values[dailyIndices[d]].toUpperCase();
+            }
+         }
+
          if (teacherName && !isNaN(jamVal)) {
             // Pencarian cerdas berdasarkan nama guru
             const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
@@ -2574,7 +2589,8 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                      ...updatedTeachers[teacherIndex].payroll,
                      jamMengajar: {
                         ...updatedTeachers[teacherIndex].payroll.jamMengajar,
-                        realisasi: jamVal
+                        realisasi: jamVal,
+                        harian: harianData // <- Menyimpan rincian harian
                      }
                   }
                };
@@ -2585,7 +2601,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
 
       if (updatedCount > 0) {
         setTeachers(updatedTeachers);
-        alert(`Berhasil! Jam mengajar ${updatedCount} guru telah diperbarui ke dalam sistem.`);
+        alert(`Berhasil! Total jam dan rincian harian (Tgl 1-31) untuk ${updatedCount} guru telah diperbarui ke dalam sistem.`);
       } else {
         alert('Tidak ada data guru yang cocok untuk diperbarui.');
       }
