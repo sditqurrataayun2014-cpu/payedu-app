@@ -220,24 +220,34 @@ const safeStorageSet = (key, value) => {
 };
 
 const defaultGeneralSettings = {
-  appName: 'Portal Penggajian (PayEdu)',
-  foundationName: 'Yayasan Pendidikan XYZ',
-  schoolName: 'Sekolah Islam Terpadu XYZ',
-  principalName: 'H. Fulan, S.Pd., M.Pd', // TAMBAHAN: Nama Kepala Sekolah Dinamis
-  signatureUrl: '', // TAMBAHAN: URL Gambar Tanda Tangan
-  address: 'Jl. Pendidikan No. 123, Kec. Banjarmasin, Kalimantan Selatan',
-  logoUrl: 'https://cdn-icons-png.flaticon.com/512/6213/6213753.png',
+  appName: 'Manajemen Penggajian',
+  foundationName: 'YAYASAN DAARUSSALAAM SERUYAN',
+  schoolName: 'Sekolah Dasar Islam Terpadu (SD-IT)',
+  principalName: 'ILWANI, S.Pd.I', 
+  signatureUrl: '', 
+  address: 'Jl. Diponegoro Gg. Makam Pahlawan Kuala Pembuang Seruyan',
+  logoUrl: 'https://i.ibb.co.com/zVGjvWxV/httpsi-ibb-co-com-GQYf3-Hd81-removebg-preview-png.png',
   avatarMaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png',
   avatarFemaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png',
-  payrollStatus: 'Draft', // Status Workflow: Draft, Pending, Approved
+  payrollStatus: 'Draft', 
   payrollPeriod: (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })(),
-  payrollInfoText: `Sistem penggajian di sekolah kami disusun secara transparan dan berbasis kinerja. Berikut adalah komponen yang membentuk gaji Anda (Take Home Pay):
-...
-* Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi.`,
-  lastModified: Date.now() // TAMBAHAN: Stempel waktu untuk melacak versi data
+  // PERBAIKAN: Mengganti teks yang terpotong (...) dengan pedoman utuh yang profesional
+  payrollInfoText: `Sistem penggajian di sekolah kami disusun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
+
+* Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di instansi ini.
+* Tunjangan Pendidikan: Penyesuaian berdasarkan kualifikasi akademik terakhir (SMA/Diploma/S1/S2).
+* Tunjangan Jabatan: Diberikan kepada pemangku amanah struktural sekolah (Kepsek, Waka, Wali Kelas, dll).
+* Tunjangan Keluarga: Diberikan khusus bagi pegawai yang telah menikah (Tunjangan Suami/Istri & Anak).
+* Insentif Kehadiran (Tepat Waktu): Apresiasi atas dedikasi dan kedisiplinan waktu kehadiran masuk kelas.
+* Insentif Tugas Tambahan: Disesuaikan dengan penugasan kepanitiaan insidental atau tugas khusus lainnya.
+* Pemotongan Kedisiplinan: Pengurangan nominal atas keterlambatan atau ketidakhadiran tanpa keterangan.
+* Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, Koperasi, atau lainnya.
+
+Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan.`,
+  lastModified: Date.now() 
 };
 
 // --- KOMPONEN UTAMA APP ---
@@ -5574,53 +5584,9 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
     return null;
   };
 
-  // FUNGSI GEMINI AI: Membuat Analisis Keuangan Eksekutif
-  const handleGenerateAIAnalysis = async () => {
-    setIsAnalyzing(true);
-    try {
-      const prompt = `Anda adalah analis keuangan dan konsultan HRD sekolah yang profesional. Buatkan ringkasan eksekutif untuk laporan penggajian periode ${bulan}.
-      
-Data Ringkasan Sekolah Kami:
-- Total Gaji Kotor: Rp ${formatNum(reportData.totalKotor)}
-- Total Potongan (Kasbon/Telat): Rp ${formatNum(reportData.totalPotongan)}
-- Total Gaji Bersih (THP): Rp ${formatNum(reportData.totalBersih)}
-- Porsi Dana Pegawai Tetap: Rp ${formatNum(reportData.distribusiStatus[0].value)}
-- Porsi Dana Pegawai Tidak Tetap: Rp ${formatNum(reportData.distribusiStatus[1].value)}
-- Total Sumber Dana Masuk: Rp ${formatNum(reportData.totalPendanaan)}
-
-Berikan analisis yang padat dalam 3 bagian:
-1. Kondisi Finansial Bulan Ini (Keseimbangan dana vs pengeluaran, apakah aman/minus).
-2. Sorotan Utama (Distribusi status & rasio pemotongan).
-3. Rekomendasi Efisiensi untuk Manajemen (Satu tips konkrit).
-
-Gunakan bahasa Indonesia yang rapi, profesional, optimis, dan jangan gunakan simbol markdown secara berlebihan.`;
-
-      // DIPERBARUI: Mengirimkan API Key dari pengaturan
-      const result = await callGeminiAPI(prompt, settings?.geminiApiKey);
-      setAiAnalysis(result);
-    } catch (err) {
-      console.error("AI Error:", err);
-      // DIPERBARUI: Menggunakan Toast Modal yang tidak akan diblokir browser
-      setNotification({ isOpen: true, type: 'error', message: "Gagal menghasilkan analisis AI. Terjadi gangguan pada koneksi internet atau layanan sistem." });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       
-      {/* TAMBAHAN: Custom Notifikasi / Toast untuk Menangkap Error AI */}
-      {notification.isOpen && (
-        <div className="fixed top-20 right-4 md:right-10 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className="p-4 rounded-xl shadow-xl border flex items-center gap-3 max-w-sm bg-red-50 border-red-200 text-red-800 dark:bg-red-900/90 dark:border-red-700 dark:text-red-200">
-             <AlertCircle size={24} className="shrink-0" />
-             <p className="text-sm font-medium">{notification.message}</p>
-             <button onClick={() => setNotification({ isOpen: false, type: '', message: '' })} className="p-1 hover:bg-black/10 rounded-full transition-colors ml-auto"><X size={16}/></button>
-          </div>
-        </div>
-      )}
-
       {/* Modal Edit Sumber Dana */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -6875,36 +6841,45 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
     { id: 'saran', label: 'Kritik & Saran', icon: MessageSquare, desc: 'Aspirasi & Masukan' },
   ];
 
-  // Sinkronisasi data guru menjadi data akun saat komponen dimuat
+  // PERBAIKAN CERDAS: Sinkronisasi data guru menjadi data akun dengan pelindung (Failsafe) Anti-Crash
   useEffect(() => {
-    const teacherAccounts = teachers.map(t => {
-      // Ambil 2 huruf pertama dari nama, buang spasi/simbol
-      const cleanName = t.name ? t.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-      const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-      const defaultPass = `${twoLetters}123`;
-      
-      return { 
-        id: t.id, 
-        name: t.name, 
-        username: t.id, // Username otomatis menggunakan ID (Cth: G01QA)
-        password: simpleHash(defaultPass), 
-        role: 'Guru' 
-      };
-    });
-    
     setAccounts(prev => {
-      const adminAcc = prev.map(a => 
-         a.password === '••••••••' ? { ...a, password: simpleHash(a.username === 'admin' ? 'Boy2014' : 'Ilwani2010') } : a
-      ).filter(a => a.role !== 'Guru');
+      const validPrev = Array.isArray(prev) ? prev : [];
 
-      return [...adminAcc, ...teacherAccounts.map(ta => {
-         const existing = prev.find(p => p.id === ta.id);
-         // Jaga agar password kustom guru tidak tertimpa saat sinkronisasi ulang
-         if (existing && existing.password && existing.password !== '••••••••' && existing.password !== simpleHash('guru123')) {
-            return { ...ta, password: existing.password };
-         }
-         return ta;
-      })];
+      // 1. Ambil akun Admin & Yayasan (selain Guru)
+      const adminAcc = validPrev.map(a => 
+         a.password === '••••••••' ? { ...a, password: simpleHash(a.username === 'admin' ? 'Boy2014' : 'Ilwani2010') } : a
+      ).filter(a => a?.role !== 'Guru' && a?.role !== 'guru');
+
+      // 2. Buat ulang akun Guru berdasarkan data 'teachers' terkini secara aman
+      const teacherAccounts = (teachers || []).map(t => {
+        const safeName = t.name || 'Pegawai';
+        const cleanName = safeName.replace(/[^a-zA-Z]/g, '');
+        const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+        const defaultPass = `${twoLetters}123`;
+        
+        const existing = validPrev.find(p => p.id === t.id);
+        let finalPassword = simpleHash(defaultPass);
+
+        // Pertahankan password lama jika sudah pernah diubah secara manual
+        if (existing && existing.password && existing.password !== '••••••••' && existing.password !== simpleHash('guru123') && existing.password !== simpleHash(defaultPass)) {
+           finalPassword = existing.password;
+        }
+
+        return { 
+          id: t.id || generateUniqueId('G-'), 
+          name: safeName, 
+          username: t.id || generateUniqueId('G-'), 
+          password: finalPassword, 
+          role: 'Guru',
+          status: t.status || 'Aktif'
+        };
+      });
+      
+      // 3. Gabungkan dan pastikan ID mutlak unik agar tabel tidak error
+      const merged = [...adminAcc, ...teacherAccounts];
+      const uniqueAccounts = Array.from(new Map(merged.map(item => [item.id, item])).values());
+      return uniqueAccounts;
     });
   }, [teachers]);
 
@@ -6923,9 +6898,10 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
   // TAMBAHAN: State Notifikasi Lokal untuk Error AI Summarizer
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
 
+  // PERBAIKAN: Menambahkan fallback (|| '') untuk mencegah crash toLowerCase pada data undefined
   const filteredAccounts = accounts.filter(a =>
-    a.name.toLowerCase().includes(searchAcc.toLowerCase()) ||
-    a.username.toLowerCase().includes(searchAcc.toLowerCase())
+    (a.name || '').toLowerCase().includes(searchAcc.toLowerCase()) ||
+    (a.username || '').toLowerCase().includes(searchAcc.toLowerCase())
   );
 
   const handleSaveGeneral = (e) => {
@@ -7455,11 +7431,11 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                      </thead>
                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                        {filteredAccounts.map(acc => (
-                         <tr key={acc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                           <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{acc.name}</td>
+                         <tr key={acc.id || generateUniqueId('row-')} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                           <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{acc.name || 'Tanpa Nama'}</td>
                            <td className="p-4">
                              <span className="bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded font-mono text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-600">
-                               {acc.username}
+                               {acc.username || '-'}
                              </span>
                            </td>
                            <td className="p-4 tracking-widest text-slate-400 text-[11px] font-mono" title="Password Disamarkan">
@@ -7467,7 +7443,7 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                            </td>
                            <td className="p-4">
                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                               {acc.role}
+                               {acc.role || 'Guru'}
                              </span>
                            </td>
                            <td className="p-4 text-center">
