@@ -6907,6 +6907,10 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
   const handleSaveGeneral = (e) => {
     e.preventDefault();
     setIsSaving(true);
+    
+    // PERBAIKAN: Paksa trigger pembaruan lastModified agar auto-save langsung mengeksekusi pengiriman ke Google Sheets
+    setSettings(prev => ({ ...prev, lastModified: Date.now() }));
+    
     setTimeout(() => {
       setIsSaving(false);
       alert('Pengaturan Aplikasi berhasil disimpan dan diperbarui!');
