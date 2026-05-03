@@ -40,25 +40,6 @@ const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
 const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
-// TAMBAHAN CERDAS: Fungsi Helper Terpusat Anti-CORS untuk Komunikasi ke Google Sheets
-const callGoogleScript = async (action, payload) => {
-  try {
-    const res = await fetch(GOOGLE_SHEETS_API_URL, {
-      method: 'POST',
-      redirect: 'follow', // GAS membutuhkan follow redirect
-      headers: { 
-         "Content-Type": "text/plain;charset=utf-8" // Mengakali preflight CORS
-      },
-      body: JSON.stringify({ action, payload })
-    });
-    if (!res.ok) throw new Error("HTTP_ERROR_" + res.status);
-    return await res.json();
-  } catch (err) {
-    console.error(`[SYNC_ERROR] Aksi ${action} gagal:`, err);
-    throw err;
-  }
-};
-
 // --- HELPER FUNCTIONS LOGIKA GAJI ---
 const calculatePayroll = (teacher) => {
   const p = teacher.payroll || {}; // Failsafe jika payroll undefined
@@ -209,18 +190,21 @@ const exportToPDF = (elementId, filename) => {
     }
   });
 };
-const generateTeacherId = (teachersList) => {
-  let maxNum = 0;
-  teachersList.forEach(t => {
-    if (t.id && typeof t.id === 'string' && t.id.startsWith('G') && t.id.endsWith('QA')) {
-      const numStr = t.id.substring(1, t.id.length - 2);
-      const num = parseInt(numStr, 10);
-      if (!isNaN(num) && num > maxNum) {
-        maxNum = num;
-      }
-    }
-  });
-  return `G${String(maxNum + 1).padStart(2, '0')}QA`;
+
+// Fungsi Helper untuk memformat string YYYY-MM ke format teks lokal
+const getFormattedPeriod = (periodStr) => {
+  if (!periodStr) {
+    const d = new Date();
+    return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  }
+  const [year, month] = periodStr.split('-');
+  const d = new Date(year, month - 1, 1);
+  return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+};
+
+// TAMBAHAN NO 2: Fungsi Helper Cerdas untuk ID Unik Mutlak (Mencegah Duplikat)
+const generateUniqueId = (prefix = '') => {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 };
 
 // TAMBAHAN NO 1: Failsafe Storage Cerdas untuk mendeteksi limit memori browser (5MB)
@@ -300,69 +284,58 @@ export default function App() {
   const fetchCloudData = async (isBackgroundSync = false) => {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
-      const res = await fetch(GOOGLE_SHEETS_API_URL, { redirect: 'follow' });
+      const res = await fetch(GOOGLE_SHEETS_API_URL);
       if (!res.ok) throw new Error("Network response was not ok");
       const text = await res.text();
       const data = JSON.parse(text);
       
       if (data.status === 'success') {
+        // PERBAIKAN BUG: Melindungi Pengaturan Sistem agar tidak terhapus jika Google Sheet dikosongkan manual
         let serverSettings = defaultGeneralSettings;
         
         if (data.data?.settings && Object.keys(data.data.settings).length > 0) {
             serverSettings = data.data.settings;
         } else {
+            // Jika server kehilangan data pengaturan, pulihkan dari memori lokal (Failsafe Cerdas)
             const localSettingsStr = localStorage.getItem('payedu_settings');
             if (localSettingsStr) {
                 const parsedLocal = JSON.parse(localSettingsStr);
                 if (parsedLocal && parsedLocal.appName) {
                     serverSettings = parsedLocal;
-                    callGoogleScript('SAVE_SETTINGS', { ...serverSettings, lastModified: Date.now() })
-                        .catch(e => console.error("Failsafe save settings error:", e));
+                    // Kirim ulang ke server secara diam-diam agar JSON Google Sheet kembali normal
+                    fetch(GOOGLE_SHEETS_API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
+                    }).catch(e => console.error("Failsafe save settings error:", e));
                 }
             }
         }
         
+        // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
+        // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
         const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
         
+        // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
           if (serverSettings.lastModified > generalSettings.lastModified) {
-             setHasConflict(true); 
-             return; 
+             setHasConflict(true); // Kunci Auto-Save!
+             return; // Hentikan proses penimpaan state lokal
           }
         } else {
           setGeneralSettings(serverSettings);
-          setTeachers(serverTeachers); 
-          
-          if (data.data?.accounts && data.data.accounts.length > 0) {
-             localStorage.setItem('payedu_accounts', JSON.stringify(data.data.accounts));
-          }
-          if (data.data?.feedbacks && data.data.feedbacks.length > 0) {
-             setFeedbacks(data.data.feedbacks);
-          }
-          if (data.data?.loginHistory && data.data.loginHistory.length > 0) {
-             setLoginHistory(data.data.loginHistory);
-          }
-          if (data.data?.fundingSources && data.data.fundingSources.length > 0) {
-             localStorage.setItem('payedu_funding', JSON.stringify(data.data.fundingSources));
-          }
-          
-          setHasConflict(false); 
+          setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
+          setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
         }
       }
     } catch (err) {
       console.warn("Gagal mengambil/memproses data dari server.", err);
-      // PERBAIKAN: Deteksi cerdas penyebab Network Error dan beri tahu user
-      if (err.name === 'TypeError' || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-         if (!isBackgroundSync) {
-            alert("⚠️ KONEKSI SERVER TERBLOKIR (NETWORK ERROR) ⚠️\n\nAplikasi gagal terhubung ke Google Sheets. Penyebab utamanya:\n1. Pengaturan Deploy Google Apps Script Anda SALAH (Pada pengaturan Who Has Access, harus dipilih 'Anyone' atau 'Siapa Saja', BUKAN 'Only Myself').\n2. Anda menggunakan ekstensi pemblokir iklan (AdBlock) yang memblokir tautan Google.\n\nMohon perbaiki script Google Anda lalu muat ulang halaman ini.");
-         }
-      }
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
       setIsDataLoaded(true);
     }
   };
 
+  // Mengambil data dari Google Sheets saat aplikasi pertama kali dimuat
   useEffect(() => {
     fetchCloudData();
   }, []);
@@ -386,6 +359,7 @@ export default function App() {
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
+    // Mencegah Infinite Loop: Abaikan jika yang berubah HANYA stempel waktu (lastModified)
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
     if (lastSavedSettingsRef.current === currentDataStr) return;
     lastSavedSettingsRef.current = currentDataStr;
@@ -394,19 +368,32 @@ export default function App() {
     setSyncStatus('syncing');
 
     const payloadWithTime = { ...generalSettings, lastModified: Date.now() };
+    // Update state lokal, tapi loop akan terhenti di iterasi berikutnya berkat `lastSavedSettingsRef`
     setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
 
     const timeoutId = setTimeout(() => {
-      callGoogleScript('SAVE_SETTINGS', payloadWithTime)
+      fetch(GOOGLE_SHEETS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
+      })
+      .then(res => {
+         if (!res.ok) throw new Error("Gagal sinkron");
+         return res.json();
+      })
       .then(() => setSyncStatus('synced'))
-      .catch(() => setSyncStatus('error'));
+      .catch(err => {
+         console.error("Sync Error:", err);
+         setSyncStatus('error');
+      });
     }, 1500);
     return () => clearTimeout(timeoutId);
   }, [generalSettings, isDataLoaded, hasConflict]);
 
+  // Menyimpan data pegawai ke browser dan Google Sheets secara otomatis (Debounce 2 detik)
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
+    // Mencegah Infinite Loop pada data Pegawai
     const currentTeachersStr = JSON.stringify(teachers);
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
     lastSavedTeachersRef.current = currentTeachersStr;
@@ -418,9 +405,19 @@ export default function App() {
     setGeneralSettings(prev => ({ ...prev, lastModified: newTimestamp }));
 
     const timeoutId = setTimeout(() => {
-      callGoogleScript('SAVE_TEACHERS', teachers)
+      fetch(GOOGLE_SHEETS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'SAVE_TEACHERS', payload: teachers })
+      })
+      .then(res => {
+         if (!res.ok) throw new Error("Gagal sinkron");
+         return res.json();
+      })
       .then(() => setSyncStatus('synced'))
-      .catch(() => setSyncStatus('error'));
+      .catch(err => {
+         console.error("Sync Error:", err);
+         setSyncStatus('error');
+      });
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict]);
@@ -428,14 +425,12 @@ export default function App() {
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_feedbacks', JSON.stringify(feedbacks));
-      callGoogleScript('SAVE_FEEDBACKS', feedbacks).catch(() => {});
     }
   }, [feedbacks, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_loginHistory', JSON.stringify(loginHistory));
-      callGoogleScript('SAVE_LOGS', loginHistory).catch(() => {});
     }
   }, [loginHistory, isDataLoaded, hasConflict]);
 
@@ -832,7 +827,6 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
   useEffect(() => {
     localStorage.setItem('payedu_funding', JSON.stringify(fundingSources));
-    callGoogleScript('SAVE_FUNDING', fundingSources).catch(e => console.error(e));
   }, [fundingSources]);
 
   useEffect(() => {
@@ -4504,10 +4498,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmArchiveOpen(false);
     setIsArchiving(true);
     try {
-      const result = await callGoogleScript('ARCHIVE_PAYROLL', {
-        periode: bulan,
-        data: teachers
+      const res = await fetch(GOOGLE_SHEETS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'ARCHIVE_PAYROLL',
+          payload: {
+            periode: bulan,
+            data: teachers
+          }
+        })
       });
+      const result = await res.json();
       if (result.status === 'success') {
         // --- SAVE TO LOCAL ARCHIVE STATE ---
         const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
@@ -5298,13 +5299,6 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
   // TAMBAHAN NO 3: State Loading PDF
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
-  // TAMBAHAN GEMINI AI: State untuk Analisis Laporan
-  const [aiAnalysis, setAiAnalysis] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
-  // TAMBAHAN: State Notifikasi Lokal untuk Penanganan Error AI
-  const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
-
   const FUNDING_COLORS = [
     { bg: 'bg-blue-500', hex: '#3b82f6' },
     { bg: 'bg-emerald-500', hex: '#10b981' },
@@ -5443,6 +5437,39 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
       );
     }
     return null;
+  };
+
+  // FUNGSI GEMINI AI: Membuat Analisis Keuangan Eksekutif
+  const handleGenerateAIAnalysis = async () => {
+    setIsAnalyzing(true);
+    try {
+      const prompt = `Anda adalah analis keuangan dan konsultan HRD sekolah yang profesional. Buatkan ringkasan eksekutif untuk laporan penggajian periode ${bulan}.
+      
+Data Ringkasan Sekolah Kami:
+- Total Gaji Kotor: Rp ${formatNum(reportData.totalKotor)}
+- Total Potongan (Kasbon/Telat): Rp ${formatNum(reportData.totalPotongan)}
+- Total Gaji Bersih (THP): Rp ${formatNum(reportData.totalBersih)}
+- Porsi Dana Pegawai Tetap: Rp ${formatNum(reportData.distribusiStatus[0].value)}
+- Porsi Dana Pegawai Tidak Tetap: Rp ${formatNum(reportData.distribusiStatus[1].value)}
+- Total Sumber Dana Masuk: Rp ${formatNum(reportData.totalPendanaan)}
+
+Berikan analisis yang padat dalam 3 bagian:
+1. Kondisi Finansial Bulan Ini (Keseimbangan dana vs pengeluaran, apakah aman/minus).
+2. Sorotan Utama (Distribusi status & rasio pemotongan).
+3. Rekomendasi Efisiensi untuk Manajemen (Satu tips konkrit).
+
+Gunakan bahasa Indonesia yang rapi, profesional, optimis, dan jangan gunakan simbol markdown secara berlebihan.`;
+
+      // DIPERBARUI: Mengirimkan API Key dari pengaturan
+      const result = await callGeminiAPI(prompt, settings?.geminiApiKey);
+      setAiAnalysis(result);
+    } catch (err) {
+      console.error("AI Error:", err);
+      // DIPERBARUI: Menggunakan Toast Modal yang tidak akan diblokir browser
+      setNotification({ isOpen: true, type: 'error', message: "Gagal menghasilkan analisis AI. Terjadi gangguan pada koneksi internet atau layanan sistem." });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -6699,7 +6726,6 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
 
   useEffect(() => {
     localStorage.setItem('payedu_accounts', JSON.stringify(accounts));
-    callGoogleScript('SAVE_USERS', accounts).catch(e => console.error(e));
   }, [accounts]);
 
   const [activeTabSetting, setActiveTabSetting] = useState('umum');
@@ -6871,10 +6897,14 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
         setTeachers([]);
         setConfirmResetDb({ isOpen: false, keyword: '' });
         
+        // TAMBALAN CERDAS: Memaksa penyimpanan ulang settings sesaat setelah reset
+        // Mencegah bug di mana backend Google Apps Script secara tidak sengaja menghapus setting saat array guru kosong
         setTimeout(() => {
            const payloadWithTime = { ...settings, lastModified: Date.now() };
-           callGoogleScript('SAVE_SETTINGS', payloadWithTime)
-             .catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
+           fetch(GOOGLE_SHEETS_API_URL, {
+             method: 'POST',
+             body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
+           }).catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
         }, 500);
 
         setTimeout(() => alert("Proses eksekusi berhasil. Seluruh data pegawai telah dibersihkan dari database, namun Pengaturan Logo & Sekolah tetap aman!"), 300);
@@ -6951,13 +6981,30 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                {modal.type === 'add' || modal.type === 'edit' ? <Key className="text-amber-500" /> : <Trash2 className="text-red-500" />}
-                {modal.type === 'add' ? 'Tambah Hak Akses Baru' : modal.type === 'edit' ? 'Edit Hak Akses Login' : 'Cabut Hak Akses Login'}
+                {modal.type === 'add' || modal.type === 'edit' ? <Key className="text-amber-500" /> : modal.type === 'aiSummary' ? <Sparkles className="text-rose-500" /> : <Trash2 className="text-red-500" />}
+                {modal.type === 'add' ? 'Tambah Hak Akses Baru' : modal.type === 'edit' ? 'Edit Hak Akses Login' : modal.type === 'aiSummary' ? 'Rangkuman Analisis Masukan' : 'Cabut Hak Akses Login'}
               </h3>
               <button onClick={() => setModal({ isOpen: false, type: null, data: null })} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
 
             <div className="p-6 overflow-y-auto">
+              {/* TAMBAHAN GEMINI AI: Tampilan Modal untuk Hasil Rangkuman AI */}
+              {modal.type === 'aiSummary' && modal.data && (
+                <div className="p-2 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-inner border border-rose-200 dark:border-rose-800">
+                      <Sparkles size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold dark:text-white">Rangkuman Cerdas AI</h3>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mt-1">Ditenagai oleh Google Gemini API</p>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
+                    <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-medium">
+                      {modal.data}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {(modal.type === 'add' || modal.type === 'edit') && (
                 <form id="accForm" onSubmit={handleSaveAccount} className="space-y-4">
@@ -7448,7 +7495,7 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                     {(feedbacks || []).length === 0 && (
                       <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
                         <MessageSquare size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk saat ini.</p>
+                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk.</p>
                       </div>
                     )}
                   </div>
