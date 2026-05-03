@@ -70,9 +70,9 @@ const calculatePayroll = (teacher) => {
   const tarifSuamiIstri = p.keluarga?.tarifSuamiIstri !== undefined && p.keluarga?.tarifSuamiIstri !== '' ? (Number(p.keluarga.tarifSuamiIstri) || 0) : 200000;
   const tarifAnak = p.keluarga?.tarifAnak !== undefined && p.keluarga?.tarifAnak !== '' ? (Number(p.keluarga.tarifAnak) || 0) : 100000;
 
-  // LOGIKA BARU: Menggunakan failsafe 'family'
+  // LOGIKA BARU: Tunjangan keluarga (istri/suami & anak) hanya diberikan jika statusnya "Menikah" (wife === 1)
   const tKeluargaWife = Number(family.wife) === 1 ? tarifSuamiIstri : 0;
-  const tKeluargaAnak = (Number(family.children) || 0) * tarifAnak;
+  const tKeluargaAnak = Number(family.wife) === 1 ? (Number(family.children) || 0) * tarifAnak : 0;
   const tKeluarga = tKeluargaWife + tKeluargaAnak;
 
   const tTambahan = (p.insentifTambahan || []).reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
@@ -1996,8 +1996,8 @@ function DataGuruView({ teachers, setTeachers }) {
                         <tbody>
                           <tr><td className="py-1.5 text-slate-500 w-32">Mulai Tugas (TMT)</td><td className="font-medium dark:text-slate-200">: {formatDateId(modal.data.tmt)}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Masa Kerja</td><td className="font-medium dark:text-slate-200">: {new Date().getFullYear() - new Date(modal.data.tmt).getFullYear()} Tahun</td></tr>
-                          <tr><td className="py-1.5 text-slate-500">Status Menikah</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.wife === 1 ? 'Menikah (1 Pasangan)' : modal.data.family?.wife === 2 ? 'Menikah (Ditanggung Pasangan)' : 'Belum / Tidak Menikah'}</td></tr>
-                          <tr><td className="py-1.5 text-slate-500">Jumlah Anak</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.children || 0} Anak</td></tr>
+                          <tr><td className="py-1.5 text-slate-500">Status Menikah</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.wife === 1 ? 'Menikah' : modal.data.family?.wife === 2 ? 'Menikah (Ditanggung Suami)' : 'Belum Menikah'}</td></tr>
+                          <tr><td className="py-1.5 text-slate-500">Jumlah Anak</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.wife === 1 ? (modal.data.family?.children || 0) : 0} Anak (Masuk Tunjangan)</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -2076,15 +2076,15 @@ function DataGuruView({ teachers, setTeachers }) {
                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Informasi Profil Keluarga</h4>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
-                           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Status Pasangan</label>
-                           <select name="wife" defaultValue={modal.data?.family?.wife || 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500">
-                             <option value="1">Menikah (Terima Tunjangan)</option>
-                             <option value="2">Menikah (Pasangan 1 Sekolah - Tanpa Tunj. Ganda)</option>
-                             <option value="0">Belum Menikah / Cerai</option>
+                           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Status Pasangan</label>
+                           <select name="wife" defaultValue={modal.data?.family?.wife !== undefined ? modal.data.family.wife : 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500">
+                             <option value="1">Menikah</option>
+                             <option value="0">Belum Menikah</option>
+                             <option value="2">Menikah (Ditanggung Suami/Pasangan)</option>
                            </select>
                          </div>
                          <div>
-                           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Jumlah Anak</label>
+                           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Jumlah Anak</label>
                            <input type="number" min="0" name="children" defaultValue={modal.data?.family?.children || 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500" required />
                          </div>
                        </div>
@@ -3880,12 +3880,12 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                         <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Status Pasangan</span>
                           <select 
-                            value={family.wife || 0} onChange={e => handleUpdateFamily(t.id, 'wife', Number(e.target.value))}
+                            value={family.wife !== undefined ? family.wife : 0} onChange={e => handleUpdateFamily(t.id, 'wife', Number(e.target.value))}
                             className="w-full p-2 mb-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
                           >
-                            <option value={1}>Menikah (Terima Tunjangan)</option>
-                            <option value={2}>Menikah (1 Sekolah - Tanpa Tunjangan)</option>
-                            <option value={0}>Belum / Cerai (Tidak Ada)</option>
+                             <option value="1">Menikah</option>
+                             <option value="0">Belum Menikah</option>
+                             <option value="2">Menikah (Ditanggung Suami/Pasangan)</option>
                           </select>
                           <span className="text-[10px] font-bold text-slate-400 block mb-1 uppercase tracking-wider">Tarif Pasangan (Rp)</span>
                           <div className="relative">
@@ -4261,10 +4261,10 @@ function SlipDocument({ teacher, bulan, settings }) {
             <tr>
               <td className="border border-black p-1.5 text-center align-top">5</td>
               <td className="border border-black p-1.5">
-                <div className="mb-1 font-semibold">Tunjangan Keluarga</div>
+                <div className="mb-1 font-semibold">Tunjangan Keluarga <span className="text-[11px] font-normal italic text-slate-600">({family.wife === 1 ? 'Menikah' : family.wife === 2 ? 'Menikah - Ditanggung Suami' : 'Belum Menikah'})</span></div>
                 {/* DIPERBARUI: Label dinamis menyesuaikan gender dan pasangan 1 yayasan */}
-                {renderDetailRow(teacher.gender === 'P' ? 'Suami' : 'Isteri', <>{family.wife === 1 ? <>1 Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifSuamiIstri)})</span></> : family.wife === 2 ? <span className="italic text-slate-600 font-medium text-xs bg-slate-100 px-2 py-0.5 rounded">Ditanggung Pasangan (1 Yayasan)</span> : '0 Orang'}</>)}
-                {renderDetailRow("Anak", <>{family.children || 0} Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifAnak)})</span></>)}
+                {renderDetailRow(teacher.gender === 'P' ? 'Suami' : 'Isteri', <>{family.wife === 1 ? <>1 Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifSuamiIstri)})</span></> : family.wife === 2 ? <span className="italic text-slate-600 font-medium text-xs bg-slate-100 px-2 py-0.5 rounded">Ditanggung Suami</span> : '0 Orang'}</>)}
+                {renderDetailRow("Anak", <>{family.wife === 1 ? (family.children || 0) : 0} Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifAnak)})</span></>)}
               </td>
               <td className="border border-black p-1.5 align-top">{renderNominal(slip.tKeluarga)}</td>
             </tr>
@@ -6306,10 +6306,10 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                       <div>
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Status Keluarga</p>
                          <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                           {myData.family?.wife > 0 ? 'Menikah' : 'Belum Menikah'}
+                           {myData.family?.wife === 1 ? 'Menikah' : myData.family?.wife === 2 ? 'Menikah (Ditanggung Suami)' : 'Belum Menikah'}
                          </p>
                          <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mt-0.5">
-                           {myData.family?.children > 0 ? `${myData.family?.children} Anak Terdaftar` : 'Tidak ada tanggungan anak'}
+                           {myData.family?.wife === 1 && myData.family?.children > 0 ? `${myData.family?.children} Anak Terdaftar` : 'Tidak ada tunjangan keluarga'}
                          </p>
                       </div>
                    </div>
