@@ -322,9 +322,9 @@ export default function App() {
         }
         
         // TAMBALAN CERDAS: Auto-Recovery Teks Portal Guru
-        // Jika sistem mendeteksi teks informasi rusak atau terpotong menjadi "...",
-        // sistem akan otomatis memulihkannya ke teks asli dan menyimpannya kembali ke server.
-        if (!serverSettings.payrollInfoText || serverSettings.payrollInfoText.includes('...')) {
+        // Diperbarui: Hanya memulihkan jika teks benar-benar HANYA berisi "..." (teks rusak bawaan lama), 
+        // sehingga Admin tetap bisa mengosongkan teks atau menggunakan titik tiga saat mengetik.
+        if (serverSettings.payrollInfoText === '...') {
             serverSettings.payrollInfoText = defaultGeneralSettings.payrollInfoText;
             
             // Simpan paksa ke memori lokal
@@ -6863,6 +6863,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory }) {
   const fileInputRef = useRef(null);
 
+  // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
+  const [localPortalText, setLocalPortalText] = useState(settings.payrollInfoText || '');
+
   // Hubungkan daftar akun ke LocalStorage
   const [accounts, setAccounts] = useState(() => {
     const saved = localStorage.getItem('payedu_accounts');
@@ -7425,14 +7428,23 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                    </h3>
                 </div>
                 <div className="p-6 overflow-y-auto flex-1">
-                  <form id="formPortal" onSubmit={handleSaveGeneral} className="space-y-4 max-w-4xl">
+                  <form id="formPortal" onSubmit={(e) => {
+                     e.preventDefault();
+                     setIsSaving(true);
+                     // Kirim teks lokal ke sistem global hanya saat tombol simpan ditekan
+                     setSettings(prev => ({...prev, payrollInfoText: localPortalText, lastModified: Date.now()}));
+                     setTimeout(() => {
+                        setIsSaving(false);
+                        alert('Teks Portal Guru berhasil diperbarui dan disimpan!');
+                     }, 600);
+                  }} className="space-y-4 max-w-4xl">
                      <div>
                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Pedoman & Aturan Sistem Penggajian (Tampil di menu Info Sistem)</label>
                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Gunakan tanda bintang (*) atau strip (-) untuk membuat list/daftar yang rapi. Gunakan titik dua (:) di pertengahan teks untuk menebalkan judul poin (seperti "Nama Tunjangan: Penjelasan").</p>
                        <textarea 
                          rows="15" 
-                         value={settings.payrollInfoText || ''} 
-                         onChange={e => setSettings({...settings, payrollInfoText: e.target.value})} 
+                         value={localPortalText} 
+                         onChange={e => setLocalPortalText(e.target.value)} 
                          className="w-full p-4 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-400 outline-none dark:text-white leading-relaxed resize-y font-medium shadow-inner" 
                          placeholder="Tuliskan aturan, pedoman, dan informasi penggajian di sini..."
                        ></textarea>
