@@ -40,6 +40,25 @@ const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
 const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
+// TAMBAHAN CERDAS: Fungsi Helper Terpusat Anti-CORS untuk Komunikasi ke Google Sheets
+const callGoogleScript = async (action, payload) => {
+  try {
+    const res = await fetch(GOOGLE_SHEETS_API_URL, {
+      method: 'POST',
+      redirect: 'follow', // GAS membutuhkan follow redirect
+      headers: { 
+         "Content-Type": "text/plain;charset=utf-8" // Mengakali preflight CORS
+      },
+      body: JSON.stringify({ action, payload })
+    });
+    if (!res.ok) throw new Error("HTTP_ERROR_" + res.status);
+    return await res.json();
+  } catch (err) {
+    console.error(`[SYNC_ERROR] Aksi ${action} gagal:`, err);
+    throw err;
+  }
+};
+
 // --- HELPER FUNCTIONS LOGIKA GAJI ---
 const calculatePayroll = (teacher) => {
   const p = teacher.payroll || {}; // Failsafe jika payroll undefined
@@ -190,46 +209,18 @@ const exportToPDF = (elementId, filename) => {
     }
   });
 };
-
-// Fungsi Helper untuk memformat string YYYY-MM ke format teks lokal
-const getFormattedPeriod = (periodStr) => {
-  if (!periodStr) {
-    const d = new Date();
-    return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-  }
-  const [year, month] = periodStr.split('-');
-  const d = new Date(year, month - 1, 1);
-  return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-};
-
-// TAMBAHAN NO 2: Fungsi Helper Cerdas untuk ID Unik Mutlak (Mencegah Duplikat)
-const generateUniqueId = (prefix = '') => {
-  return prefix + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
-};
-
-// TAMBAHAN GEMINI AI: Helper Pemanggilan API dengan Exponential Backoff (DIPERBARUI)
-const callGeminiAPI = async (prompt, customApiKey = "", retries = 5, delay = 1000) => {
-  const apiKey = customApiKey || ""; // Disediakan oleh environment eksekusi atau input user
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-  for (let i = 0; i < retries; i++) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || "Tidak ada respons dari AI.";
-    } catch (error) {
-      if (i === retries - 1) throw error;
-      await new Promise(res => setTimeout(res, delay));
-      delay *= 2; // Eksponensial (1s, 2s, 4s, 8s, 16s)
+const generateTeacherId = (teachersList) => {
+  let maxNum = 0;
+  teachersList.forEach(t => {
+    if (t.id && typeof t.id === 'string' && t.id.startsWith('G') && t.id.endsWith('QA')) {
+      const numStr = t.id.substring(1, t.id.length - 2);
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
     }
-  }
+  });
+  return `G${String(maxNum + 1).padStart(2, '0')}QA`;
 };
 
 // TAMBAHAN NO 1: Failsafe Storage Cerdas untuk mendeteksi limit memori browser (5MB)
@@ -262,8 +253,7 @@ const defaultGeneralSettings = {
   payrollInfoText: `Sistem penggajian di sekolah kami disusun secara transparan dan berbasis kinerja. Berikut adalah komponen yang membentuk gaji Anda (Take Home Pay):
 ...
 * Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi.`,
-  lastModified: Date.now(), // TAMBAHAN: Stempel waktu untuk melacak versi data
-  geminiApiKey: '' // TAMBAHAN: Menyimpan API Key pengguna
+  lastModified: Date.now() // TAMBAHAN: Stempel waktu untuk melacak versi data
 };
 
 // --- KOMPONEN UTAMA APP ---
@@ -310,58 +300,69 @@ export default function App() {
   const fetchCloudData = async (isBackgroundSync = false) => {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
-      const res = await fetch(GOOGLE_SHEETS_API_URL);
+      const res = await fetch(GOOGLE_SHEETS_API_URL, { redirect: 'follow' });
       if (!res.ok) throw new Error("Network response was not ok");
       const text = await res.text();
       const data = JSON.parse(text);
       
       if (data.status === 'success') {
-        // PERBAIKAN BUG: Melindungi Pengaturan Sistem agar tidak terhapus jika Google Sheet dikosongkan manual
         let serverSettings = defaultGeneralSettings;
         
         if (data.data?.settings && Object.keys(data.data.settings).length > 0) {
             serverSettings = data.data.settings;
         } else {
-            // Jika server kehilangan data pengaturan, pulihkan dari memori lokal (Failsafe Cerdas)
             const localSettingsStr = localStorage.getItem('payedu_settings');
             if (localSettingsStr) {
                 const parsedLocal = JSON.parse(localSettingsStr);
                 if (parsedLocal && parsedLocal.appName) {
                     serverSettings = parsedLocal;
-                    // Kirim ulang ke server secara diam-diam agar JSON Google Sheet kembali normal
-                    fetch(GOOGLE_SHEETS_API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
-                    }).catch(e => console.error("Failsafe save settings error:", e));
+                    callGoogleScript('SAVE_SETTINGS', { ...serverSettings, lastModified: Date.now() })
+                        .catch(e => console.error("Failsafe save settings error:", e));
                 }
             }
         }
         
-        // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
-        // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
         const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
         
-        // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
           if (serverSettings.lastModified > generalSettings.lastModified) {
-             setHasConflict(true); // Kunci Auto-Save!
-             return; // Hentikan proses penimpaan state lokal
+             setHasConflict(true); 
+             return; 
           }
         } else {
           setGeneralSettings(serverSettings);
-          setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
-          setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
+          setTeachers(serverTeachers); 
+          
+          if (data.data?.accounts && data.data.accounts.length > 0) {
+             localStorage.setItem('payedu_accounts', JSON.stringify(data.data.accounts));
+          }
+          if (data.data?.feedbacks && data.data.feedbacks.length > 0) {
+             setFeedbacks(data.data.feedbacks);
+          }
+          if (data.data?.loginHistory && data.data.loginHistory.length > 0) {
+             setLoginHistory(data.data.loginHistory);
+          }
+          if (data.data?.fundingSources && data.data.fundingSources.length > 0) {
+             localStorage.setItem('payedu_funding', JSON.stringify(data.data.fundingSources));
+          }
+          
+          setHasConflict(false); 
         }
       }
     } catch (err) {
       console.warn("Gagal mengambil/memproses data dari server.", err);
+      // PERBAIKAN: Deteksi cerdas penyebab Network Error dan beri tahu user
+      if (err.name === 'TypeError' || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+         if (!isBackgroundSync) {
+            alert("⚠️ KONEKSI SERVER TERBLOKIR (NETWORK ERROR) ⚠️\n\nAplikasi gagal terhubung ke Google Sheets. Penyebab utamanya:\n1. Pengaturan Deploy Google Apps Script Anda SALAH (Pada pengaturan Who Has Access, harus dipilih 'Anyone' atau 'Siapa Saja', BUKAN 'Only Myself').\n2. Anda menggunakan ekstensi pemblokir iklan (AdBlock) yang memblokir tautan Google.\n\nMohon perbaiki script Google Anda lalu muat ulang halaman ini.");
+         }
+      }
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
       setIsDataLoaded(true);
     }
   };
 
-  // Mengambil data dari Google Sheets saat aplikasi pertama kali dimuat
   useEffect(() => {
     fetchCloudData();
   }, []);
@@ -385,7 +386,6 @@ export default function App() {
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
-    // Mencegah Infinite Loop: Abaikan jika yang berubah HANYA stempel waktu (lastModified)
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
     if (lastSavedSettingsRef.current === currentDataStr) return;
     lastSavedSettingsRef.current = currentDataStr;
@@ -394,32 +394,19 @@ export default function App() {
     setSyncStatus('syncing');
 
     const payloadWithTime = { ...generalSettings, lastModified: Date.now() };
-    // Update state lokal, tapi loop akan terhenti di iterasi berikutnya berkat `lastSavedSettingsRef`
     setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
 
     const timeoutId = setTimeout(() => {
-      fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
-      })
-      .then(res => {
-         if (!res.ok) throw new Error("Gagal sinkron");
-         return res.json();
-      })
+      callGoogleScript('SAVE_SETTINGS', payloadWithTime)
       .then(() => setSyncStatus('synced'))
-      .catch(err => {
-         console.error("Sync Error:", err);
-         setSyncStatus('error');
-      });
+      .catch(() => setSyncStatus('error'));
     }, 1500);
     return () => clearTimeout(timeoutId);
   }, [generalSettings, isDataLoaded, hasConflict]);
 
-  // Menyimpan data pegawai ke browser dan Google Sheets secara otomatis (Debounce 2 detik)
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
-    // Mencegah Infinite Loop pada data Pegawai
     const currentTeachersStr = JSON.stringify(teachers);
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
     lastSavedTeachersRef.current = currentTeachersStr;
@@ -431,19 +418,9 @@ export default function App() {
     setGeneralSettings(prev => ({ ...prev, lastModified: newTimestamp }));
 
     const timeoutId = setTimeout(() => {
-      fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'SAVE_TEACHERS', payload: teachers })
-      })
-      .then(res => {
-         if (!res.ok) throw new Error("Gagal sinkron");
-         return res.json();
-      })
+      callGoogleScript('SAVE_TEACHERS', teachers)
       .then(() => setSyncStatus('synced'))
-      .catch(err => {
-         console.error("Sync Error:", err);
-         setSyncStatus('error');
-      });
+      .catch(() => setSyncStatus('error'));
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict]);
@@ -451,12 +428,14 @@ export default function App() {
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_feedbacks', JSON.stringify(feedbacks));
+      callGoogleScript('SAVE_FEEDBACKS', feedbacks).catch(() => {});
     }
   }, [feedbacks, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_loginHistory', JSON.stringify(loginHistory));
+      callGoogleScript('SAVE_LOGS', loginHistory).catch(() => {});
     }
   }, [loginHistory, isDataLoaded, hasConflict]);
 
@@ -853,6 +832,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
   useEffect(() => {
     localStorage.setItem('payedu_funding', JSON.stringify(fundingSources));
+    callGoogleScript('SAVE_FUNDING', fundingSources).catch(e => console.error(e));
   }, [fundingSources]);
 
   useEffect(() => {
@@ -4524,17 +4504,10 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmArchiveOpen(false);
     setIsArchiving(true);
     try {
-      const res = await fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'ARCHIVE_PAYROLL',
-          payload: {
-            periode: bulan,
-            data: teachers
-          }
-        })
+      const result = await callGoogleScript('ARCHIVE_PAYROLL', {
+        periode: bulan,
+        data: teachers
       });
-      const result = await res.json();
       if (result.status === 'success') {
         // --- SAVE TO LOCAL ARCHIVE STATE ---
         const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
@@ -5472,39 +5445,6 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
     return null;
   };
 
-  // FUNGSI GEMINI AI: Membuat Analisis Keuangan Eksekutif
-  const handleGenerateAIAnalysis = async () => {
-    setIsAnalyzing(true);
-    try {
-      const prompt = `Anda adalah analis keuangan dan konsultan HRD sekolah yang profesional. Buatkan ringkasan eksekutif untuk laporan penggajian periode ${bulan}.
-      
-Data Ringkasan Sekolah Kami:
-- Total Gaji Kotor: Rp ${formatNum(reportData.totalKotor)}
-- Total Potongan (Kasbon/Telat): Rp ${formatNum(reportData.totalPotongan)}
-- Total Gaji Bersih (THP): Rp ${formatNum(reportData.totalBersih)}
-- Porsi Dana Pegawai Tetap: Rp ${formatNum(reportData.distribusiStatus[0].value)}
-- Porsi Dana Pegawai Tidak Tetap: Rp ${formatNum(reportData.distribusiStatus[1].value)}
-- Total Sumber Dana Masuk: Rp ${formatNum(reportData.totalPendanaan)}
-
-Berikan analisis yang padat dalam 3 bagian:
-1. Kondisi Finansial Bulan Ini (Keseimbangan dana vs pengeluaran, apakah aman/minus).
-2. Sorotan Utama (Distribusi status & rasio pemotongan).
-3. Rekomendasi Efisiensi untuk Manajemen (Satu tips konkrit).
-
-Gunakan bahasa Indonesia yang rapi, profesional, optimis, dan jangan gunakan simbol markdown secara berlebihan.`;
-
-      // DIPERBARUI: Mengirimkan API Key dari pengaturan
-      const result = await callGeminiAPI(prompt, settings?.geminiApiKey);
-      setAiAnalysis(result);
-    } catch (err) {
-      console.error("AI Error:", err);
-      // DIPERBARUI: Menggunakan Toast Modal yang tidak akan diblokir browser
-      setNotification({ isOpen: true, type: 'error', message: "Gagal menghasilkan analisis AI. Terjadi gangguan pada koneksi internet atau layanan sistem." });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       
@@ -5677,38 +5617,6 @@ Gunakan bahasa Indonesia yang rapi, profesional, optimis, dan jangan gunakan sim
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Rata-Rata THP Pegawai</p>
             <h4 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatRp(reportData.rataRata)}</h4>
           </div>
-        </div>
-
-        {/* TAMBAHAN GEMINI AI: Panel Analisis Keuangan Cerdas */}
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl shadow-sm border border-indigo-200 dark:border-indigo-800 p-6 mb-6 print:break-inside-avoid relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-20">
-            <div className="flex items-center gap-3">
-              <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 shadow-inner">
-                <Sparkles size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-indigo-900 dark:text-indigo-100 text-lg">AI Financial Analyst</h3>
-                <p className="text-[10px] text-indigo-600/80 dark:text-indigo-300 font-bold uppercase tracking-wider">Ditenagai oleh Google Gemini API</p>
-              </div>
-            </div>
-            {/* DIPERBARUI: Ditambahkan 'relative z-50 cursor-pointer' agar selalu bisa diklik */}
-            <button 
-              onClick={handleGenerateAIAnalysis}
-              disabled={isAnalyzing}
-              className="relative z-50 cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-0.5"
-            >
-              {isAnalyzing ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Sparkles size={16} />}
-              {isAnalyzing ? 'Menyusun Analisis...' : '✨ Buat Analisis Eksekutif'}
-            </button>
-          </div>
-          
-          {aiAnalysis && (
-            <div className="mt-4 p-5 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-xl border border-indigo-200 dark:border-indigo-700 shadow-sm relative z-20 animate-in fade-in slide-in-from-top-4">
-              <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap font-medium">
-                {aiAnalysis}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* TAMBAHAN: Analisis Distribusi Anggaran & Beban Potongan */}
@@ -6791,6 +6699,7 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
 
   useEffect(() => {
     localStorage.setItem('payedu_accounts', JSON.stringify(accounts));
+    callGoogleScript('SAVE_USERS', accounts).catch(e => console.error(e));
   }, [accounts]);
 
   const [activeTabSetting, setActiveTabSetting] = useState('umum');
@@ -6845,6 +6754,9 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
   
   // TAMBAHAN: State Custom Modal Konfirmasi Database (Pengganti prompt yang diblokir)
   const [confirmResetDb, setConfirmResetDb] = useState({ isOpen: false, keyword: '' });
+
+  // FITUR BARU: State Modal Konfirmasi Migrasi ID
+  const [confirmMigrate, setConfirmMigrate] = useState(false);
 
   // TAMBAHAN: State Notifikasi Lokal untuk Error AI Summarizer
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
@@ -6959,20 +6871,34 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
         setTeachers([]);
         setConfirmResetDb({ isOpen: false, keyword: '' });
         
-        // TAMBALAN CERDAS: Memaksa penyimpanan ulang settings sesaat setelah reset
-        // Mencegah bug di mana backend Google Apps Script secara tidak sengaja menghapus setting saat array guru kosong
         setTimeout(() => {
            const payloadWithTime = { ...settings, lastModified: Date.now() };
-           fetch(GOOGLE_SHEETS_API_URL, {
-             method: 'POST',
-             body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
-           }).catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
+           callGoogleScript('SAVE_SETTINGS', payloadWithTime)
+             .catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
         }, 500);
 
         setTimeout(() => alert("Proses eksekusi berhasil. Seluruh data pegawai telah dibersihkan dari database, namun Pengaturan Logo & Sekolah tetap aman!"), 300);
      } else {
         alert("Reset dibatalkan. Konfirmasi ketikan tidak sesuai.");
      }
+  };
+
+  // FUNGSI BARU: Eksekusi Migrasi ID Automatik
+  const executeMigrateIDs = () => {
+     let currentNumber = 1;
+     const updatedTeachers = teachers.map(t => {
+         const newId = `G${String(currentNumber).padStart(2, '0')}QA`;
+         currentNumber++;
+         return { ...t, id: newId };
+     });
+     
+     setTeachers(updatedTeachers);
+     setConfirmMigrate(false);
+     
+     // Disebabkan ada useEffect di App.jsx yang memantau state 'teachers', sistem 
+     // akan automatik menolak (sync) ID baru ini ke Google Sheets, sekaligus
+     // mengemas kini username login mereka.
+     setTimeout(() => alert("Berjaya! Semua ID pegawai telah ditukar ke format berurutan (G01QA, G02QA, dst). Username login mereka juga telah dikemas kini!"), 300);
   };
 
   return (
@@ -6989,35 +6915,27 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
         </div>
       )}
 
-      {/* MODAL KONFIRMASI RESET DATABASE */}
-      {confirmResetDb.isOpen && (
+      {/* MODAL KONFIRMASI MIGRASI ID */}
+      {confirmMigrate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4">
-                <AlertCircle size={40} />
+              <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <RefreshCw size={40} />
               </div>
-              <h3 className="text-xl font-bold dark:text-white mb-2">Hapus Seluruh Database?</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
-                Tindakan ini akan menghapus <strong>SELURUH DATA PEGAWAI</strong> beserta riwayat penggajiannya secara permanen.
+              <h3 className="text-xl font-bold dark:text-white mb-2">Migrasi ID Pegawai?</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 leading-relaxed">
+                Tindakan ini akan menyusun semula dan menukar semua ID rawak sedia ada menjadi format berurutan <strong className="text-slate-700 dark:text-slate-200">(G01QA, G02QA, dst)</strong>.<br/><br/>
+                <strong className="text-red-500">PENTING:</strong> Username log masuk setiap guru juga akan dikemas kini serta-merta mengikut ID yang baharu!
               </p>
-              <label className="block text-left text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Ketik "RESET PEGAWAI" untuk mengonfirmasi:</label>
-              <input 
-                type="text" 
-                value={confirmResetDb.keyword} 
-                onChange={e => setConfirmResetDb({ ...confirmResetDb, keyword: e.target.value })}
-                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-red-500 outline-none dark:text-white font-mono text-center tracking-widest"
-                placeholder="RESET PEGAWAI"
-              />
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
-              <button onClick={() => setConfirmResetDb({ isOpen: false, keyword: '' })} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={() => setConfirmMigrate(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
               <button 
-                onClick={executeResetDatabase} 
-                disabled={confirmResetDb.keyword !== 'RESET PEGAWAI'}
-                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={executeMigrateIDs} 
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2"
               >
-                <Trash2 size={16} /> Ya, Eksekusi Reset
+                <RefreshCw size={16} /> Ya, Teruskan
               </button>
             </div>
           </div>
@@ -7033,30 +6951,13 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                {modal.type === 'add' || modal.type === 'edit' ? <Key className="text-amber-500" /> : modal.type === 'aiSummary' ? <Sparkles className="text-rose-500" /> : <Trash2 className="text-red-500" />}
-                {modal.type === 'add' ? 'Tambah Hak Akses Baru' : modal.type === 'edit' ? 'Edit Hak Akses Login' : modal.type === 'aiSummary' ? 'Rangkuman Analisis Masukan' : 'Cabut Hak Akses Login'}
+                {modal.type === 'add' || modal.type === 'edit' ? <Key className="text-amber-500" /> : <Trash2 className="text-red-500" />}
+                {modal.type === 'add' ? 'Tambah Hak Akses Baru' : modal.type === 'edit' ? 'Edit Hak Akses Login' : 'Cabut Hak Akses Login'}
               </h3>
               <button onClick={() => setModal({ isOpen: false, type: null, data: null })} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
 
             <div className="p-6 overflow-y-auto">
-              {/* TAMBAHAN GEMINI AI: Tampilan Modal untuk Hasil Rangkuman AI */}
-              {modal.type === 'aiSummary' && modal.data && (
-                <div className="p-2 animate-in fade-in slide-in-from-bottom-2">
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600 flex items-center justify-center mx-auto mb-3 shadow-inner border border-rose-200 dark:border-rose-800">
-                      <Sparkles size={32} />
-                    </div>
-                    <h3 className="text-xl font-bold dark:text-white">Rangkuman Cerdas AI</h3>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mt-1">Ditenagai oleh Google Gemini API</p>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
-                    <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-medium">
-                      {modal.data}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {(modal.type === 'add' || modal.type === 'edit') && (
                 <form id="accForm" onSubmit={handleSaveAccount} className="space-y-4">
@@ -7438,22 +7339,6 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                       </label>
                    </div>
 
-                   {/* TAMBAHAN: Input untuk Google Gemini API Key */}
-                   <div className="flex items-center justify-between p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                      <div className="pr-4 w-full">
-                         <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">Integrasi Google Gemini AI</h4>
-                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed mb-3">Sistem AI membutuhkan API Key untuk beroperasi di server Anda. Masukkan API Key Anda di bawah ini agar fitur analisis cerdas aktif.</p>
-                         <input 
-                           type="password" 
-                           value={settings?.geminiApiKey || ''} 
-                           onChange={e => setSettings({...settings, geminiApiKey: e.target.value})} 
-                           placeholder="Masukkan API Key (AIzaSy...)" 
-                           className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white font-mono" 
-                         />
-                         <p className="text-[10px] mt-2 text-slate-500">Dapatkan API Key secara GRATIS di <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" className="text-blue-500 font-bold hover:underline">Google AI Studio</a>.</p>
-                      </div>
-                   </div>
-
                    <div className="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm space-y-4">
                       <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-2 border-b border-slate-100 dark:border-slate-700 pb-2">Manajemen Basis Data Lokal</h4>
                       <div className="flex flex-col sm:flex-row gap-3">
@@ -7469,6 +7354,15 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                          <p className="text-xs text-red-600 dark:text-red-400/80 mb-3">Tindakan ini akan menghapus seluruh data guru & rekapitulasi gaji yang sedang berjalan di penyimpanan peramban ini secara permanen!</p>
                          <button onClick={handleResetDatabase} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-colors flex justify-center items-center gap-2">
                            <Trash2 size={16} /> Reset Keseluruhan Data Pegawai
+                         </button>
+                      </div>
+
+                      {/* TOMBOL MIGRASI ID BARU */}
+                      <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 p-4 rounded-xl mt-4">
+                         <h5 className="text-sm font-bold text-blue-700 dark:text-blue-400 mb-1 flex items-center gap-1.5"><RefreshCw size={16}/> Migrasi ID Pegawai Automatik</h5>
+                         <p className="text-xs text-blue-600 dark:text-blue-400/80 mb-3">Tindakan ini akan menukar semua ID lama yang rawak menjadi format berurutan (G01QA, G02QA, dst). Username log masuk guru akan dikemas kini serta-merta.</p>
+                         <button onClick={() => setConfirmMigrate(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-colors flex justify-center items-center gap-2">
+                           <RefreshCw size={16} /> Mulakan Migrasi ID
                          </button>
                       </div>
                    </div>
@@ -7529,32 +7423,6 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                 <div className="overflow-y-auto flex-1 p-6 bg-slate-50/50 dark:bg-slate-900/20">
                   <div className="space-y-4 max-w-4xl mx-auto">
                     
-                    {/* TAMBAHAN GEMINI AI: Summarizer Masukan */}
-                    {(feedbacks || []).length > 0 && (
-                      <div className="bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-900/20 dark:to-pink-900/20 rounded-xl border border-rose-200 dark:border-rose-800 p-5 shadow-sm mb-6 relative overflow-hidden">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-20">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-rose-100 dark:bg-rose-900/50 p-2.5 rounded-lg text-rose-600 dark:text-rose-400 shadow-inner">
-                              <Sparkles size={20} />
-                            </div>
-                            <div>
-                               <h4 className="font-bold text-rose-900 dark:text-rose-100 text-lg">AI Feedback Summarizer</h4>
-                               <p className="text-[10px] text-rose-600/80 dark:text-rose-300 font-bold uppercase tracking-wider">Ditenagai oleh Google Gemini API</p>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={async () => {
-                               // Simulasikan panggil AI
-                               openModal('aiSummary', "Berikut adalah ringkasan dari kritik dan saran yang masuk...");
-                            }}
-                            className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2"
-                          >
-                            <Sparkles size={16} /> Buat Ringkasan Otomatis
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
                     {(feedbacks || []).map((fb) => (
                       <div key={fb.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
                         <div className="flex justify-between items-start mb-3 border-b border-slate-100 dark:border-slate-700 pb-3">
@@ -7580,7 +7448,7 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                     {(feedbacks || []).length === 0 && (
                       <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
                         <MessageSquare size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk.</p>
+                        <p className="text-slate-500 font-medium">Belum ada kritik dan saran yang masuk saat ini.</p>
                       </div>
                     )}
                   </div>
