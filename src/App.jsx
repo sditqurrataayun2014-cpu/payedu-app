@@ -6870,6 +6870,22 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
   // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
   const [localPortalText, setLocalPortalText] = useState(settings.payrollInfoText || '');
 
+  // Teks Default Resmi Sekolah
+  const DEFAULT_PORTAL_TEXT = `Sistem penggajian di sekolah ini kami susun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
+
+* Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di sekolah ini.
+* Tunjangan Masa Kerja: Diberikan kepada Guru/Pegawai yang berstatus TETAP. Adapun syarat untuk diangkat sebagai Guru/ Pegawai Tetap adalah minimal masa kerja 2 tahun.
+* Tunjangan Pendidikan: Penyesuaian berdasarkan kualifikasi pendidikan terakhir (SMA/Diploma/S1/S2).
+* Tunjangan Jabatan: Diberikan kepada pemangku amanah struktural sekolah (Kepsek, Waka, Wali Kelas, dll).
+* Tunjangan Keluarga: Diberikan khusus bagi pegawai yang telah menikah (Tunjangan Suami/Istri & Anak).
+* Insentif Kehadiran (Tepat Waktu): Apresiasi atas dedikasi dan kedisiplinan waktu kehadiran masuk kelas.
+* Insentif Tugas Tambahan: Disesuaikan dengan penugasan dari Kepala Sekolah yang sifanya insidental atau tugas khusus lainnya.
+* Pemotongan Kedisiplinan: Pengurangan nominal atas keterlambatan atau ketidakhadiran tanpa keterangan.
+* Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, iuran baju Guru, atau lainnya.
+* Adapun Hal lainnya yang belum terakomodir di dalam sistem aplikasi penggajian ini, akan menyesuaikan dengan kebijakan Sekolah/Yayasan. (misalnya: Guru cuti, libur Panjang, dll.) yang berdampak terhadap rekapitulasi jam mengajar.
+
+Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan/dikonfirmasi.`;
+
   // PERBAIKAN FLEKSIBILITAS: Memastikan teks editor lokal selalu sinkron dengan data server (Anti-Bug Tersangkut)
   useEffect(() => {
     if (settings.payrollInfoText !== undefined) {
@@ -6977,13 +6993,21 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
     e.preventDefault();
     setIsSaving(true);
     
-    // PERBAIKAN: Paksa trigger pembaruan lastModified agar auto-save langsung mengeksekusi pengiriman ke Google Sheets
-    setSettings(prev => ({ ...prev, lastModified: Date.now() }));
+    const newSettings = { ...settings, lastModified: Date.now() };
+    setSettings(newSettings);
+    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
     
-    setTimeout(() => {
-      setIsSaving(false);
-      alert('Pengaturan Aplikasi berhasil disimpan dan diperbarui!');
-    }, 600);
+    // PAKSA SIMPAN LANGSUNG KE SERVER (Bypass Auto-save)
+    fetch(GOOGLE_SHEETS_API_URL, {
+       method: 'POST',
+       body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: newSettings })
+    }).then(() => {
+       setIsSaving(false);
+       alert('Pengaturan Umum berhasil disimpan permanen!');
+    }).catch(() => {
+       setIsSaving(false);
+       alert('Gagal sinkronisasi ke server, namun tersimpan di perangkat.');
+    });
   };
 
   const handleSaveAccount = (e) => {
@@ -7443,18 +7467,29 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                      e.preventDefault();
                      setIsSaving(true);
                      
-                     // TAMBALAN CERDAS 4: Paksa simpan ke local storage seketika sebelum auto-save mengambil alih
                      const newSettings = {...settings, payrollInfoText: localPortalText, lastModified: Date.now()};
                      setSettings(newSettings);
                      safeStorageSet('payedu_settings', JSON.stringify(newSettings));
                      
-                     setTimeout(() => {
+                     // PAKSA SIMPAN LANGSUNG KE SERVER (Mutlak Tersimpan)
+                     fetch(GOOGLE_SHEETS_API_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: newSettings })
+                     }).then(() => {
                         setIsSaving(false);
-                        alert('Teks Portal Guru berhasil diperbarui dan disimpan!');
-                     }, 600);
+                        alert('Mantap! Teks Portal Guru berhasil diperbarui dan dikunci ke server database!');
+                     }).catch(() => {
+                        setIsSaving(false);
+                        alert('Koneksi terputus. Data tersimpan secara lokal.');
+                     });
                   }} className="space-y-4 max-w-4xl">
                      <div>
-                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Pedoman & Aturan Sistem Penggajian (Tampil di menu Info Sistem)</label>
+                       <div className="flex justify-between items-end mb-2">
+                         <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Pedoman & Aturan Sistem Penggajian</label>
+                         <button type="button" onClick={() => setLocalPortalText(DEFAULT_PORTAL_TEXT)} className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors shadow-sm">
+                           🔄 Reset ke Teks Standar Sekolah
+                         </button>
+                       </div>
                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Gunakan tanda bintang (*) atau strip (-) untuk membuat list/daftar yang rapi. Gunakan titik dua (:) di pertengahan teks untuk menebalkan judul poin (seperti "Nama Tunjangan: Penjelasan").</p>
                        <textarea 
                          rows="15" 
