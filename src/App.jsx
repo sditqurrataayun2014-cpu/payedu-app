@@ -411,9 +411,25 @@ export default function App() {
             }
         }
         
-        // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
-        // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
-        const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
+        // 🛡️ TAMBALAN CERDAS (SISTEM PENYELAMAT DATA MUTLAK) 🛡️
+        let serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
+        
+        // Cek isi memori lokal di browser saat ini
+        const localTeachersStr = localStorage.getItem('payedu_teachers');
+        const localTeachers = localTeachersStr ? JSON.parse(localTeachersStr) : [];
+
+        // LOGIKA ANTI-HAPUS: 
+        // Jika server Google Sheet kosong (0) TAPI memori perangkat lokal punya data, JANGAN DIHAPUS!
+        // Paksa server untuk menarik (menyerap) data dari memori perangkat ini.
+        if (serverTeachers.length === 0 && localTeachers.length > 0) {
+            serverTeachers = localTeachers;
+            
+            // Secara diam-diam tembak data lokal yang selamat ini ke server Google Sheets
+            postToGoogleSheets('SAVE_TEACHERS', serverTeachers)
+               .catch(e => console.error("Penyelamatan data gagal:", e));
+               
+            console.warn("🛡️ Sistem Penyelamat Aktif: Mencegah penghapusan data lokal oleh server yang kosong.");
+        }
         
         // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
