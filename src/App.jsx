@@ -672,13 +672,21 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${isDarkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
-      {/* BANNER NOTIFIKASI INSTAL PWA */}
+      {/* BANNER NOTIFIKASI INSTAL PWA (DIBUAT DINAMIS) */}
       {showInstallBanner && (
         <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-[0_10px_40px_-10px_rgba(59,130,246,0.6)] z-[100] flex items-center justify-between animate-in slide-in-from-bottom-5 border border-white/20">
           <div className="flex items-center gap-3">
-             <div className="bg-white/20 p-2.5 rounded-xl shadow-inner"><Download size={24} /></div>
+             <div className="bg-white/20 p-2 rounded-xl shadow-inner shrink-0 flex items-center justify-center">
+               {/* Membaca logo dari pengaturan secara otomatis */}
+               {generalSettings?.logoUrl ? (
+                 <img src={generalSettings.logoUrl} alt="Logo" className="w-7 h-7 object-contain drop-shadow-md" />
+               ) : (
+                 <Download size={24} />
+               )}
+             </div>
              <div>
-               <p className="font-bold text-sm leading-tight">Instal PayEdu Apps</p>
+               {/* Membaca nama aplikasi dari pengaturan secara otomatis */}
+               <p className="font-bold text-sm leading-tight">Instal {generalSettings?.appName || 'Aplikasi'}</p>
                <p className="text-[11px] text-blue-100 mt-0.5">Akses lebih cepat dan lancar dari layar utama perangkat Anda.</p>
              </div>
           </div>
@@ -689,12 +697,17 @@ export default function App() {
         </div>
       )}
 
-      {/* TAMBALAN CERDAS: MODAL PANDUAN INSTAL MANUAL */}
+      {/* TAMBALAN CERDAS: MODAL PANDUAN INSTAL MANUAL (DIBUAT DINAMIS) */}
       {showInstallGuide && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 border border-slate-200 dark:border-slate-700">
               <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4">
-                <Download size={32} />
+                {/* Membaca logo dari pengaturan secara otomatis */}
+                {generalSettings?.logoUrl ? (
+                  <img src={generalSettings.logoUrl} alt="Logo" className="w-10 h-10 object-contain drop-shadow-sm" />
+                ) : (
+                  <Download size={32} />
+                )}
               </div>
               <h3 className="text-xl font-bold dark:text-white mb-2">Cara Instal Manual</h3>
               <div className="text-sm text-slate-600 dark:text-slate-400 mb-6 space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
