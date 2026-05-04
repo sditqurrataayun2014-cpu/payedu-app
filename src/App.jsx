@@ -40,6 +40,25 @@ const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
 const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
+// TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
+const postToGoogleSheets = async (action, payload) => {
+  try {
+    const res = await fetch(GOOGLE_SHEETS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8', // WAJIB text/plain agar tidak memicu preflight OPTIONS (CORS Block)
+      },
+      redirect: 'follow', // WAJIB untuk mengikuti redirect Google ke script.googleusercontent.com
+      body: JSON.stringify({ action, payload })
+    });
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Fetch POST Error:", error);
+    throw error;
+  }
+};
+
 // --- HELPER FUNCTIONS LOGIKA GAJI ---
 const calculatePayroll = (teacher) => {
   const p = teacher.payroll || {}; // Failsafe jika payroll undefined
@@ -263,6 +282,11 @@ export default function App() {
   // TAMBAHAN: State Pendeteksi Tabrakan Data (Concurrency Conflict)
   const [hasConflict, setHasConflict] = useState(false);
   
+  // TAMBAHAN FITUR: State untuk Notifikasi Instalasi PWA
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false); // TAMBALAN CERDAS: Panduan Manual
+  
   const [teachers, setTeachers] = useState(() => {
     const saved = localStorage.getItem('payedu_teachers');
     return saved ? JSON.parse(saved) : [];
@@ -295,6 +319,69 @@ export default function App() {
   // TAMBALAN CERDAS 1: Ref Anti-Tabrakan untuk menahan radar saat sedang push data
   const isPushingDataRef = useRef(false);
 
+  // --- EFEK UNTUK MENANGKAP EVENT INSTALASI PWA & FALLBACK CERDAS ---
+  useEffect(() => {
+    // Cek apakah user sudah pernah menolak banner ini
+    const hasDismissed = localStorage.getItem('payedu_dismiss_install');
+    if (hasDismissed) return;
+
+    const handleBeforeInstallPrompt = (e) => {
+      // Mencegah mini-infobar default muncul di mobile
+      e.preventDefault();
+      // Simpan event sehingga bisa dipicu nanti dengan tombol
+      setDeferredPrompt(e);
+      // Tampilkan banner custom kita
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    window.addEventListener('appinstalled', () => {
+      // Sembunyikan banner jika user sudah berhasil instal
+      setShowInstallBanner(false);
+      setDeferredPrompt(null);
+      localStorage.setItem('payedu_dismiss_install', 'true');
+    });
+
+    // TAMBALAN CERDAS: Fallback Timeout
+    // Jika dalam 3.5 detik browser tidak memicu event native (misal di iOS/Safari atau manifest blm sempurna),
+    // kita paksa banner custom tetap muncul sebagai panduan shortcut.
+    const fallbackTimer = setTimeout(() => {
+      setShowInstallBanner(prev => {
+         if (!prev) return true;
+         return prev;
+      });
+    }, 3500);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      clearTimeout(fallbackTimer);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      // Munculkan prompt instalasi bawaan browser jika tersedia (Chrome Android/Desktop)
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+      if (outcome === 'accepted') {
+         setShowInstallBanner(false);
+         localStorage.setItem('payedu_dismiss_install', 'true');
+      }
+    } else {
+      // TAMBALAN CERDAS: Jika prompt native tidak tersedia (iOS / Error config), 
+      // munculkan modal panduan instalasi manual.
+      setShowInstallGuide(true);
+      setShowInstallBanner(false);
+    }
+  };
+
+  const handleDismissInstall = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem('payedu_dismiss_install', 'true'); // Simpan pilihan agar tidak mengganggu lagi
+  };
+
   // Fungsi Fetch Data Utama (Bisa dipanggil ulang saat terjadi konflik)
   const fetchCloudData = async (isBackgroundSync = false) => {
     try {
@@ -318,10 +405,8 @@ export default function App() {
                 if (parsedLocal && parsedLocal.appName) {
                     serverSettings = parsedLocal;
                     // Kirim ulang ke server secara diam-diam agar JSON Google Sheet kembali normal
-                    fetch(GOOGLE_SHEETS_API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
-                    }).catch(e => console.error("Failsafe save settings error:", e));
+                    postToGoogleSheets('SAVE_SETTINGS', { ...serverSettings, lastModified: Date.now() })
+                        .catch(e => console.error("Failsafe save settings error:", e));
                 }
             }
         }
@@ -393,14 +478,7 @@ export default function App() {
     isPushingDataRef.current = true; // Kunci Radar Background
 
     const timeoutId = setTimeout(() => {
-      fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
-      })
-      .then(res => {
-         if (!res.ok) throw new Error("Gagal sinkron");
-         return res.json();
-      })
+      postToGoogleSheets('SAVE_SETTINGS', payloadWithTime)
       .then(() => setSyncStatus('synced'))
       .catch(err => {
          console.error("Sync Error:", err);
@@ -432,14 +510,7 @@ export default function App() {
     isPushingDataRef.current = true; // Kunci Radar Background
 
     const timeoutId = setTimeout(() => {
-      fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'SAVE_TEACHERS', payload: teachers })
-      })
-      .then(res => {
-         if (!res.ok) throw new Error("Gagal sinkron");
-         return res.json();
-      })
+      postToGoogleSheets('SAVE_TEACHERS', teachers)
       .then(() => setSyncStatus('synced'))
       .catch(err => {
          console.error("Sync Error:", err);
@@ -600,6 +671,52 @@ export default function App() {
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${isDarkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+      
+      {/* BANNER NOTIFIKASI INSTAL PWA */}
+      {showInstallBanner && (
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-[0_10px_40px_-10px_rgba(59,130,246,0.6)] z-[100] flex items-center justify-between animate-in slide-in-from-bottom-5 border border-white/20">
+          <div className="flex items-center gap-3">
+             <div className="bg-white/20 p-2.5 rounded-xl shadow-inner"><Download size={24} /></div>
+             <div>
+               <p className="font-bold text-sm leading-tight">Instal PayEdu Apps</p>
+               <p className="text-[11px] text-blue-100 mt-0.5">Akses lebih cepat dan lancar dari layar utama perangkat Anda.</p>
+             </div>
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0 ml-3">
+            <button onClick={handleInstallClick} className="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 hover:bg-blue-50 rounded-lg transition-transform hover:scale-105 shadow-sm text-center">Instal</button>
+            <button onClick={handleDismissInstall} className="px-4 py-1.5 text-[10px] font-semibold text-blue-100 hover:bg-white/10 rounded-lg transition-colors text-center">Lain Kali</button>
+          </div>
+        </div>
+      )}
+
+      {/* TAMBALAN CERDAS: MODAL PANDUAN INSTAL MANUAL */}
+      {showInstallGuide && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 border border-slate-200 dark:border-slate-700">
+              <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                <Download size={32} />
+              </div>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Cara Instal Manual</h3>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mb-6 space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <p>
+                  <strong>📱 Pengguna iPhone / Safari:</strong><br/>
+                  1. Tekan ikon <strong>Share (Bagikan)</strong> di menu bawah.<br/>
+                  2. Geser ke bawah, pilih <strong>"Add to Home Screen"</strong>.
+                </p>
+                <div className="h-px bg-slate-200 dark:bg-slate-700 w-full"></div>
+                <p>
+                  <strong>🤖 Pengguna Android / Chrome:</strong><br/>
+                  1. Tekan ikon <strong>Titik Tiga</strong> di pojok kanan atas.<br/>
+                  2. Pilih <strong>"Install App"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.
+                </p>
+              </div>
+              <button onClick={() => setShowInstallGuide(false)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-sm">
+                Mengerti, Tutup
+              </button>
+           </div>
+        </div>
+      )}
+
       {!user ? (
         <LoginView onLogin={setUser} isDarkMode={isDarkMode} toggleTheme={() => setIsDarkMode(!isDarkMode)} settings={generalSettings} recordLogin={recordLogin} teachers={teachers} setTeachers={setTeachers} />
       ) : (
@@ -4694,17 +4811,11 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmArchiveOpen(false);
     setIsArchiving(true);
     try {
-      const res = await fetch(GOOGLE_SHEETS_API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'ARCHIVE_PAYROLL',
-          payload: {
-            periode: bulan,
-            data: teachers
-          }
-        })
+      const result = await postToGoogleSheets('ARCHIVE_PAYROLL', {
+        periode: bulan,
+        data: teachers
       });
-      const result = await res.json();
+      
       if (result.status === 'success') {
         // --- SAVE TO LOCAL ARCHIVE STATE ---
         const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
@@ -6998,10 +7109,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     safeStorageSet('payedu_settings', JSON.stringify(newSettings));
     
     // PAKSA SIMPAN LANGSUNG KE SERVER (Bypass Auto-save)
-    fetch(GOOGLE_SHEETS_API_URL, {
-       method: 'POST',
-       body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: newSettings })
-    }).then(() => {
+    postToGoogleSheets('SAVE_SETTINGS', newSettings)
+    .then(() => {
        setIsSaving(false);
        alert('Pengaturan Umum berhasil disimpan permanen!');
     }).catch(() => {
@@ -7472,10 +7581,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      safeStorageSet('payedu_settings', JSON.stringify(newSettings));
                      
                      // PAKSA SIMPAN LANGSUNG KE SERVER (Mutlak Tersimpan)
-                     fetch(GOOGLE_SHEETS_API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: newSettings })
-                     }).then(() => {
+                     postToGoogleSheets('SAVE_SETTINGS', newSettings)
+                     .then(() => {
                         setIsSaving(false);
                         alert('Mantap! Teks Portal Guru berhasil diperbarui dan dikunci ke server database!');
                      }).catch(() => {
