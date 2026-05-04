@@ -2798,6 +2798,12 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
             // Pencarian cerdas berdasarkan nama guru
             const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
             if (teacherIndex !== -1) {
+               // 🪄 Hitung otomatis Hari Hadir dari data impor
+               let autoHadir = 0;
+               harianData.forEach(val => {
+                 if (!isNaN(val) && Number(val) > 0) autoHadir++;
+               });
+
                updatedTeachers[teacherIndex] = {
                   ...updatedTeachers[teacherIndex],
                   payroll: {
@@ -2806,6 +2812,10 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                         ...updatedTeachers[teacherIndex].payroll.jamMengajar,
                         realisasi: jamVal,
                         harian: harianData // <- Menyimpan rincian harian
+                     },
+                     disiplin: {
+                        ...(updatedTeachers[teacherIndex].payroll?.disiplin || {}),
+                        hadir: autoHadir // Disimpan otomatis
                      }
                   }
                };
@@ -2924,6 +2934,12 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     
     // Hitung ulang total realisasi berdasarkan input 31 hari (Hanya menjumlahkan angka)
     const totalRealisasi = editingData.harian.reduce((sum, val) => sum + (Number(val) || 0), 0);
+    
+    // 🪄 TAMBALAN CERDAS: Hitung otomatis Hari Hadir untuk disimpan
+    let autoHadir = 0;
+    editingData.harian.forEach(val => {
+       if (!isNaN(val) && Number(val) > 0) autoHadir++;
+    });
 
     // Memberikan jeda (delay) visual cerdas
     setTimeout(() => {
@@ -2937,6 +2953,10 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                 ...(t.payroll?.jamMengajar || {}),
                 harian: editingData.harian,
                 realisasi: totalRealisasi
+              },
+              disiplin: {
+                ...(t.payroll?.disiplin || {}),
+                hadir: autoHadir // Disimpan ke database
               }
             }
           };
@@ -2948,36 +2968,6 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
       setIsEditModalOpen(false);
       setEditingData(null);
     }, 600);
-  };
-
-  const handleHarianChange = (index, val) => {
-     let formattedVal = val.toUpperCase();
-     // Mengizinkan kosong, huruf S, I, A, atau angka jam (0-24)
-     if (formattedVal === '' || ['S', 'I', 'A'].includes(formattedVal) || (!isNaN(formattedVal) && Number(formattedVal) >= 0 && Number(formattedVal) <= 24)) {
-       const newHarian = [...editingData.harian];
-       newHarian[index] = formattedVal;
-       setEditingData({...editingData, harian: newHarian});
-     }
-  };
-
-  // FUNGSI BARU: Untuk mengubah telat langsung di tabel
-  const handleInlineTelatChange = (teacherId, newValue) => {
-    const telatVal = newValue === '' ? '' : Math.max(0, Number(newValue));
-    setTeachers(prev => prev.map(t => {
-      if (t.id === teacherId) {
-        return {
-          ...t,
-          payroll: {
-            ...(t.payroll || {}),
-            disiplin: {
-              ...(t.payroll?.disiplin || {}),
-              telat: telatVal
-            }
-          }
-        };
-      }
-      return t;
-    }));
   };
 
   // FUNGSI BARU: Untuk mengubah jam wajib langsung di tabel
@@ -3066,14 +3056,18 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
               <div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-3 gap-2">
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rincian Jam Mengajar (Tanggal 1 - 31)</label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-slate-500 flex gap-2 font-medium">
-                      <span className="text-amber-500">S: Sakit</span>
-                      <span className="text-blue-500">I: Izin</span>
-                      <span className="text-red-500">A: Alpa</span>
-                    </span>
-                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 px-3 py-1.5 rounded-lg shadow-sm">
-                      Total Realisasi: {editingData.harian.reduce((sum, val) => sum + (Number(val) || 0), 0)} JPL
+                  
+                  {/* 🪄 TAMBALAN CERDAS: Hitungan Live S/I/A/Hadir untuk memudahkan Admin */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                    <div className="flex gap-2 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                      <span className="text-emerald-600 dark:text-emerald-400">Hadir: {editingData.harian.filter(v => !isNaN(v) && Number(v)>0).length}</span>
+                      <span className="text-amber-500 border-l border-slate-300 dark:border-slate-600 pl-2">S: {editingData.harian.filter(v => String(v).toUpperCase()==='S').length}</span>
+                      <span className="text-blue-500 border-l border-slate-300 dark:border-slate-600 pl-2">I: {editingData.harian.filter(v => String(v).toUpperCase()==='I').length}</span>
+                      <span className="text-red-500 border-l border-slate-300 dark:border-slate-600 pl-2">A: {editingData.harian.filter(v => String(v).toUpperCase()==='A').length}</span>
+                    </div>
+                    
+                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
+                      Total: {editingData.harian.reduce((sum, val) => sum + (Number(val) || 0), 0)} JPL
                     </div>
                   </div>
                 </div>
@@ -6221,6 +6215,16 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   const tepatWaktuDisiplin = Math.max(0, realJam - telatDisiplin);
   const dailyData = myData.payroll?.jamMengajar?.harian || getDailyHours(realJam, myData.id);
 
+  // 🪄 TAMBALAN CERDAS: Kalkulasi Kehadiran Otomatis dari Array Harian
+  let autoHadir = 0, autoSakit = 0, autoIzin = 0, autoAlpa = 0;
+  dailyData.forEach(val => {
+     const v = String(val).toUpperCase();
+     if (v === 'S') autoSakit++;
+     else if (v === 'I') autoIzin++;
+     else if (v === 'A') autoAlpa++;
+     else if (!isNaN(v) && Number(v) > 0) autoHadir++;
+  });
+
   const handleSendFeedback = (e) => {
     e.preventDefault();
     if (!feedbackMsg.trim()) return;
@@ -6690,26 +6694,42 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
         {/* 2. Rekap Kehadiran */}
         {activeSection === 'portal_kehadiran' && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800/30">
-              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mb-1">Hari Hadir</span>
-              <span className="text-2xl font-black text-amber-800 dark:text-amber-300">{myData.payroll.disiplin.hadir} <span className="text-sm font-medium text-amber-600">Hari</span></span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800/30 shadow-inner">
+              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mb-1">Total Hari Hadir</span>
+              <span className="text-2xl font-black text-amber-800 dark:text-amber-300">{autoHadir} <span className="text-sm font-medium text-amber-600">Hari</span></span>
             </div>
             
-            <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-800/30">
+            <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-800/30 shadow-inner">
               <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider block mb-1">Terlambat</span>
               <span className="text-2xl font-black text-red-800 dark:text-red-300">{telatDisiplin} <span className="text-sm font-medium text-red-600">Kali</span></span>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
               <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Target Wajib</span>
               <span className="text-2xl font-black text-slate-700 dark:text-slate-200">{wajibJam} <span className="text-sm font-medium text-slate-500">JPL</span></span>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30">
+            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 shadow-inner">
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block mb-1">Total Realisasi</span>
               <span className="text-2xl font-black text-blue-800 dark:text-blue-300">{realJam} <span className="text-sm font-medium text-blue-600">JPL</span></span>
             </div>
+          </div>
+
+          {/* 🪄 TAMBALAN CERDAS: Kartu Rincian Sakit, Izin, Alpa Otomatis */}
+          <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
+             <div className="bg-amber-100/50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
+                <span className="text-xs md:text-sm font-bold text-amber-700 dark:text-amber-400">Sakit (S)</span>
+                <span className="text-lg md:text-xl font-black text-amber-600">{autoSakit} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
+             </div>
+             <div className="bg-blue-100/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
+                <span className="text-xs md:text-sm font-bold text-blue-700 dark:text-blue-400">Izin (I)</span>
+                <span className="text-lg md:text-xl font-black text-blue-600">{autoIzin} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
+             </div>
+             <div className="bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
+                <span className="text-xs md:text-sm font-bold text-red-700 dark:text-red-400">Alpa (A)</span>
+                <span className="text-lg md:text-xl font-black text-red-600">{autoAlpa} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
+             </div>
           </div>
 
           <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800">
