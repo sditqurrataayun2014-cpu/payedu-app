@@ -234,19 +234,21 @@ const defaultGeneralSettings = {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })(),
-  // PERBAIKAN: Mengganti teks yang terpotong (...) dengan pedoman utuh yang profesional
-  payrollInfoText: `Sistem penggajian di sekolah kami disusun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
+  // PERBAIKAN: Teks Default Portal Guru sesuai gambar dokumen terbaru dari Sekolah
+  payrollInfoText: `Sistem penggajian di sekolah ini kami susun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
 
-* Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di instansi ini.
-* Tunjangan Pendidikan: Penyesuaian berdasarkan kualifikasi akademik terakhir (SMA/Diploma/S1/S2).
+* Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di sekolah ini.
+* Tunjangan Masa Kerja: Diberikan kepada Guru/Pegawai yang berstatus TETAP. Adapun syarat untuk diangkat sebagai Guru/ Pegawai Tetap adalah minimal masa kerja 2 tahun.
+* Tunjangan Pendidikan: Penyesuaian berdasarkan kualifikasi pendidikan terakhir (SMA/Diploma/S1/S2).
 * Tunjangan Jabatan: Diberikan kepada pemangku amanah struktural sekolah (Kepsek, Waka, Wali Kelas, dll).
 * Tunjangan Keluarga: Diberikan khusus bagi pegawai yang telah menikah (Tunjangan Suami/Istri & Anak).
 * Insentif Kehadiran (Tepat Waktu): Apresiasi atas dedikasi dan kedisiplinan waktu kehadiran masuk kelas.
-* Insentif Tugas Tambahan: Disesuaikan dengan penugasan kepanitiaan insidental atau tugas khusus lainnya.
+* Insentif Tugas Tambahan: Disesuaikan dengan penugasan dari Kepala Sekolah yang sifanya insidental atau tugas khusus lainnya.
 * Pemotongan Kedisiplinan: Pengurangan nominal atas keterlambatan atau ketidakhadiran tanpa keterangan.
-* Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, Koperasi, atau lainnya.
+* Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, iuran baju Guru, atau lainnya.
+* Adapun Hal lainnya yang belum terakomodir di dalam sistem aplikasi penggajian ini, akan menyesuaikan dengan kebijakan Sekolah/Yayasan. (misalnya: Guru cuti, libur Panjang, dll.) yang berdampak terhadap rekapitulasi jam mengajar.
 
-Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan.`,
+Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan/dikonfirmasi.`,
   lastModified: Date.now() 
 };
 
@@ -289,6 +291,9 @@ export default function App() {
 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isLoadingDb, setIsLoadingDb] = useState(true);
+  
+  // TAMBALAN CERDAS 1: Ref Anti-Tabrakan untuk menahan radar saat sedang push data
+  const isPushingDataRef = useRef(false);
 
   // Fungsi Fetch Data Utama (Bisa dipanggil ulang saat terjadi konflik)
   const fetchCloudData = async (isBackgroundSync = false) => {
@@ -327,7 +332,8 @@ export default function App() {
         
         // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
-          if (serverSettings.lastModified > generalSettings.lastModified) {
+          // TAMBALAN CERDAS 2: Beri toleransi waktu 5 detik (5000ms) untuk mencegah konflik palsu akibat delay server Google
+          if (serverSettings.lastModified > (generalSettings.lastModified + 5000)) {
              setHasConflict(true); // Kunci Auto-Save!
              return; // Hentikan proses penimpaan state lokal
           }
@@ -350,13 +356,16 @@ export default function App() {
     fetchCloudData();
   }, []);
 
-  // TAMBAHAN: Radar Latar Belakang (Polling) mengecek versi data setiap 15 detik
+  // TAMBAHAN: Radar Latar Belakang (Polling) mengecek versi data
   useEffect(() => {
     if (!isDataLoaded || !user || hasConflict) return; // Jangan polling jika belum login atau sedang konflik
 
     const pollInterval = setInterval(() => {
-       fetchCloudData(true); // Lakukan background check
-    }, 15000); // 15 detik
+       // TAMBALAN CERDAS 3: Jangan tarik data jika aplikasi kita sendiri sedang sibuk nge-push data ke server
+       if (!isPushingDataRef.current) {
+          fetchCloudData(true); // Lakukan background check
+       }
+    }, 45000); // DIPERLAMA: Dari 15 detik menjadi 45 detik agar lalu lintas jaringan ke Google Sheet lebih stabil
 
     return () => clearInterval(pollInterval);
   }, [isDataLoaded, user, generalSettings.lastModified, hasConflict]);
@@ -381,6 +390,8 @@ export default function App() {
     // Update state lokal, tapi loop akan terhenti di iterasi berikutnya berkat `lastSavedSettingsRef`
     setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
 
+    isPushingDataRef.current = true; // Kunci Radar Background
+
     const timeoutId = setTimeout(() => {
       fetch(GOOGLE_SHEETS_API_URL, {
         method: 'POST',
@@ -394,6 +405,10 @@ export default function App() {
       .catch(err => {
          console.error("Sync Error:", err);
          setSyncStatus('error');
+      })
+      .finally(() => {
+         // Buka kunci radar setelah 3 detik untuk memastikan Sheets sudah stabil menyerap data
+         setTimeout(() => { isPushingDataRef.current = false; }, 3000);
       });
     }, 1500);
     return () => clearTimeout(timeoutId);
@@ -414,6 +429,8 @@ export default function App() {
     const newTimestamp = Date.now();
     setGeneralSettings(prev => ({ ...prev, lastModified: newTimestamp }));
 
+    isPushingDataRef.current = true; // Kunci Radar Background
+
     const timeoutId = setTimeout(() => {
       fetch(GOOGLE_SHEETS_API_URL, {
         method: 'POST',
@@ -427,6 +444,9 @@ export default function App() {
       .catch(err => {
          console.error("Sync Error:", err);
          setSyncStatus('error');
+      })
+      .finally(() => {
+         setTimeout(() => { isPushingDataRef.current = false; }, 3000);
       });
     }, 2000);
     return () => clearTimeout(timeoutId);
@@ -7422,8 +7442,12 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
                   <form id="formPortal" onSubmit={(e) => {
                      e.preventDefault();
                      setIsSaving(true);
-                     // Kirim teks lokal ke sistem global hanya saat tombol simpan ditekan
-                     setSettings(prev => ({...prev, payrollInfoText: localPortalText, lastModified: Date.now()}));
+                     
+                     // TAMBALAN CERDAS 4: Paksa simpan ke local storage seketika sebelum auto-save mengambil alih
+                     const newSettings = {...settings, payrollInfoText: localPortalText, lastModified: Date.now()};
+                     setSettings(newSettings);
+                     safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+                     
                      setTimeout(() => {
                         setIsSaving(false);
                         alert('Teks Portal Guru berhasil diperbarui dan disimpan!');
