@@ -226,6 +226,20 @@ const generateUniqueId = (prefix = '') => {
   return prefix + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 };
 
+// TAMBALAN CERDAS: Fungsi Pembangkit ID Guru Terstruktur (G01QA, G02QA, dst)
+const generateTeacherId = (currentTeachers) => {
+  if (!currentTeachers || currentTeachers.length === 0) return 'G01QA';
+  let maxNum = 0;
+  currentTeachers.forEach(t => {
+    const match = String(t.id).match(/^G(\d+)QA$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  return `G${String(maxNum + 1).padStart(2, '0')}QA`;
+};
+
 // TAMBAHAN NO 1: Failsafe Storage Cerdas untuk mendeteksi limit memori browser (5MB)
 const safeStorageSet = (key, value) => {
   try {
@@ -470,6 +484,26 @@ export default function App() {
 
     return () => clearInterval(pollInterval);
   }, [isDataLoaded, user, generalSettings.lastModified, hasConflict]);
+
+  // 🪄 TAMBALAN CERDAS: AUTO-MIGRASI ID GURU (Format Acak -> GxxQA) 🪄
+  useEffect(() => {
+    if (!isDataLoaded || hasConflict || teachers.length === 0) return;
+    
+    // Cek apakah masih ada ID yang berformat acak (G-xxxx)
+    const needsMigration = teachers.some(t => String(t.id).includes('-') || String(t.id).length > 8);
+    
+    if (needsMigration) {
+       console.log("Menjalankan Auto-Migrasi ID Pegawai ke format GxxQA...");
+       const updatedTeachers = teachers.map((t, index) => {
+          const paddedNumber = String(index + 1).padStart(2, '0');
+          return { ...t, id: `G${paddedNumber}QA` };
+       });
+       
+       // Menyimpan state otomatis memicu auto-save ke Google Sheets & sinkronisasi akun
+       setTeachers(updatedTeachers);
+       alert("✨ PEMBARUAN SISTEM: Seluruh ID & Username Pegawai telah berhasil dirapikan menjadi format berurutan (G01QA, G02QA, dst) secara otomatis!");
+    }
+  }, [isDataLoaded, teachers, hasConflict]);
 
   // TAMBAHAN: Ref untuk mencegah infinite loop pada Auto-Save
   const lastSavedSettingsRef = useRef('');
