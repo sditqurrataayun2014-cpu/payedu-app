@@ -321,22 +321,6 @@ export default function App() {
             }
         }
         
-        // TAMBALAN CERDAS: Auto-Recovery Teks Portal Guru
-        // Diperbarui: Hanya memulihkan jika teks benar-benar HANYA berisi "..." (teks rusak bawaan lama), 
-        // sehingga Admin tetap bisa mengosongkan teks atau menggunakan titik tiga saat mengetik.
-        if (serverSettings.payrollInfoText === '...') {
-            serverSettings.payrollInfoText = defaultGeneralSettings.payrollInfoText;
-            
-            // Simpan paksa ke memori lokal
-            safeStorageSet('payedu_settings', JSON.stringify(serverSettings));
-            
-            // Simpan paksa ke Google Sheets agar database di baris JSON_SETTINGS kembali normal
-            fetch(GOOGLE_SHEETS_API_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: { ...serverSettings, lastModified: Date.now() } })
-            }).catch(e => console.error("Auto-recovery text error:", e));
-        }
-        
         // Memastikan jika server kosong, data ditetapkan sebagai array kosong []
         // Ini mencegah aplikasi membangkitkan kembali data dari memori browser lokal
         const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
@@ -6865,6 +6849,13 @@ function PengaturanView({ teachers, setTeachers, settings, setSettings, feedback
 
   // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
   const [localPortalText, setLocalPortalText] = useState(settings.payrollInfoText || '');
+
+  // PERBAIKAN FLEKSIBILITAS: Memastikan teks editor lokal selalu sinkron dengan data server (Anti-Bug Tersangkut)
+  useEffect(() => {
+    if (settings.payrollInfoText !== undefined) {
+       setLocalPortalText(settings.payrollInfoText);
+    }
+  }, [settings.payrollInfoText]);
 
   // Hubungkan daftar akun ke LocalStorage
   const [accounts, setAccounts] = useState(() => {
