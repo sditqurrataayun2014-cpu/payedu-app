@@ -849,35 +849,40 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
       // Hash inputan user sebelum membandingkan dengan database
       const hashedInputPassword = simpleHash(password);
       
-      // Cari akun dengan username dan password yang sudah di-hash
-      const acc = savedAccounts.find(a => a.username === username && a.password === hashedInputPassword);
+      // Cari akun berdasarkan username terlebih dahulu
+      const accInStorage = savedAccounts.find(a => a.username === username);
       
       let authUser = null;
 
-      if (acc) {
-         recordLogin(acc.name, acc.role, 'Sukses');
-         authUser = { role: acc.role === 'Admin' ? 'admin' : acc.role, name: acc.name, id: acc.id || username };
+      if (accInStorage) {
+         // Jika akun ada di storage, password HARUS cocok dengan hash yang tersimpan (Mencegah Bypass)
+         if (accInStorage.password === hashedInputPassword) {
+            recordLogin(accInStorage.name, accInStorage.role, 'Sukses');
+            authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username };
+         }
+      } 
+      // 2. Jika akun belum ter-sync ke storage (Misal Admin belum pernah buka menu Pengaturan)
+      else if (username.startsWith('G')) {
+         const teacherData = teachers.find(t => t.id === username);
+         if (teacherData) {
+            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+            const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+            const defaultPassByNama = `${twoLetters}123`;
+
+            // Hanya izinkan password default jika akun belum dikelola di Storage
+            if (password === defaultPassByNama) {
+               recordLogin(teacherData.name, 'Guru', 'Sukses');
+               authUser = { role: 'guru', id: username, name: teacherData.name };
+            }
+         }
       }
-      // 2. Fallback Hardcoded
+      // 3. Fallback Hardcoded (Jika storage benar-benar hilang/kosong)
       else if (username === 'Akbar' && password === 'Boy2014') {
         recordLogin('Administrator System', 'Admin', 'Sukses');
         authUser = { role: 'admin', name: 'Administrator System' };
       } else if (username === 'kepsek' && password === 'Ilwani2010') {
         recordLogin('Kepala Sekolah', 'Kepala Sekolah', 'Sukses');
         authUser = { role: 'Kepala Sekolah', name: 'Kepala Sekolah' };
-      } else if (username.startsWith('G')) {
-        // PERBAIKAN LOGIKA: Deteksi sandi bawaan atau sandi fallback untuk guru
-        const teacherData = teachers.find(t => t.id === username);
-        if (teacherData) {
-            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-            const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-            const defaultPassByNama = `${twoLetters}123`;
-
-            if (password === 'guru123' || password === defaultPassByNama) {
-               recordLogin(teacherData.name, 'Guru', 'Sukses');
-               authUser = { role: 'guru', id: username, name: teacherData.name };
-            }
-        }
       }
 
       if (authUser) {
@@ -7823,11 +7828,20 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                    if (waNum.startsWith('0')) waNum = '62' + waNum.slice(1);
                                    if (acc.role !== 'Guru' && !waNum) waNum = ''; // Biarkan kosong untuk diketik manual di HP admin
 
-                                   let passText = "Tersandi (Rahasia)";
+                                   let passText = "••••••••";
                                    if (acc.role === 'Guru') {
                                       const cleanName = acc.name.replace(/[^a-zA-Z]/g, '');
                                       const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-                                      passText = `${twoLetters}123`;
+                                      const defaultPass = `${twoLetters}123`;
+                                      
+                                      // Cek apakah password masih default atau sudah diubah
+                                      if (acc.password === simpleHash(defaultPass)) {
+                                          passText = defaultPass;
+                                      } else if (acc.password === simpleHash('guru123')) {
+                                          passText = 'guru123';
+                                      } else {
+                                          passText = "[Telah Diubah Khusus - Silakan Ketik Manual]";
+                                      }
                                    } else if (acc.role === 'Admin') {
                                       passText = "Boy2014";
                                    } else if (acc.role === 'Kepala Sekolah') {
