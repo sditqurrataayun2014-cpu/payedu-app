@@ -865,9 +865,19 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
       } else if (username === 'kepsek' && password === 'Ilwani2010') {
         recordLogin('Kepala Sekolah', 'Kepala Sekolah', 'Sukses');
         authUser = { role: 'Kepala Sekolah', name: 'Kepala Sekolah' };
-      } else if (username.startsWith('G') && password === 'guru123') {
-        recordLogin(`Guru ${username}`, 'Guru', 'Sukses');
-        authUser = { role: 'guru', id: username, name: `Guru ${username}` };
+      } else if (username.startsWith('G')) {
+        // PERBAIKAN LOGIKA: Deteksi sandi bawaan atau sandi fallback untuk guru
+        const teacherData = teachers.find(t => t.id === username);
+        if (teacherData) {
+            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+            const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+            const defaultPassByNama = `${twoLetters}123`;
+
+            if (password === 'guru123' || password === defaultPassByNama) {
+               recordLogin(teacherData.name, 'Guru', 'Sukses');
+               authUser = { role: 'guru', id: username, name: teacherData.name };
+            }
+        }
       }
 
       if (authUser) {
@@ -7186,9 +7196,9 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         return { 
           id: t.id || generateUniqueId('G-'), 
           name: safeName, 
-          username: t.id || generateUniqueId('G-'), 
+          username: existing?.username || t.id || generateUniqueId('G-'), 
           password: finalPassword, 
-          role: 'Guru',
+          role: existing?.role || 'Guru',
           status: t.status || 'Aktif',
           phone: t.phone || '' // TAMBAHAN: Mengalirkan data WA ke data Akun
         };
@@ -7788,7 +7798,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                              </span>
                            </td>
                            <td className="p-4 tracking-widest text-slate-400 text-[11px] font-mono" title="Password Disamarkan">
-                             {acc.role === 'Guru' ? 'Tersandi (2 Huruf Nama + 123)' : '••••••••'}
+                             {/* 🪄 TAMBALAN CERDAS: Teks dinamis untuk status password */}
+                             {acc.role === 'Guru' ? (
+                               (acc.password === simpleHash('guru123') || acc.password === simpleHash(`${(acc.name?.replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase() || 'GU')}123`))
+                                 ? 'Tersandi (2 Huruf Nama + 123)' 
+                                 : <span className="text-emerald-600 dark:text-emerald-400 font-bold">•••••••• (Telah Diubah)</span>
+                             ) : '••••••••'}
                            </td>
                            <td className="p-4">
                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
