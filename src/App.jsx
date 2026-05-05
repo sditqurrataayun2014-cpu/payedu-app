@@ -64,12 +64,17 @@ const calculatePayroll = (teacher) => {
   const p = teacher.payroll || {}; // Failsafe jika payroll undefined
   const family = teacher.family || {}; // Failsafe jika family undefined
   
+  // 🪄 LOGIKA BARU: Tunjangan Masa Kerja Otomatis dari TMT & Syarat Guru Tetap
   let tMasaKerja = 0;
-  const calcYear = Number(p.tahunMasaKerja) || new Date(teacher.tmt || new Date()).getFullYear();
-  if (p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== null && p.tunjanganMasaKerjaManual !== "") {
-    tMasaKerja = Number(p.tunjanganMasaKerjaManual) || 0; // Failsafe Mencegah NaN
-  } else {
-    tMasaKerja = TENURE_RATES[calcYear] || 0;
+  const tmtYear = new Date(teacher.tmt || new Date()).getFullYear();
+  
+  // Tunjangan Masa Kerja HANYA CAIR jika statusnya adalah Pegawai Tetap
+  if (teacher.status === 'Tetap') {
+    if (p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== null && p.tunjanganMasaKerjaManual !== "") {
+      tMasaKerja = Number(p.tunjanganMasaKerjaManual) || 0; // Failsafe Mencegah NaN
+    } else {
+      tMasaKerja = TENURE_RATES[tmtYear] || 0;
+    }
   }
 
   const tJabatan = (p.jabatans || []).reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
@@ -1235,7 +1240,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
-      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} />;
+      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} user={user} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
       case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
@@ -3658,7 +3663,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   );
 }
 
-function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, settings }) {
+function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, settings, user }) {
   const [activeTabGaji, setActiveTabGaji] = useState('masaKerja');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); 
@@ -3738,23 +3743,6 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
       newArr.splice(index, 1);
       return { ...t, payroll: { ...p, [arrKey]: newArr } };
     });
-  };
-
-  const handleYearChange = (teacherId, yearStr) => {
-     const year = parseInt(yearStr, 10);
-     const safeYear = isNaN(year) ? new Date().getFullYear() : year;
-     const newNominal = TENURE_RATES[safeYear] !== undefined ? TENURE_RATES[safeYear] : '';
-     updateTeacherData(teacherId, t => {
-         const p = t.payroll || {};
-         return {
-             ...t,
-             payroll: {
-                 ...p,
-                 tahunMasaKerja: safeYear,
-                 tunjanganMasaKerjaManual: newNominal
-             }
-         };
-     });
   };
 
   const handleApplyMassal = (arrKey, itemData, targetGender = 'All') => {
@@ -4113,30 +4101,64 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                   {/* Isi Konten Input Berdasarkan Komponen Gaji Aktif */}
                   <div className="p-4 md:p-5">
                     
-                    {/* 1. MASA KERJA */}
+                    {/* 1. MASA KERJA (Otomatis & Penilaian Kepsek) */}
                     {activeTabGaji === 'masaKerja' && (
-                      <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="w-full sm:w-1/3">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tahun Hitung</label>
-                          <input 
-                             type="number" 
-                             value={p.tahunMasaKerja || ''}
-                             onChange={(e) => handleYearChange(t.id, e.target.value)}
-                             className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white font-bold"
-                             placeholder="Contoh: 2018"
-                           />
+                      <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 duration-200 items-end">
+                        <div className="w-full sm:w-1/4">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tahun Masuk (TMT)</label>
+                          <div className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-900/50 text-sm font-bold text-slate-500 cursor-not-allowed flex items-center justify-between">
+                             <span>{new Date(t.tmt || new Date()).getFullYear()}</span>
+                             <span className="text-[10px] bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300">
+                                {Math.max(0, new Date().getFullYear() - new Date(t.tmt || new Date()).getFullYear())} Thn
+                             </span>
+                          </div>
                         </div>
-                        <div className="w-full sm:w-2/3">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal Tunjangan</label>
+                        
+                        <div className="w-full sm:w-1/3">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal (Khusus Tetap)</label>
                           <div className="relative">
                              <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
                              <input type="number" 
-                               value={p.tunjanganMasaKerjaManual !== undefined ? p.tunjanganMasaKerjaManual : ''}
+                               value={p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' ? p.tunjanganMasaKerjaManual : (t.status === 'Tetap' ? (TENURE_RATES[new Date(t.tmt || new Date()).getFullYear()] || 0) : '')}
                                onChange={e => updateTeacherData(t.id, currentT => ({ ...currentT, payroll: { ...(currentT.payroll || {}), tunjanganMasaKerjaManual: e.target.value === '' ? '' : Number(e.target.value) } }))}
-                               className="w-full pl-10 pr-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white font-bold text-emerald-600"
-                               placeholder="Ketik manual nominal..."
+                               disabled={t.status !== 'Tetap'}
+                               className={`w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm font-bold outline-none transition-colors ${t.status === 'Tetap' ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-emerald-500 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'}`}
+                               placeholder={t.status === 'Tetap' ? "Auto / Ketik manual..." : "Belum berhak"}
                              />
                           </div>
+                        </div>
+
+                        {/* Kolom Penilaian Kepsek jika Masa Pengabdian >= 2 */}
+                        <div className="w-full sm:w-5/12">
+                           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Penilaian Kelayakan (Kepsek)</label>
+                           {Math.max(0, new Date().getFullYear() - new Date(t.tmt || new Date()).getFullYear()) >= 2 ? (
+                              <div className="flex gap-2">
+                                 <select 
+                                   value={p.evaluasiKepsek || (t.status === 'Tetap' ? 'Layak' : 'Belum Dinilai')}
+                                   onChange={(e) => {
+                                      const val = e.target.value;
+                                      updateTeacherData(t.id, currentT => ({ 
+                                        ...currentT, 
+                                        status: val === 'Layak' ? 'Tetap' : (val === 'Tidak Layak' ? 'Tidak Tetap' : currentT.status), 
+                                        payroll: { ...(currentT.payroll || {}), evaluasiKepsek: val } 
+                                      }));
+                                   }}
+                                   className={`w-full p-2.5 border rounded-lg text-sm font-bold outline-none transition-colors cursor-pointer ${
+                                      (p.evaluasiKepsek === 'Layak' || t.status === 'Tetap') ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400' : 
+                                      p.evaluasiKepsek === 'Tidak Layak' ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400' : 
+                                      'bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400'
+                                   }`}
+                                 >
+                                    <option value="Belum Dinilai">Belum Dinilai</option>
+                                    <option value="Layak">🌟 Layak (Angkat Jadi Tetap)</option>
+                                    <option value="Belum Layak">❌ Belum Layak</option>
+                                 </select>
+                              </div>
+                           ) : (
+                              <div className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900/50 text-slate-400 dark:text-slate-500 text-sm font-semibold flex items-center gap-2 cursor-not-allowed">
+                                 <Lock size={16}/> Min. 2 Thn Pengabdian
+                              </div>
+                           )}
                         </div>
                       </div>
                     )}
