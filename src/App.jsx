@@ -1827,142 +1827,146 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
 
-        {/* Card 1: Total SDM (Desain Profesional) */}
+        {/* Card 1: Total SDM (Desain Berwarna Premium) */}
         <div 
           onClick={() => setActiveTab('dataguru')}
-          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 flex flex-col group cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 relative"
+          className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 px-2 py-1 rounded z-20">Kelola Data</div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-blue-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Kelola Data</div>
           <div className="flex justify-between items-start mb-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Total Guru & Staff</p>
+              <p className="text-xs font-semibold text-blue-100 uppercase tracking-wider mb-2">Total Guru & Staff</p>
               <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight">{stats.total}</h4>
-                <span className="text-sm font-medium text-slate-500">Orang</span>
+                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.total}</h4>
+                <span className="text-sm font-medium text-blue-100">Orang</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform duration-300">
-              <Users size={24} />
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
+              <Users size={24} className="drop-shadow-sm" />
             </div>
           </div>
-          <div className="mt-auto space-y-3 pt-4 border-t border-slate-100 dark:border-slate-700/50 relative z-10">
+          <div className="mt-auto space-y-3 pt-4 border-t border-white/20 relative z-10">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Laki-laki</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">{stats.lk}</span>
+              <span className="text-blue-50 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-200"></span> Laki-laki</span>
+              <span className="font-bold">{stats.lk}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-400"></span> Perempuan</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">{stats.pr}</span>
+              <span className="text-blue-50 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-200"></span> Perempuan</span>
+              <span className="font-bold">{stats.pr}</span>
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-2 flex overflow-hidden">
-              <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${(stats.lk / stats.total) * 100}%` }}></div>
-              <div className="bg-indigo-400 h-full transition-all duration-500" style={{ width: `${(stats.pr / stats.total) * 100}%` }}></div>
+            <div className="w-full bg-black/20 rounded-full h-1.5 mt-2 flex overflow-hidden">
+              <div className="bg-blue-200 h-full transition-all duration-500" style={{ width: `${(stats.lk / stats.total) * 100}%` }}></div>
+              <div className="bg-indigo-300 h-full transition-all duration-500" style={{ width: `${(stats.pr / stats.total) * 100}%` }}></div>
             </div>
           </div>
         </div>
 
-        {/* Card 2: Status Kepegawaian (Desain Profesional) */}
+        {/* Card 2: Status Kepegawaian (Desain Berwarna Premium) */}
         <div 
           onClick={() => setIsStatusModalOpen(true)}
-          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:border-emerald-300 dark:hover:border-emerald-600 cursor-pointer flex flex-col group relative"
+          className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
         >
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 px-2 py-1 rounded">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Status Pegawai</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight">{stats.tetap}</h4>
-                <span className="text-sm font-medium text-slate-500">Tetap</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform duration-300">
-              <Award size={24} />
-            </div>
-          </div>
-          <div className="mt-auto space-y-2 pt-4 border-t border-slate-100 dark:border-slate-700/50">
-             <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
-                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5"><CheckCircle size={14}/> Guru Tetap</span>
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{stats.tetap}</span>
-             </div>
-             <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50">
-                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5"><Clock size={14}/> Tidak Tetap</span>
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{stats.tdkTetap}</span>
-             </div>
-          </div>
-        </div>
-
-        {/* Card 3: Kualifikasi Pendidikan (Desain Profesional) */}
-        <div 
-          onClick={() => setIsEduModalOpen(true)}
-          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 hover:border-purple-300 dark:hover:border-purple-600 cursor-pointer flex flex-col group relative"
-        >
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800/50 px-2 py-1 rounded z-20">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Pendidikan (S1/S2)</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight">
-                  {stats.eduCount['S2'] + stats.eduCount['S1']}
-                </h4>
-                <span className="text-sm font-medium text-slate-500">Sarjana+</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <GraduationCap size={24} />
-            </div>
-          </div>
-          <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-slate-100 dark:border-slate-700/50 relative z-10">
-             <div className="p-2 border border-slate-100 dark:border-slate-700/50 rounded-lg bg-slate-50 dark:bg-slate-900/30 text-center transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-900/20">
-                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Magister</span>
-                <span className="block text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">{stats.eduCount['S2']}</span>
-             </div>
-             <div className="p-2 border border-slate-100 dark:border-slate-700/50 rounded-lg bg-slate-50 dark:bg-slate-900/30 text-center transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-900/20">
-                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sarjana</span>
-                <span className="block text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">{stats.eduCount['S1']}</span>
-             </div>
-             <div className="p-2 border border-slate-100 dark:border-slate-700/50 rounded-lg bg-slate-50 dark:bg-slate-900/30 text-center transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-900/20">
-                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Diploma</span>
-                <span className="block text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">{stats.eduCount['Diploma']}</span>
-             </div>
-             <div className="p-2 border border-slate-100 dark:border-slate-700/50 rounded-lg bg-slate-50 dark:bg-slate-900/30 text-center transition-colors group-hover:bg-purple-50 dark:group-hover:bg-purple-900/20">
-                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">SMA/Setara</span>
-                <span className="block text-base font-bold text-slate-800 dark:text-slate-200 mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
-             </div>
-          </div>
-        </div>
-
-        {/* Card 4: Staff Operasional (Desain Profesional) */}
-        <div 
-          onClick={() => setActiveTab('dataguru')}
-          className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md border border-slate-200 dark:border-slate-700 transition-all duration-300 flex flex-col group cursor-pointer hover:border-orange-300 dark:hover:border-orange-600 relative"
-        >
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/50 px-2 py-1 rounded z-20">Kelola Data</div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-emerald-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Lihat Detail</div>
           <div className="flex justify-between items-start mb-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Staff Operasional</p>
+              <p className="text-xs font-semibold text-emerald-100 uppercase tracking-wider mb-2">Status Pegawai</p>
               <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold text-slate-800 dark:text-white tracking-tight">
-                  {stats.opsCount.security + stats.opsCount.kebersihan + stats.opsCount.pengabdian}
-                </h4>
-                <span className="text-sm font-medium text-slate-500">Orang</span>
+                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.tetap}</h4>
+                <span className="text-sm font-medium text-emerald-100">Tetap</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/50 flex items-center justify-center text-orange-600 dark:text-orange-400 group-hover:scale-105 transition-transform duration-300">
-              <HeartHandshake size={24} />
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
+              <Award size={24} className="drop-shadow-sm" />
             </div>
           </div>
-          <div className="mt-auto space-y-2.5 pt-4 border-t border-slate-100 dark:border-slate-700/50 relative z-10">
+          <div className="mt-auto space-y-2 pt-4 border-t border-white/20 relative z-10">
+             <div className="flex items-center justify-between p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-xs font-semibold text-emerald-50 flex items-center gap-1.5"><CheckCircle size={14}/> Guru Tetap</span>
+                <span className="text-sm font-bold text-white">{stats.tetap}</span>
+             </div>
+             <div className="flex items-center justify-between p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-xs font-semibold text-emerald-50 flex items-center gap-1.5"><Clock size={14}/> Tidak Tetap</span>
+                <span className="text-sm font-bold text-white">{stats.tdkTetap}</span>
+             </div>
+          </div>
+        </div>
+
+        {/* Card 3: Kualifikasi Pendidikan (Desain Berwarna Premium) */}
+        <div 
+          onClick={() => setIsEduModalOpen(true)}
+          className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-purple-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Lihat Detail</div>
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div>
+              <p className="text-xs font-semibold text-purple-100 uppercase tracking-wider mb-2">Pendidikan (S1/S2)</p>
+              <div className="flex items-baseline gap-1.5">
+                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">
+                  {stats.eduCount['S2'] + stats.eduCount['S1']}
+                </h4>
+                <span className="text-sm font-medium text-purple-100">Sarjana+</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <GraduationCap size={24} className="drop-shadow-sm" />
+            </div>
+          </div>
+          <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-white/20 relative z-10">
+             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Magister</span>
+                <span className="block text-base font-bold mt-0.5">{stats.eduCount['S2']}</span>
+             </div>
+             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Sarjana</span>
+                <span className="block text-base font-bold mt-0.5">{stats.eduCount['S1']}</span>
+             </div>
+             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Diploma</span>
+                <span className="block text-base font-bold mt-0.5">{stats.eduCount['Diploma']}</span>
+             </div>
+             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">SMA/Setara</span>
+                <span className="block text-base font-bold mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
+             </div>
+          </div>
+        </div>
+
+        {/* Card 4: Staff Operasional (Desain Berwarna Premium) */}
+        <div 
+          onClick={() => setActiveTab('dataguru')}
+          className="bg-gradient-to-br from-orange-500 to-rose-500 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-orange-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Kelola Data</div>
+          <div className="flex justify-between items-start mb-6 relative z-10">
+            <div>
+              <p className="text-xs font-semibold text-orange-100 uppercase tracking-wider mb-2">Staff Operasional</p>
+              <div className="flex items-baseline gap-1.5">
+                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">
+                  {stats.opsCount.security + stats.opsCount.kebersihan + stats.opsCount.pengabdian}
+                </h4>
+                <span className="text-sm font-medium text-orange-100">Orang</span>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
+              <HeartHandshake size={24} className="drop-shadow-sm" />
+            </div>
+          </div>
+          <div className="mt-auto space-y-2.5 pt-4 border-t border-white/20 relative z-10">
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2"><Shield size={14} className="text-slate-400"/> Security</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{stats.opsCount.security}</span>
+                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Shield size={14} className="opacity-70"/> Security</span>
+                <span className="font-bold">{stats.opsCount.security}</span>
              </div>
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2"><Trash2 size={14} className="text-slate-400"/> Kebersihan</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{stats.opsCount.kebersihan}</span>
+                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Trash2 size={14} className="opacity-70"/> Kebersihan</span>
+                <span className="font-bold">{stats.opsCount.kebersihan}</span>
              </div>
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2"><Sparkles size={14} className="text-slate-400"/> Pengabdian</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{stats.opsCount.pengabdian}</span>
+                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Sparkles size={14} className="opacity-70"/> Pengabdian</span>
+                <span className="font-bold">{stats.opsCount.pengabdian}</span>
              </div>
           </div>
         </div>
