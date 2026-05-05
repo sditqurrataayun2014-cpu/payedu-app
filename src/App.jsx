@@ -2938,6 +2938,18 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     setIsEditModalOpen(true);
   };
 
+  // 🪄 TAMBALAN CERDAS: Fungsi ini yang sebelumnya hilang untuk menangani ketikan Bapak
+  const handleHarianChange = (index, value) => {
+    // Ubah input menjadi huruf besar otomatis dan batasi 2 karakter (cth: 4, S, I, A)
+    let cleanVal = value.toUpperCase().slice(0, 2);
+    
+    setEditingData(prev => {
+      const newHarian = [...prev.harian];
+      newHarian[index] = cleanVal;
+      return { ...prev, harian: newHarian };
+    });
+  };
+
   const handleSaveEdit = () => {
     setIsSaving(true); // Aktifkan animasi loading
     
