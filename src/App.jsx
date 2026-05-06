@@ -1536,7 +1536,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
      teachers.forEach(t => {
         if ((t.payroll?.disiplin?.telat || 0) >= 3) lateTeachers++;
         const loans = t.payroll?.potonganLainnya?.filter(p => p.ket.toLowerCase().match(/kasbon|koperasi|pinjaman/)) || [];
-        loans.forEach(l => totalUnpaidLoans += (l.nominal * 4)); // Menggunakan aturan simulasi sisa 4x cicilan
+        loans.forEach(l => totalUnpaidLoans += (l.sisaHutang !== undefined ? l.sisaHutang : l.nominal * 4)); 
      });
      return { lateTeachers, totalUnpaidLoans };
   }, [teachers]);
@@ -3375,7 +3375,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   
   // TAMBAHAN: State untuk Modal Manajemen Pinjaman
   const [modal, setModal] = useState({ isOpen: false, type: 'add', data: null });
-  const [formData, setFormData] = useState({ teacherId: '', ket: 'Kasbon Sekolah', nominal: '' });
+  const [formData, setFormData] = useState({ teacherId: '', ket: 'Kasbon Sekolah', nominal: '', totalPinjaman: '', sisaHutang: '' });
   
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
   const [isSaving, setIsSaving] = useState(false);
@@ -3399,7 +3399,8 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
             position: t.position,
             ket: l.ket,
             nominal: l.nominal,
-            sisa: l.nominal * 4, // Berdasarkan rule simulasi sebelumnya (bisa dikembangkan nanti)
+            totalPinjaman: l.totalPinjaman !== undefined ? l.totalPinjaman : (l.nominal * 10),
+            sisa: l.sisaHutang !== undefined ? l.sisaHutang : (l.nominal * 4),
             originalIndex: index // Menyimpan index asli di array untuk keperluan Edit/Hapus
           });
         }
@@ -3421,18 +3422,24 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   // HANDLERS UNTUK TAMBAH, EDIT, & HAPUS PINJAMAN
   const openModal = (type, loanData = null) => {
     if (type === 'edit' && loanData) {
-      setFormData({ teacherId: loanData.teacherId, ket: loanData.ket, nominal: loanData.nominal });
+      setFormData({ 
+        teacherId: loanData.teacherId, 
+        ket: loanData.ket, 
+        nominal: loanData.nominal,
+        totalPinjaman: loanData.totalPinjaman,
+        sisaHutang: loanData.sisa 
+      });
       setModal({ isOpen: true, type, data: loanData });
     } else {
-      setFormData({ teacherId: teachers[0]?.id || '', ket: 'Kasbon Sekolah', nominal: '' });
+      setFormData({ teacherId: teachers[0]?.id || '', ket: 'Kasbon Sekolah', nominal: '', totalPinjaman: '', sisaHutang: '' });
       setModal({ isOpen: true, type, data: null });
     }
   };
 
   const handleSaveLoan = (e) => {
     e.preventDefault();
-    if (!formData.teacherId || !formData.ket || !formData.nominal) {
-      alert("Mohon lengkapi semua data!");
+    if (!formData.teacherId || !formData.ket || !formData.nominal || formData.totalPinjaman === '') {
+      alert("Mohon lengkapi semua data Pinjaman, termasuk Plafon!");
       return;
     }
 
@@ -3443,10 +3450,17 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
         if (t.id === formData.teacherId) {
           const currentPotongan = [...(t.payroll?.potonganLainnya || [])];
           
+          const newLoanObj = { 
+            ket: formData.ket, 
+            nominal: Number(formData.nominal) || 0,
+            totalPinjaman: Number(formData.totalPinjaman) || 0,
+            sisaHutang: formData.sisaHutang !== '' ? Number(formData.sisaHutang) : (Number(formData.totalPinjaman) || 0)
+          };
+
           if (modal.type === 'add') {
-            currentPotongan.push({ ket: formData.ket, nominal: Number(formData.nominal) || 0 });
+            currentPotongan.push(newLoanObj);
           } else if (modal.type === 'edit') {
-            currentPotongan[modal.data.originalIndex] = { ket: formData.ket, nominal: Number(formData.nominal) || 0 };
+            currentPotongan[modal.data.originalIndex] = { ...currentPotongan[modal.data.originalIndex], ...newLoanObj };
           }
           
           return {
@@ -3554,16 +3568,44 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                   />
                 </div>
 
-                {/* Nominal Cicilan */}
+                {/* Nominal Pinjaman Awal (Plafon) */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Potongan Per Bulan (Rp)</label>
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Total Pinjaman Awal (Plafon)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
                     <input 
-                      type="number" min="1" value={formData.nominal} onChange={e => setFormData({...formData, nominal: e.target.value})}
-                      placeholder="Masukkan nominal..." required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white font-bold text-teal-600 dark:text-teal-400"
+                      type="number" min="1" value={formData.totalPinjaman} onChange={e => setFormData({...formData, totalPinjaman: e.target.value})}
+                      placeholder="Masukkan total hutang keseluruhan..." required
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white font-bold"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Nominal Cicilan */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Potongan / Bulan (Rp)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
+                      <input 
+                        type="number" min="1" value={formData.nominal} onChange={e => setFormData({...formData, nominal: e.target.value})}
+                        placeholder="Nominal cicilan..." required
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white font-bold text-red-600 dark:text-red-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sisa Hutang Saat Ini */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Sisa Hutang Saat Ini</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
+                      <input 
+                        type="number" min="0" value={formData.sisaHutang} onChange={e => setFormData({...formData, sisaHutang: e.target.value})}
+                        placeholder="Default = Plafon"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white font-bold text-teal-600 dark:text-teal-400"
+                      />
+                    </div>
                   </div>
                 </div>
               </form>
@@ -3641,8 +3683,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
               <tr>
                 <th className="p-4 font-bold">Pegawai / NIPY</th>
                 <th className="p-4 font-bold">Jenis Tanggungan</th>
+                <th className="p-4 font-bold text-right text-slate-600">Plafon Pinjaman</th>
                 <th className="p-4 font-bold text-right text-red-500">Potongan Bulan Ini</th>
-                <th className="p-4 font-bold text-right text-teal-600">Estimasi Sisa Saldo</th>
+                <th className="p-4 font-bold text-right text-teal-600">Sisa Saldo</th>
                 <th className="p-4 font-bold text-center">Tindakan Admin</th>
               </tr>
             </thead>
@@ -3657,6 +3700,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                      <span className="bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-600 flex items-center gap-1.5 w-fit">
                        <CreditCard size={14}/> {loan.ket}
                      </span>
+                  </td>
+                  <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-300">
+                    {formatRp(loan.totalPinjaman)}
                   </td>
                   <td className="p-4 text-right font-bold text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
                     -{formatRp(loan.nominal)}
@@ -4740,7 +4786,7 @@ function SlipDocument({ teacher, bulan, settings }) {
               <td className="border border-black p-2 font-bold">{renderNominal(slip.totalKotor)}</td>
             </tr>
 
-            {/* D. POTONGAN GAJI */}
+                {/* D. POTONGAN GAJI */}
             <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 font-bold">D. POTONGAN GAJI</td></tr>
             {potongans.length > 0 ? potongans.map((pot, i) => (
               <tr key={`pot-${i}`} className="print:break-inside-avoid">
@@ -4750,7 +4796,7 @@ function SlipDocument({ teacher, bulan, settings }) {
                   {/* TAMBAHAN POIN 4: Fitur Info Sisa Saldo Kasbon/Koperasi Dinamis */}
                   {(pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('pinjaman')) && (
                      <div className="text-[10px] text-slate-600 font-medium italic mt-0.5 ml-1">
-                        *(Sisa Saldo Pinjaman/Kasbon: {formatRp(pot.nominal * 4)})
+                        *(Sisa Saldo Pinjaman/Kasbon: {formatRp(pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4))})
                      </div>
                   )}
                 </td>
@@ -4948,6 +4994,28 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
             }
           };
         });
+
+        // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang untuk bulan depan pada master data Guru
+        setTeachers(prev => prev.map(t => {
+           if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
+           
+           const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
+              if ((pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('pinjaman'))) {
+                 const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
+                 const newSisa = Math.max(0, currentSisa - pot.nominal);
+                 return { ...pot, sisaHutang: newSisa };
+              }
+              return pot;
+           });
+
+           return {
+              ...t,
+              payroll: {
+                 ...t.payroll,
+                 potonganLainnya: updatedPotongan
+              }
+           };
+        }));
 
         const newArchive = {
           id: generateUniqueId('arc-'),
@@ -6887,10 +6955,10 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
             <div className="space-y-6">
               {loanItems.map((loan, idx) => {
                 const cicilanBulanan = loan.nominal;
-                const sisaSaldo = loan.nominal * 4; 
-                const totalPinjamanAwal = loan.nominal * 10; 
-                const totalTerbayar = totalPinjamanAwal - sisaSaldo;
-                const persentase = ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0);
+                const totalPinjamanAwal = loan.totalPinjaman !== undefined ? loan.totalPinjaman : (loan.nominal * 10);
+                const sisaSaldo = loan.sisaHutang !== undefined ? loan.sisaHutang : (loan.nominal * 4); 
+                const totalTerbayar = Math.max(0, totalPinjamanAwal - sisaSaldo);
+                const persentase = totalPinjamanAwal > 0 ? ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0) : 0;
 
                 return (
                   <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
