@@ -861,16 +861,20 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
             authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username };
          }
       } 
-      // 2. Jika akun belum ter-sync ke storage (Misal Admin belum pernah buka menu Pengaturan)
+      // 2. Jika akun Guru
       else if (username.startsWith('G')) {
          const teacherData = teachers.find(t => t.id === username);
          if (teacherData) {
-            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-            const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-            const defaultPassByNama = `${twoLetters}123`;
+            // SANGAT SEDERHANA: Cek password custom ATAU plain password yang tersimpan
+            const isPasswordCorrect = 
+                (teacherData.customPassword && teacherData.customPassword === hashedInputPassword) || 
+                (teacherData.plainPassword && teacherData.plainPassword === password);
 
-            // Hanya izinkan password default jika akun belum dikelola di Storage
-            if (password === defaultPassByNama) {
+            // Fallback default jika admin belum pernah menyentuh password guru ini sama sekali
+            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+            const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
+            
+            if (isPasswordCorrect || (!teacherData.customPassword && !teacherData.plainPassword && password === defaultPass)) {
                recordLogin(teacherData.name, 'Guru', 'Sukses');
                authUser = { role: 'guru', id: username, name: teacherData.name };
             }
@@ -7165,54 +7169,31 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     { id: 'saran', label: 'Kritik & Saran', icon: MessageSquare, desc: 'Aspirasi & Masukan' },
   ];
 
-  // PERBAIKAN CERDAS: Sinkronisasi data guru menjadi data akun dengan pelindung (Failsafe) Anti-Crash
+  // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun yang Jauh Lebih Mudah Dikelola
   useEffect(() => {
-    setAccounts(prev => {
-      const validPrev = Array.isArray(prev) && prev.length > 0 ? prev : [
-        { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
-        { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
-      ];
+    // 1. Ambil data Admin/Kepsek dari memori lokal (bebas dari sinkronisasi awan)
+    const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
+      { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+    ];
 
-      let adminAcc = validPrev.filter(a => a?.role !== 'Guru' && a?.role !== 'guru');
+    // 2. Petakan data Guru secara langsung dari database guru
+    const teacherAccounts = teachers.map(t => {
+      const cleanName = t.name ? t.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+      const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
       
-      // PERBAIKAN STRUKTUR: Menambahkan kembali kurung penutup yang sebelumnya terpotong
-      if (adminAcc.length === 0) {
-         adminAcc = [
-           { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
-           { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
-         ];
-      }
-
-      // 2. Buat ulang akun Guru berdasarkan data 'teachers' terkini secara aman
-      const teacherAccounts = (teachers || []).map(t => {
-        const safeName = t.name || 'Pegawai';
-        const cleanName = safeName.replace(/[^a-zA-Z]/g, '');
-        const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-        const defaultPass = `${twoLetters}123`;
-        
-        const existing = validPrev.find(p => p.id === t.id);
-        let finalPassword = simpleHash(defaultPass);
-
-        // Pertahankan password lama jika sudah pernah diubah secara manual
-        if (existing && existing.password && existing.password !== '••••••••' && existing.password !== simpleHash('guru123') && existing.password !== simpleHash(defaultPass)) {
-           finalPassword = existing.password;
-        }
-
-        return { 
-          id: t.id || generateUniqueId('G-'), 
-          name: safeName, 
-          username: existing?.username || t.id || generateUniqueId('G-'), 
-          password: finalPassword, 
-          role: existing?.role || 'Guru',
-          status: t.status || 'Aktif',
-          phone: t.phone || '' // TAMBAHAN: Mengalirkan data WA ke data Akun
-        };
-      });
-      
-      const merged = [...adminAcc, ...teacherAccounts];
-      const uniqueAccounts = Array.from(new Map(merged.map(item => [item.id, item])).values());
-      return uniqueAccounts;
+      return { 
+        id: t.id, 
+        name: t.name, 
+        username: t.id, 
+        password: t.customPassword || simpleHash(defaultPass),
+        plainPassword: t.plainPassword || defaultPass, // Password akan selalu tampil JELAS untuk Admin
+        role: 'Guru',
+        phone: t.phone || ''
+      };
     });
+    
+    setAccounts([...adminAccs, ...teacherAccounts]);
   }, [teachers]);
 
   const [searchAcc, setSearchAcc] = useState('');
@@ -7235,6 +7216,29 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     (a.name || '').toLowerCase().includes(searchAcc.toLowerCase()) ||
     (a.username || '').toLowerCase().includes(searchAcc.toLowerCase())
   );
+
+  // 🪄 TAMBALAN CERDAS: Export Data Login ke CSV Sesuai Gambar 🪄
+  const handleExportLoginCSV = () => {
+    const headers = ['ID', 'Nama Lengkap', 'USER NAME', 'PASSWORD'];
+    const csvRows = [headers.join(';')];
+    
+    filteredAccounts.forEach(acc => {
+        if (acc.role === 'Guru') {
+            let passText = acc.plainPassword || `${(acc.name.replace(/[^a-zA-Z]/g, '').substring(0,2).toUpperCase() || 'GU')}123`;
+            csvRows.push([acc.id, `"${acc.name}"`, acc.username, `"${passText}"`].join(';'));
+        }
+    });
+    
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Data_Akses_Login_Guru_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleSaveGeneral = (e) => {
     e.preventDefault();
@@ -7261,35 +7265,73 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     
     const formData = new FormData(e.target);
     const passInput = formData.get('password');
-    const newData = {
-      name: formData.get('name'),
-      username: formData.get('username'),
-      role: formData.get('role'),
-      password: passInput ? simpleHash(passInput) : (modal.data?.password || simpleHash('12345678'))
-    };
+    const roleInput = formData.get('role');
 
     setTimeout(() => {
-      if (modal.type === 'add') {
-        setAccounts([{ id: generateUniqueId('acc-'), ...newData }, ...accounts]);
-        alert('Akses login baru berhasil ditambahkan.');
+      if (roleInput === 'Guru' || modal.data?.role === 'Guru') {
+         // SEDERHANA: Langsung ubah password Guru di state teachers
+         if (passInput) {
+            setTeachers(prev => prev.map(t => {
+               if (t.id === modal.data.id) {
+                  return { ...t, customPassword: simpleHash(passInput), plainPassword: passInput };
+               }
+               return t;
+            }));
+            alert(`Selesai! Password untuk ${modal.data?.name} berhasil diubah menjadi: ${passInput}`);
+         }
       } else {
-        setAccounts(accounts.map(a => a.id === modal.data.id ? { ...a, ...newData } : a));
-        alert(`Perubahan akses login untuk ${newData.name} berhasil disimpan.`);
+         // SEDERHANA: Simpan Admin ke Local Storage terpisah
+         const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
+           { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+           { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+         ];
+         
+         const newData = {
+            name: formData.get('name'),
+            username: formData.get('username'),
+            role: roleInput,
+            password: passInput ? simpleHash(passInput) : (modal.data?.password || simpleHash('12345678'))
+         };
+         
+         let updatedAdmins;
+         if (modal.type === 'add') {
+           updatedAdmins = [{ id: generateUniqueId('acc-'), ...newData }, ...adminAccs];
+         } else {
+           updatedAdmins = adminAccs.map(a => a.id === modal.data.id ? { ...a, ...newData } : a);
+         }
+         
+         localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
+         setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
+         alert('Data akses Admin berhasil disimpan.');
       }
       setIsSaving(false);
       setModal({ isOpen: false, type: null, data: null });
-    }, 600);
+    }, 300);
   };
 
   const handleDeleteAccount = () => {
-    if (modal.data.role === 'Admin' && accounts.filter(a => a.role === 'Admin').length <= 1) {
-      alert('Akses ditolak: Aplikasi setidaknya harus memiliki satu akun Admin aktif!');
-      setModal({ isOpen: false, type: null, data: null });
-      return;
+    if (modal.data.role === 'Guru') {
+       // Jika Guru, kita reset saja passwordnya ke default
+       setTeachers(prev => prev.map(t => {
+           if (t.id === modal.data.id) {
+              return { ...t, customPassword: null, plainPassword: null };
+           }
+           return t;
+       }));
+       alert(`Selesai! Password untuk ${modal.data.name} telah direset kembali ke default.`);
+    } else {
+       if (modal.data.role === 'Admin' && accounts.filter(a => a.role === 'Admin').length <= 1) {
+         alert('Akses ditolak: Aplikasi harus memiliki setidaknya satu akun Admin aktif!');
+         setModal({ isOpen: false, type: null, data: null });
+         return;
+       }
+       const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [];
+       const updatedAdmins = adminAccs.filter(a => a.id !== modal.data.id);
+       localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
+       setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
+       alert('Akun Admin berhasil dihapus dari sistem.');
     }
-    setAccounts(accounts.filter(a => a.id !== modal.data.id));
     setModal({ isOpen: false, type: null, data: null });
-    alert('Akses login berhasil dihapus dari sistem.');
   };
 
   const handleMarkFeedbackDone = (id) => {
@@ -7485,7 +7527,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Password</label>
                     <div className="relative">
                        <Lock size={16} className="absolute left-3 top-3 text-slate-400" />
-                       <input name="password" type="password" placeholder={modal.type === 'edit' ? 'Abaikan jika tidak ganti password' : 'Buat password baru...'} className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-slate-400 outline-none dark:text-white" required={modal.type === 'add'} />
+                       <input name="password" type="text" placeholder={modal.type === 'edit' ? 'Abaikan jika tidak ganti password' : 'Buat password baru...'} className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-slate-400 outline-none dark:text-white" required={modal.type === 'add'} />
                     </div>
                   </div>
                 </form>
@@ -7496,9 +7538,11 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                   <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4">
                     <Trash2 size={40} />
                   </div>
-                  <h3 className="text-xl font-bold dark:text-white mb-2">Cabut Hak Akses?</h3>
+                  <h3 className="text-xl font-bold dark:text-white mb-2">{modal.data.role === 'Guru' ? 'Reset Password Pegawai?' : 'Cabut Hak Akses?'}</h3>
                   <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                    Apakah Anda yakin ingin mencabut hak akses login dari <span className="font-bold text-slate-700 dark:text-slate-200">{modal.data.name}</span> ({modal.data.username})? Pengguna ini tidak akan bisa lagi masuk ke sistem.
+                    {modal.data.role === 'Guru' 
+                      ? `Apakah Anda yakin ingin mereset password ${modal.data.name} kembali ke default bawaan sistem?` 
+                      : `Apakah Anda yakin ingin mencabut hak akses login dari ${modal.data.name} (${modal.data.username})? Pengguna ini tidak akan bisa lagi masuk ke sistem.`}
                   </p>
                 </div>
               )}
@@ -7761,23 +7805,26 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             {/* TAB: AKUN LOGIN */}
             {activeTabSetting === 'akun' && (
               <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
-                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0">
                    <div>
                      <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                        <Key className="text-amber-500" size={18} /> Akses Login Pengguna
                      </h3>
                    </div>
-                   <div className="flex gap-3 w-full sm:w-auto">
-                     <div className="relative w-full sm:w-56">
+                   <div className="flex gap-2 w-full xl:w-auto flex-wrap sm:flex-nowrap">
+                     <div className="relative w-full sm:flex-1">
                        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                        <input 
                          type="text" placeholder="Cari akun..." 
                          value={searchAcc} onChange={e => setSearchAcc(e.target.value)}
-                         className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-400 outline-none dark:text-white"
+                         className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-400 outline-none dark:text-white shadow-sm"
                        />
                      </div>
-                     <button onClick={() => openModal('add')} className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 shrink-0">
-                        <PlusCircle size={16} /> Buat Akses
+                     <button onClick={handleExportLoginCSV} className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5 shrink-0" title="Export tabel ini ke Excel (CSV)">
+                        <Download size={16} /> Export
+                     </button>
+                     <button onClick={() => openModal('add')} className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5 shrink-0">
+                        <PlusCircle size={16} /> Tambah Admin
                      </button>
                    </div>
                 </div>
@@ -7802,13 +7849,15 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                {acc.username || '-'}
                              </span>
                            </td>
-                           <td className="p-4 tracking-widest text-slate-400 text-[11px] font-mono" title="Password Disamarkan">
-                             {/* 🪄 TAMBALAN CERDAS: Teks dinamis untuk status password */}
+                           <td className="p-4 tracking-widest text-[13px] font-mono" title="Password">
+                             {/* PENYEDERHANAAN: Tampilkan password guru secara langsung agar Admin mudah memantau */}
                              {acc.role === 'Guru' ? (
-                               (acc.password === simpleHash('guru123') || acc.password === simpleHash(`${(acc.name?.replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase() || 'GU')}123`))
-                                 ? 'Tersandi (2 Huruf Nama + 123)' 
-                                 : <span className="text-emerald-600 dark:text-emerald-400 font-bold">•••••••• (Telah Diubah)</span>
-                             ) : '••••••••'}
+                                <span className="text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1 rounded border border-blue-200 dark:border-blue-800">
+                                  {acc.plainPassword}
+                                </span>
+                             ) : (
+                                <span className="text-slate-400">••••••••</span>
+                             )}
                            </td>
                            <td className="p-4">
                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
@@ -7826,22 +7875,11 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                    }
                                    let waNum = acc.phone ? acc.phone.replace(/[^0-9]/g, '') : '';
                                    if (waNum.startsWith('0')) waNum = '62' + waNum.slice(1);
-                                   if (acc.role !== 'Guru' && !waNum) waNum = ''; // Biarkan kosong untuk diketik manual di HP admin
+                                   if (acc.role !== 'Guru' && !waNum) waNum = ''; 
 
                                    let passText = "••••••••";
                                    if (acc.role === 'Guru') {
-                                      const cleanName = acc.name.replace(/[^a-zA-Z]/g, '');
-                                      const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-                                      const defaultPass = `${twoLetters}123`;
-                                      
-                                      // Cek apakah password masih default atau sudah diubah
-                                      if (acc.password === simpleHash(defaultPass)) {
-                                          passText = defaultPass;
-                                      } else if (acc.password === simpleHash('guru123')) {
-                                          passText = 'guru123';
-                                      } else {
-                                          passText = "[Telah Diubah Khusus - Silakan Ketik Manual]";
-                                      }
+                                      passText = acc.plainPassword;
                                    } else if (acc.role === 'Admin') {
                                       passText = "Boy2014";
                                    } else if (acc.role === 'Kepala Sekolah') {
@@ -7861,7 +7899,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                <button onClick={() => openModal('edit', acc)} className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-md transition-colors" title="Edit Akun">
                                  <Edit size={14} />
                                </button>
-                               <button onClick={() => openModal('delete', acc)} className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors" title="Cabut Akses">
+                               <button onClick={() => openModal('delete', acc)} className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors" title={acc.role === 'Guru' ? "Reset Password ke Default" : "Cabut Akses"}>
                                  <Trash2 size={14} />
                                </button>
                              </div>
