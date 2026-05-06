@@ -719,7 +719,7 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white">
         <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4 shadow-lg shadow-blue-500/20"></div>
         <h2 className="text-xl font-bold animate-pulse">Menghubungkan ke Server...</h2>
-        <p className="text-slate-500 mt-2 font-medium">Mohon Tunggu Ya..</p>
+        <p className="text-slate-500 mt-2 font-medium">mohon tunggu ya..</p>
       </div>
     );
   }
@@ -1573,8 +1573,14 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
 
   const executeApprove = () => {
     setIsConfirmApproveOpen(false);
-    setSettings({ ...settings, payrollStatus: 'Approved' });
-    setNotification({ isOpen: true, type: 'success', message: 'Berhasil! Rincian gaji bulan ini telah disahkan.' });
+    
+    // PERBAIKAN: Paksa simpan langsung ke Local Storage dan Server agar permanen tanpa jeda
+    const newSettings = { ...settings, payrollStatus: 'Approved', lastModified: Date.now() };
+    setSettings(newSettings);
+    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+    postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan approval ke server:", e));
+    
+    setNotification({ isOpen: true, type: 'success', message: 'Berhasil! Rincian gaji bulan ini telah disahkan secara permanen.' });
   };
 
   return (
@@ -4958,8 +4964,14 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
 
   const executeAjukanApproval = () => {
      setIsConfirmAjukanOpen(false);
-     setSettings({ ...settings, payrollStatus: 'Pending' });
-     setNotification({ isOpen: true, type: 'success', message: 'Draft Gaji berhasil diajukan! Menunggu persetujuan Kepala Sekolah.' });
+     
+     // PERBAIKAN: Paksa simpan langsung ke Local Storage dan Server agar permanen tanpa jeda (bypass debounce)
+     const newSettings = { ...settings, payrollStatus: 'Pending', lastModified: Date.now() };
+     setSettings(newSettings);
+     safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+     postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan ajuan ke server:", e));
+     
+     setNotification({ isOpen: true, type: 'success', message: 'Draft Gaji berhasil diajukan! Status telah dikunci ke server.' });
   };
 
   const handleArchive = () => {
@@ -5039,8 +5051,13 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         const nextD = new Date(y, m, 1);
         const nextPeriod = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
         
-        setSettings({ ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod });
-        setNotification({ isOpen: true, type: 'success', message: result.message || 'Gaji berhasil diarsipkan! Bulan periode telah otomatis diperbarui ke bulan berikutnya.' });
+        // PERBAIKAN: Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
+        const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
+        setSettings(newSettings);
+        safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+        postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal update periode:", e));
+        
+        setNotification({ isOpen: true, type: 'success', message: result.message || 'Gaji berhasil diarsipkan permanen! Periode telah otomatis diperbarui ke bulan berikutnya.' });
       } else {
         setNotification({ isOpen: true, type: 'error', message: 'Gagal mengarsipkan: ' + result.message });
       }
