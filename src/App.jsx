@@ -68,13 +68,11 @@ const calculatePayroll = (teacher) => {
   let tMasaKerja = 0;
   const tmtYear = new Date(teacher.tmt || new Date()).getFullYear();
   
-  // Tunjangan Masa Kerja HANYA CAIR jika statusnya adalah Pegawai Tetap
-  if (teacher.status === 'Tetap') {
-    if (p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== null && p.tunjanganMasaKerjaManual !== "") {
-      tMasaKerja = Number(p.tunjanganMasaKerjaManual) || 0; // Failsafe Mencegah NaN
-    } else {
-      tMasaKerja = TENURE_RATES[tmtYear] || 0;
-    }
+  // 🪄 TAMBALAN CERDAS: Fitur Tunjangan Masa Kerja kini DIBUKA untuk Semua Status Pegawai
+  if (p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== null && p.tunjanganMasaKerjaManual !== "") {
+    tMasaKerja = Number(p.tunjanganMasaKerjaManual) || 0; // Failsafe Mencegah NaN
+  } else {
+    tMasaKerja = TENURE_RATES[tmtYear] || 0;
   }
 
   const tJabatan = (p.jabatans || []).reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
@@ -4202,15 +4200,15 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                         </div>
                         
                         <div className="w-full sm:w-1/3">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal (Khusus Tetap)</label>
+                          {/* 🪄 TAMBALAN CERDAS: Label dan Input dibuka untuk semua pegawai */}
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal (Semua Status)</label>
                           <div className="relative">
                              <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
                              <input type="number" 
-                               value={p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' ? p.tunjanganMasaKerjaManual : (t.status === 'Tetap' ? (TENURE_RATES[new Date(t.tmt || new Date()).getFullYear()] || 0) : '')}
+                               value={p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' ? p.tunjanganMasaKerjaManual : (TENURE_RATES[new Date(t.tmt || new Date()).getFullYear()] || 0)}
                                onChange={e => updateTeacherData(t.id, currentT => ({ ...currentT, payroll: { ...(currentT.payroll || {}), tunjanganMasaKerjaManual: e.target.value === '' ? '' : Number(e.target.value) } }))}
-                               disabled={t.status !== 'Tetap'}
-                               className={`w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm font-bold outline-none transition-colors ${t.status === 'Tetap' ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-emerald-500 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'}`}
-                               placeholder={t.status === 'Tetap' ? "Auto / Ketik manual..." : "Belum berhak"}
+                               className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm font-bold outline-none transition-colors bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-emerald-500 text-emerald-600 dark:text-emerald-400"
+                               placeholder="Auto / Ketik manual..."
                              />
                           </div>
                         </div>
