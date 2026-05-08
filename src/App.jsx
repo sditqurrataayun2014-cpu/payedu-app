@@ -403,7 +403,10 @@ export default function App() {
   const fetchCloudData = async (isBackgroundSync = false) => {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
-      const res = await fetch(GOOGLE_SHEETS_API_URL);
+      
+      // 🪄 PERBAIKAN 1: Tambahkan anti-cache agar Browser selalu menarik data PALING BARU, bukan data usang dari cache
+      const res = await fetch(`${GOOGLE_SHEETS_API_URL}?t=${Date.now()}`, { cache: 'no-store' });
+      
       if (!res.ok) throw new Error("Network response was not ok");
       const text = await res.text();
       const data = JSON.parse(text);
@@ -434,11 +437,20 @@ export default function App() {
         // Cek isi memori lokal di browser saat ini
         const localTeachersStr = localStorage.getItem('payedu_teachers');
         const localTeachers = localTeachersStr ? JSON.parse(localTeachersStr) : [];
+        
+        const localSettingsStr = localStorage.getItem('payedu_settings');
+        const parsedLocal = localSettingsStr ? JSON.parse(localSettingsStr) : null;
 
+        // 🪄 PERBAIKAN 2: Sistem Penyelamat Data agar data ketikan manual tidak tertimpa server yang terlambat
+        if (parsedLocal && parsedLocal.lastModified > (serverSettings.lastModified || 0)) {
+            console.warn("🛡️ Data perangkat lebih baru! Mencegah penimpaan data.");
+            serverSettings = parsedLocal;
+            serverTeachers = localTeachers;
+        }
         // LOGIKA ANTI-HAPUS: 
         // Jika server Google Sheet kosong (0) TAPI memori perangkat lokal punya data, JANGAN DIHAPUS!
         // Paksa server untuk menarik (menyerap) data dari memori perangkat ini.
-        if (serverTeachers.length === 0 && localTeachers.length > 0) {
+        else if (serverTeachers.length === 0 && localTeachers.length > 0) {
             serverTeachers = localTeachers;
             
             // Secara diam-diam tembak data lokal yang selamat ini ke server Google Sheets
@@ -558,7 +570,11 @@ export default function App() {
     setSyncStatus('syncing');
 
     const newTimestamp = Date.now();
-    setGeneralSettings(prev => ({ ...prev, lastModified: newTimestamp }));
+    
+    // 🪄 PERBAIKAN 3: Kunci stempel waktu seketika ke perangkat agar Sistem Penyelamat Data selalu aktif
+    const newSettings = { ...generalSettings, lastModified: newTimestamp };
+    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+    setGeneralSettings(newSettings);
 
     isPushingDataRef.current = true; // Kunci Radar Background
 
@@ -4863,25 +4879,13 @@ function SlipDocument({ teacher, bulan, settings }) {
          <div className="flex flex-col items-center justify-end relative">
            <p className="mb-2">Kuala Pembuang, {tanggalCetak}<br/>Mengetahui, Kepala Sekolah</p>
            
-           {/* E-Sign & Stamp Container (Vektor SVG Premium) */}
+           {/* E-Sign Container */}
            <div className="relative w-32 h-20 flex items-center justify-center my-1">
-             {/* Stempel SVG Transparan */}
-             <svg className="absolute w-20 h-20 text-indigo-700/30 transform -rotate-12" viewBox="0 0 100 100">
-               <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4,2" />
-               <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="1" />
-               <path id="curve" d="M 15 50 A 35 35 0 1 1 85 50 A 35 35 0 1 1 15 50" fill="transparent" />
-               <text fontSize="9.5" fill="currentColor" fontWeight="bold" letterSpacing="1.2">
-                 <textPath href="#curve" startOffset="50%" textAnchor="middle">LEMBAGA PENDIDIKAN</textPath>
-               </text>
-               <text x="50" y="54" fontSize="15" fill="currentColor" fontWeight="900" textAnchor="middle">PAYEDU</text>
-               <circle cx="50" cy="50" r="25" fill="none" stroke="currentColor" strokeWidth="1" />
-             </svg>
-             
              {/* Tanda Tangan: Cek jika ada URL kustom di pengaturan */}
              {settings?.signatureUrl ? (
-               <img src={settings.signatureUrl} alt="Tanda Tangan" className="absolute w-32 h-16 object-contain z-10 mix-blend-multiply ml-6 transform -rotate-2" />
+               <img src={settings.signatureUrl} alt="Tanda Tangan" className="absolute w-32 h-16 object-contain z-10 mix-blend-multiply transform -rotate-2" />
              ) : (
-               <svg className="absolute w-28 h-16 text-blue-900/80 transform rotate-[-5deg] ml-6" viewBox="0 0 100 50">
+               <svg className="absolute w-28 h-16 text-blue-900/80 transform rotate-[-5deg]" viewBox="0 0 100 50">
                  <path d="M10,40 C15,25 25,10 35,15 C45,20 40,45 50,35 C60,25 65,10 75,20 C85,30 80,45 95,30" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                  <path d="M25,28 L50,28" fill="none" stroke="currentColor" strokeWidth="1.5" />
                </svg>
