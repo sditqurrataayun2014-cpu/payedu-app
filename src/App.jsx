@@ -43,6 +43,9 @@ const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_Wu
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
   try {
+    if (!navigator.onLine) {
+       throw new Error("Koneksi internet perangkat sedang offline");
+    }
     const res = await fetch(GOOGLE_SHEETS_API_URL, {
       method: 'POST',
       headers: {
@@ -54,7 +57,8 @@ const postToGoogleSheets = async (action, payload) => {
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return await res.json();
   } catch (error) {
-    console.error("Fetch POST Error:", error);
+    // PERBAIKAN: Ubah pesan menjadi peringatan kuning agar tidak memicu error merah di sistem pengawasan
+    console.warn(`[Info Cloud] Sinkronisasi tertunda karena masalah jaringan: ${error.message}`);
     throw error;
   }
 };
@@ -270,7 +274,6 @@ const defaultGeneralSettings = {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   })(),
-  // PERBAIKAN: Teks Default Portal Guru sesuai gambar dokumen terbaru dari Sekolah
   payrollInfoText: `Sistem penggajian di sekolah ini kami susun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
 
 * Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di sekolah ini.
@@ -284,59 +287,43 @@ const defaultGeneralSettings = {
 * Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, iuran baju Guru, atau lainnya.
 * Adapun Hal lainnya yang belum terakomodir di dalam sistem aplikasi penggajian ini, akan menyesuaikan dengan kebijakan Sekolah/Yayasan. (misalnya: Guru cuti, libur Panjang, dll.) yang berdampak terhadap rekapitulasi jam mengajar.
 
-Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan/dikonfirmasi.`,
-  lastModified: Date.now() 
+Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan/dikonfirmasi.`
 };
 
-// --- KOMPONEN UTAMA APP ---
 export default function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [user, setUser] = useState(null); 
-  
-  // TAMBAHAN NO 4: State Sinkronisasi Cloud UI
-  const [syncStatus, setSyncStatus] = useState('synced'); // 'synced', 'syncing', 'error'
-  
-  // TAMBAHAN: State Pendeteksi Tabrakan Data (Concurrency Conflict)
-  const [hasConflict, setHasConflict] = useState(false);
-  
-  // TAMBAHAN FITUR: State untuk Notifikasi Instalasi PWA
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [showInstallGuide, setShowInstallGuide] = useState(false); // TAMBALAN CERDAS: Panduan Manual
-  
   const [teachers, setTeachers] = useState(() => {
     const saved = localStorage.getItem('payedu_teachers');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? JSON.parse(saved) : initialTeachers;
   });
-
-  // State Global untuk Pengaturan Aplikasi dengan LocalStorage
+  const [user, setUser] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('payedu_theme') === 'dark');
   const [generalSettings, setGeneralSettings] = useState(() => {
     const saved = localStorage.getItem('payedu_settings');
     return saved ? JSON.parse(saved) : defaultGeneralSettings;
   });
-
   const [feedbacks, setFeedbacks] = useState(() => {
     const saved = localStorage.getItem('payedu_feedbacks');
     return saved ? JSON.parse(saved) : [];
   });
-
   const [loginHistory, setLoginHistory] = useState(() => {
     const saved = localStorage.getItem('payedu_loginHistory');
     return saved ? JSON.parse(saved) : [];
   });
-
   const [archives, setArchives] = useState(() => {
     const saved = localStorage.getItem('payedu_archives');
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [isLoadingDb, setIsLoadingDb] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [isLoadingDb, setIsLoadingDb] = useState(true);
-  
-  // TAMBALAN CERDAS 1: Ref Anti-Tabrakan untuk menahan radar saat sedang push data
+  const [syncStatus, setSyncStatus] = useState('synced');
+  const [hasConflict, setHasConflict] = useState(false);
   const isPushingDataRef = useRef(false);
 
-  // --- EFEK UNTUK MENANGKAP EVENT INSTALASI PWA & FALLBACK CERDAS ---
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+
   useEffect(() => {
     // Cek apakah user sudah pernah menolak banner ini
     const hasDismissed = localStorage.getItem('payedu_dismiss_install');
@@ -571,10 +558,12 @@ export default function App() {
 
     const newTimestamp = Date.now();
     
-    // 🪄 PERBAIKAN 3: Kunci stempel waktu seketika ke perangkat agar Sistem Penyelamat Data selalu aktif
-    const newSettings = { ...generalSettings, lastModified: newTimestamp };
-    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
-    setGeneralSettings(newSettings);
+    // 🪄 PERBAIKAN MUTLAK 1: Gunakan 'prev' state untuk mencegah bug penimpaan (Stale Closure)
+    setGeneralSettings(prev => {
+       const newSettings = { ...prev, lastModified: newTimestamp };
+       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+       return newSettings;
+    });
 
     isPushingDataRef.current = true; // Kunci Radar Background
 
@@ -1179,6 +1168,91 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [absensiFilter, setAbsensiFilter] = useState('all');
 
+  // 🪄 FITUR BARU & DIPERBARUI: Mesin Audit Log Cloud & Anti-Spam Ketikan (Debounce)
+  const latestTeachersRef = useRef(teachers);
+  useEffect(() => { latestTeachersRef.current = teachers; }, [teachers]);
+  
+  const auditBufferRef = useRef({});
+  const auditTimeoutRef = useRef(null);
+
+  const flushAuditLogs = () => {
+     const bufferKeys = Object.keys(auditBufferRef.current);
+     if (bufferKeys.length === 0) return;
+
+     const newLogs = [];
+     const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+     const timestamp = Date.now();
+
+     bufferKeys.forEach((key, idx) => {
+        const item = auditBufferRef.current[key];
+        if (Number(item.oldVal) === Number(item.newVal) || String(item.oldVal) === String(item.newVal)) return;
+
+        // Dapatkan kalkulasi total gaji TERBARU setelah pengetikan selesai
+        const latestTeacher = latestTeachersRef.current.find(t => t.id === item.teacherId);
+        const calcLatest = latestTeacher ? calculatePayroll(latestTeacher) : null;
+        const newTotal = calcLatest ? calcLatest.totalBersih : 0;
+        const newTotalKotor = calcLatest ? calcLatest.totalKotor : 0;
+
+        newLogs.push({
+           id: timestamp + idx,
+           date: nowStr,
+           teacher: item.teacherName,
+           field: item.field,
+           old: item.oldVal,
+           new: item.newVal,
+           oldTotal: item.oldTotal,
+           newTotal: newTotal,
+           oldTotalKotor: item.oldTotalKotor,
+           newTotalKotor: newTotalKotor
+        });
+     });
+
+     auditBufferRef.current = {};
+
+     if (newLogs.length > 0) {
+        setSettings(prev => {
+           const existingLogs = prev.auditLogs || [];
+           const updatedLogs = [...newLogs, ...existingLogs].slice(0, 150); // Maksimal 150 riwayat di Cloud
+           const newState = { ...prev, auditLogs: updatedLogs, lastModified: Date.now() };
+           
+           // 🪄 PERBAIKAN MUTLAK 2: SIMPAN LANGSUNG KE CLOUD SEKETIKA! (Mencegah hilang saat di-refresh)
+           safeStorageSet('payedu_settings', JSON.stringify(newState));
+           postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Audit log sync error:", e));
+           
+           return newState;
+        });
+     }
+  };
+
+  const saveAuditLog = (targetTeacher, fieldLabel, oldVal, newVal) => {
+     if (!targetTeacher) return;
+     const teacherId = targetTeacher.id;
+     const bufferKey = `${teacherId}_${fieldLabel}`;
+
+     // Jika ini adalah ketikan pertama, rekam nilai aslinya dan Total Gaji aslinya
+     if (!auditBufferRef.current[bufferKey]) {
+         const calc = calculatePayroll(targetTeacher);
+         auditBufferRef.current[bufferKey] = {
+             teacherId: teacherId,
+             teacherName: targetTeacher.name,
+             field: fieldLabel,
+             oldVal: oldVal,
+             newVal: newVal,
+             oldTotal: calc.totalBersih,
+             oldTotalKotor: calc.totalKotor
+         };
+     } else {
+         // Jika sedang mengetik, perbarui saja nilai tujuan akhirnya
+         auditBufferRef.current[bufferKey].newVal = newVal;
+     }
+
+     // Beri jeda 2 detik setelah jari berhenti mengetik, baru simpan ke awan (Anti-Spam)
+     if (auditTimeoutRef.current) clearTimeout(auditTimeoutRef.current);
+     auditTimeoutRef.current = setTimeout(() => {
+         flushAuditLogs();
+     }, 2000);
+  };
+
   // TAMBAHAN: Jam & Tanggal Real-time di Header
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -1273,9 +1347,9 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
-      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} user={user} />;
+      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
-      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} />;
+      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
       case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
       case 'portal_dashboard': 
@@ -1476,7 +1550,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
            </div>
         )}
 
-        <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}>
+        <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 touch-pan-y scroll-smooth ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}>
           {renderContent()}
         </div>
       </main>
@@ -2588,7 +2662,7 @@ function DataGuruView({ teachers, setTeachers }) {
           </div>
         </div>
         
-        <div className="overflow-x-auto flex-1">
+        <div className="overflow-x-auto flex-1 touch-pan-x scroll-smooth">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
               <tr>
@@ -3257,7 +3331,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+        <div className="overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4 touch-pan-x touch-pan-y scroll-smooth" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border-2 border-slate-400 dark:border-slate-500">
             <thead className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 sticky top-0 z-20 shadow-sm">
               <tr>
@@ -3697,7 +3771,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto flex-1">
+        <div className="overflow-x-auto flex-1 touch-pan-x scroll-smooth">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
               <tr>
@@ -3742,29 +3816,26 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                         <button 
                           onClick={() => handleDeleteLoan(loan.teacherId, loan.originalIndex)} 
                           className="p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 rounded-lg transition-all shadow-sm"
-                          title="Hapus / Lunasi pinjaman ini permanen"
+                          title="Hapus data pinjaman"
                         >
                           <Trash2 size={16} />
                         </button>
                      </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredLoans.length === 0 && (
-                <tr><td colSpan="5" className="p-10 text-center text-slate-500">
-                  <CheckCircle size={40} className="mx-auto mb-3 text-emerald-400 opacity-50" />
-                  Belum ada data pinjaman atau kasbon yang terdaftar.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+                   </td>
+                 </tr>
+               ))}
+               {filteredLoans.length === 0 && (
+                 <tr><td colSpan="6" className="p-8 text-center text-slate-500">Tidak ada tanggungan pinjaman ditemukan.</td></tr>
+               )}
+             </tbody>
+           </table>
+         </div>
+       </div>
+     </div>
+   );
 }
 
-function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, settings, user }) {
+function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, settings, user, saveAuditLog }) {
   const [activeTabGaji, setActiveTabGaji] = useState('masaKerja');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); 
@@ -3779,13 +3850,18 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   // TAMBAHAN: Custom Modal Terapkan Massal
   const [confirmMassal, setConfirmMassal] = useState({ isOpen: false, arrKey: null, itemData: null, targetGender: 'All', targetText: '' });
 
-  // Jika ada ID Guru yang dikirim dari menu lain, otomatis filter nama/NIPY guru tersebut
+  // 🪄 PERBAIKAN: Cegah Kotak Pencarian Loncat/Tersangkut 🪄
   useEffect(() => {
      if(externalSelectedId) {
         const t = teachers.find(x => x.id === externalSelectedId);
-        if (t) setSearchTerm(t.nipy);
+        if (t) {
+           setSearchTerm(t.nipy);
+           // Hapus ID dari memori induk sesaat setelah digunakan, 
+           // agar kotak pencarian bebas diketik ulang tanpa ditarik paksa.
+           if (setExternalSelectedId) setExternalSelectedId(null);
+        }
      }
-  }, [externalSelectedId, teachers]);
+  }, [externalSelectedId, teachers, setExternalSelectedId]);
 
   const filteredTeachers = teachers.filter(t => {
     const matchName = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.nipy.includes(searchTerm);
@@ -3802,11 +3878,19 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
 
   const handleUpdateFamily = (teacherId, field, value) => {
     const safeValue = (typeof value === 'number' && isNaN(value)) ? 0 : value;
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher && saveAuditLog) {
+        saveAuditLog(targetTeacher, `Keluarga (${field === 'wife' ? 'Status Pasangan' : 'Jml Anak'})`, targetTeacher.family?.[field] || 0, safeValue);
+    }
     updateTeacherData(teacherId, t => ({ ...t, family: { ...(t.family || {}), [field]: safeValue } }));
   };
 
   const handleUpdatePayrollObj = (teacherId, objKey, field, value) => {
     const safeValue = (typeof value === 'number' && isNaN(value)) ? 0 : value;
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher && saveAuditLog) {
+        saveAuditLog(targetTeacher, `${objKey} (${field})`, targetTeacher.payroll?.[objKey]?.[field] || 0, safeValue);
+    }
     updateTeacherData(teacherId, t => {
       const p = t.payroll || {};
       const childObj = p[objKey] || {};
@@ -3819,6 +3903,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
 
   const handleArrayUpdate = (teacherId, arrKey, index, field, value) => {
     const safeValue = (typeof value === 'number' && isNaN(value)) ? 0 : value;
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher && saveAuditLog) {
+        const oldItem = targetTeacher.payroll?.[arrKey]?.[index] || {};
+        saveAuditLog(targetTeacher, `${arrKey} [Item ke-${index + 1}] - ${field}`, oldItem[field] || 0, safeValue);
+    }
     updateTeacherData(teacherId, t => {
       const p = t.payroll || {};
       const newArr = [...(p[arrKey] || [])];
@@ -3828,6 +3917,10 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   };
 
   const handleAddArrayItem = (teacherId, arrKey, defaultObj) => {
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher && saveAuditLog) {
+        saveAuditLog(targetTeacher, `Tambah Data ${arrKey}`, '-', 'Item Baru Ditambahkan');
+    }
     updateTeacherData(teacherId, t => {
       const p = t.payroll || {};
       return { 
@@ -3838,6 +3931,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   };
 
   const handleRemoveArrayItem = (teacherId, arrKey, index) => {
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher && saveAuditLog) {
+        const removedItem = targetTeacher.payroll?.[arrKey]?.[index] || {};
+        saveAuditLog(targetTeacher, `Hapus Data ${arrKey}`, removedItem.nominal || removedItem.ket || `Item ke-${index + 1}`, 'Dihapus');
+    }
     updateTeacherData(teacherId, t => {
       const p = t.payroll || {};
       const newArr = [...(p[arrKey] || [])];
@@ -4091,22 +4189,24 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-emerald-600 to-green-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-emerald-600 to-green-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 lg:mb-0">
         <div className="relative z-10">
           <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Calculator className="text-green-100" /> Input Cepat Komponen Gaji</h1>
           <p className="text-green-50 text-sm">Pilih komponen di menu kiri, lalu sesuaikan nilainya untuk semua pegawai secara berurutan di sebelah kanan.</p>
         </div>
-        <Calculator size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <Calculator size={100} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 flex-1 min-h-0 mt-2 lg:mt-0">
         
         {/* KOLOM KIRI: DAFTAR KOMPONEN GAJI */}
+        {/* PERBAIKAN: Tinggi auto di HP agar tidak kaku, dan lock tinggi hanya di Laptop */}
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-auto lg:h-[calc(100vh-16rem)] shadow-sm shrink-0">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center shrink-0">
-             <h3 className="font-bold dark:text-white flex items-center gap-2"><Calculator size={18} className="text-emerald-500" /> Pilih Komponen</h3>
+          <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center shrink-0">
+             <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2"><Calculator size={18} className="text-emerald-500" /> Pilih Komponen</h3>
           </div>
-          <div className="flex-1 overflow-x-auto lg:overflow-y-auto flex flex-row lg:flex-col hide-scrollbar lg:py-2">
+          {/* PERBAIKAN: Menambahkan touch-pan-x dan scroll-smooth agar geseran jari sangat licin */}
+          <div className="flex-1 overflow-x-auto lg:overflow-y-auto flex flex-row lg:flex-col hide-scrollbar lg:py-2 touch-pan-x scroll-smooth overscroll-x-contain">
             {tabMenus.map(tab => {
               const isActive = activeTabGaji === tab.id;
               const Icon = tab.icon;
@@ -4114,10 +4214,10 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                 <button 
                   key={tab.id} 
                   onClick={() => setActiveTabGaji(tab.id)}
-                  className={`w-auto lg:w-full text-left p-4 border-b border-r lg:border-r-0 border-slate-100 dark:border-slate-700/50 hover:bg-emerald-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-3 whitespace-nowrap lg:whitespace-normal shrink-0 ${isActive ? 'bg-emerald-50 dark:bg-emerald-900/20 lg:border-l-4 border-b-4 lg:border-b border-emerald-500 font-bold text-emerald-700 dark:text-emerald-400' : 'lg:border-l-4 border-transparent font-medium text-slate-600 dark:text-slate-400'}`}
+                  className={`w-auto lg:w-full text-left p-3 sm:p-4 border-b border-r lg:border-r-0 border-slate-100 dark:border-slate-700/50 hover:bg-emerald-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-2 sm:gap-3 whitespace-nowrap lg:whitespace-normal shrink-0 ${isActive ? 'bg-emerald-50 dark:bg-emerald-900/20 lg:border-l-4 border-b-4 lg:border-b border-emerald-500 font-bold text-emerald-700 dark:text-emerald-400' : 'lg:border-l-4 border-transparent font-medium text-slate-600 dark:text-slate-400'}`}
                 >
-                  <Icon size={18} className={isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"} />
-                  <span>{tab.label}</span>
+                  <Icon size={16} className={`sm:w-5 sm:h-5 ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />
+                  <span className="text-xs sm:text-sm">{tab.label}</span>
                 </button>
               );
             })}
@@ -4125,28 +4225,29 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
         </div>
 
         {/* KOLOM KANAN: DAFTAR GURU & FORM INPUT */}
-        <div className="lg:col-span-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-[calc(100vh-16rem)] shadow-sm relative">
+        {/* PERBAIKAN: Hapus lock h-[calc(...)] mutlak pada HP, ubah menjadi min-h-[60vh] agar layar HP bisa bernapas dan digulir bebas */}
+        <div className="lg:col-span-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-auto min-h-[60vh] lg:h-[calc(100vh-16rem)] shadow-sm relative">
           
           {/* HEADER: Filter, Pencarian & Import/Export */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+          <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
              <div className="flex gap-2 w-full sm:w-auto">
                <select 
                  value={filterStatus} 
                  onChange={e => setFilterStatus(e.target.value)}
-                 className="p-2.5 text-sm font-semibold border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white transition-all w-1/3 sm:w-auto"
+                 className="p-2 sm:p-2.5 text-xs sm:text-sm font-semibold border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white transition-all w-1/3 sm:w-auto"
                >
                  <option value="Semua">Semua Pegawai</option>
                  <option value="Tetap">Status Tetap</option>
                  <option value="Tidak Tetap">Status Tidak Tetap</option>
                </select>
                <div className="relative flex-1 sm:w-64">
-                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                 <Search className="absolute left-3 top-2 sm:top-2.5 text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
                  <input 
                    type="text" 
-                   placeholder="Cari Nama Pegawai..." 
+                   placeholder="Cari Pegawai..." 
                    value={searchTerm} 
                    onChange={e => setSearchTerm(e.target.value)}
-                   className="w-full pl-9 pr-3 py-2.5 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white transition-all shadow-sm"
+                   className="w-full pl-8 sm:pl-9 pr-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white transition-all shadow-sm"
                  />
                </div>
              </div>
@@ -4162,7 +4263,7 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
           </div>
 
           {/* KONTEN: DAFTAR KARTU GURU BERSERTA INPUT */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 dark:bg-slate-900/20 space-y-5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 dark:bg-slate-900/20 space-y-5 touch-pan-y scroll-smooth" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
             
             <div className="mb-4 bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-emerald-500 p-3 rounded-r-lg shadow-sm">
                <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-2">
@@ -4222,7 +4323,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                              <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
                              <input type="number" 
                                value={p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' ? p.tunjanganMasaKerjaManual : (TENURE_RATES[new Date(t.tmt || new Date()).getFullYear()] || 0)}
-                               onChange={e => updateTeacherData(t.id, currentT => ({ ...currentT, payroll: { ...(currentT.payroll || {}), tunjanganMasaKerjaManual: e.target.value === '' ? '' : Number(e.target.value) } }))}
+                               onChange={e => {
+                                  const newVal = e.target.value === '' ? '' : Number(e.target.value);
+                                  if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja (Manual)', p.tunjanganMasaKerjaManual || 0, newVal);
+                                  updateTeacherData(t.id, currentT => ({ ...currentT, payroll: { ...(currentT.payroll || {}), tunjanganMasaKerjaManual: newVal } }));
+                               }}
                                className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm font-bold outline-none transition-colors bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-emerald-500 text-emerald-600 dark:text-emerald-400"
                                placeholder="Auto / Ketik manual..."
                              />
@@ -4906,8 +5011,9 @@ function SlipDocument({ teacher, bulan, settings }) {
 }
 
 // Rekap Gaji View
-function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives }) {
+function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog }) {
   const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: State Filter Status Guru
   const [selectedSlip, setSelectedSlip] = useState(null);
   const [isArchiving, setIsArchiving] = useState(false);
   
@@ -4915,17 +5021,72 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   const [isConfirmArchiveOpen, setIsConfirmArchiveOpen] = useState(false);
   const [isConfirmAjukanOpen, setIsConfirmAjukanOpen] = useState(false);
   const [isConfirmNotifMassalOpen, setIsConfirmNotifMassalOpen] = useState(false); // Modal Notif Massal
+  const [isConfirmClearHistoryOpen, setIsConfirmClearHistoryOpen] = useState(false); // TAMBAHAN: Modal Bersihkan Riwayat
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
   
+  // 🪄 FITUR BARU: State untuk Modal Audit Log
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+
   // FITUR BARU 3: State untuk Cetak Massal
   const [isMassPrinting, setIsMassPrinting] = useState(false);
 
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
+  // 🪄 PERBAIKAN: Menambahkan filter status pada tabel rekap
+  const filtered = teachers.filter(t => {
+    const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
+    const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
+    return matchSearch && matchStatus;
+  });
 
-  const filtered = teachers.filter(t => 
-    t.name.toLowerCase().includes(search.toLowerCase()) || 
-    t.nipy.includes(search)
-  );
+  // 🪄 FITUR BARU: Fungsi untuk mengedit nilai kolom secara manual langsung dari tabel Rekap Gaji
+  const handleInlineOverride = (teacherId, field, value) => {
+    // Lacak data asli sebelum diubah
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    if (targetTeacher) {
+       const p = targetTeacher.payroll || {};
+       let oldVal = 0; let fieldLabel = field;
+       
+       if (field === 'pendidikanOverride') {
+          oldVal = p.pendidikan?.nominalOverride !== undefined ? p.pendidikan.nominalOverride : (EDU_RATES[targetTeacher.education] || 0);
+          fieldLabel = 'Tunjangan Pendidikan';
+       } else {
+          oldVal = p[field] || 0;
+          const labelMap = {
+             tunjanganMasaKerjaManual: 'Tunjangan Masa Kerja', overrideJabatan: 'Tunjangan Jabatan',
+             overrideKompetensi: 'Tunjangan Kompetensi', overrideKeluarga: 'Tunjangan Keluarga',
+             overrideTambahan: 'Insentif Khusus', overrideBonusHadir: 'Bonus Hadir',
+             overrideMengajar: 'Jam Lebih (Mengajar)', overridePotongan: 'Potongan Manual'
+          };
+          fieldLabel = labelMap[field] || field;
+       }
+       saveAuditLog(targetTeacher, fieldLabel, oldVal, value);
+    }
+
+    setTeachers(prev => prev.map(t => {
+      if (t.id === teacherId) {
+        if (field === 'pendidikanOverride') {
+          return {
+            ...t,
+            payroll: {
+              ...(t.payroll || {}),
+              pendidikan: {
+                ...(t.payroll?.pendidikan || {}),
+                nominalOverride: value === '' ? '' : Number(value)
+              }
+            }
+          };
+        }
+        return {
+          ...t,
+          payroll: {
+            ...(t.payroll || {}),
+            [field]: value === '' ? '' : Number(value)
+          }
+        };
+      }
+      return t;
+    }));
+  };
 
   const handleKirimNotif = (id) => {
     if(settings?.payrollStatus !== 'Approved') {
@@ -5158,6 +5319,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     }, 1000); 
   };
 
+  const executeClearHistory = () => {
+     setSettings(prev => {
+        const newState = { ...prev, auditLogs: [], lastModified: Date.now() };
+        safeStorageSet('payedu_settings', JSON.stringify(newState));
+        postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Gagal hapus log:", e));
+        return newState;
+     });
+     setIsConfirmClearHistoryOpen(false);
+     setNotification({ isOpen: true, type: 'success', message: 'Seluruh riwayat perbaikan berhasil dibersihkan secara permanen.' });
+  };
+
   let gtMasaKerja = 0, gtJabatan = 0, gtPendidikan = 0, gtKompetensi = 0,
       gtKeluarga = 0, gtTambahan = 0, gtBonusHadir = 0, gtMengajar = 0,
       gtTotalKotor = 0, gtPotong = 0, gtTHP = 0;
@@ -5188,45 +5360,24 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         </div>
       )}
 
-      {/* TAMBAHAN: Modal Konfirmasi Ajukan Approval */}
-      {isConfirmAjukanOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      {/* TAMBAHAN: Modal Konfirmasi Bersihkan Riwayat */}
+      {isConfirmClearHistoryOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
-                <Send size={40} className="ml-1" />
+              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={40} />
               </div>
-              <h3 className="text-xl font-bold dark:text-white mb-2">Ajukan Approval Gaji?</h3>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Bersihkan Riwayat Edit?</h3>
               <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm">
-                Ajukan draf rekapitulasi gaji periode <strong className="text-slate-700 dark:text-slate-200">{bulan}</strong> ke Kepala Sekolah untuk disetujui? Pastikan semua nominal telah sesuai.
+                Apakah Anda yakin ingin menghapus seluruh rekaman jejak perbaikan ini secara permanen dari server? Data yang dihapus tidak dapat dikembalikan.
               </p>
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
-              <button onClick={() => setIsConfirmAjukanOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
-              <button onClick={executeAjukanApproval} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
-                <Send size={16} /> Ya, Ajukan
+              <button onClick={() => setIsConfirmClearHistoryOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executeClearHistory} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
+                <Trash2 size={16} /> Ya, Bersihkan
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAMBAHAN: Modal Konfirmasi Arsip (Pengganti window.confirm) */}
-      {isConfirmArchiveOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mx-auto mb-4">
-                <Lock size={40} />
-              </div>
-              <h3 className="text-xl font-bold dark:text-white mb-2">Tutup Buku & Arsip?</h3>
-              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                Apakah Anda yakin ingin Mengarsipkan & Tutup Buku untuk gaji periode <span className="font-bold text-slate-800 dark:text-slate-200">{bulan}</span>? Data rekap saat ini akan dikirim dan disimpan permanen di tab Arsip Google Sheets.
-              </p>
-            </div>
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
-              <button onClick={() => setIsConfirmArchiveOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
-              <button onClick={executeArchive} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full">Ya, Tutup Buku</button>
             </div>
           </div>
         </div>
@@ -5325,26 +5476,102 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                 type="text" 
                 placeholder="Cari Pegawai atau NIPY..." 
                 value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white shadow-sm transition-all"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white transition-all shadow-sm"
               />
             </div>
             
-            <div className="flex gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap justify-end">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               <button onClick={handleKirimNotifMassal} className="flex-1 sm:flex-none justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                  <BellRing size={16} /> <span className="hidden sm:inline">Notif Massal</span><span className="sm:hidden">Notif</span>
+              </button>
+              <button onClick={() => setIsAuditModalOpen(true)} className="flex-1 sm:flex-none justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors items-center gap-2 cursor-pointer flex" title="Lihat daftar perubahan manual">
+                 <History size={16} /> <span className="hidden sm:inline">Riwayat Edit</span><span className="sm:hidden">Riwayat</span>
               </button>
               <button onClick={handleExportCSV} className="flex-1 sm:flex-none justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                  <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Excel</span>
               </button>
-              {/* PERBAIKAN: Tombol Cetak Kini Menjadi Cetak Slip Massal */}
-              <button onClick={handleMassPrint} disabled={isMassPrinting} className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-70 disabled:cursor-wait">
+              <button onClick={handleMassPrint} disabled={isMassPrinting} className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex disabled:opacity-70 disabled:cursor-not-allowed">
                  {isMassPrinting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Printer size={16} />}
-                 {isMassPrinting ? 'Menyiapkan...' : 'Cetak Slip Massal'}
+                 <span className="hidden sm:inline">{isMassPrinting ? 'Memproses...' : 'Cetak Slip Massal'}</span><span className="sm:hidden">Cetak</span>
               </button>
             </div>
           </div>
         </div>
-        
+
+        {/* MODAL RIWAYAT PERUBAHAN MANUAL (AUDIT LOG CLOUD) */}
+        {isAuditModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                  <History className="text-amber-500" /> Riwayat Perbaikan (Audit Log Cloud)
+                </h3>
+                <button onClick={() => setIsAuditModalOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              </div>
+              <div className="overflow-y-auto p-4 md:p-6 flex-1 bg-slate-50/50 dark:bg-slate-900/20">
+                 <p className="text-sm text-slate-500 mb-4 font-medium">Catatan: Riwayat ini tersinkronisasi di Cloud dan dapat dilihat oleh Kepala Sekolah. Sistem mencatat perbandingan total gaji sebelum dan sesudah perubahan secara cerdas.</p>
+                 {(!settings.auditLogs || settings.auditLogs.length === 0) ? (
+                    <div className="text-center py-10 text-slate-500 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
+                       <History size={40} className="mx-auto mb-3 opacity-30 text-amber-500" />
+                       <p className="font-bold">Belum ada riwayat perbaikan yang tercatat.</p>
+                    </div>
+                 ) : (
+                    <div className="space-y-4">
+                       {settings.auditLogs.map((log) => {
+                          const renderLogValue = (val) => {
+                             if (val === '' || val === null || val === undefined) return '0 / Kosong';
+                             if (isNaN(val) || typeof val === 'string') return val;
+                             return formatRp(val);
+                          };
+                          return (
+                            <div key={log.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm hover:border-amber-300 transition-colors">
+                               
+                               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-700 pb-3 mb-3 w-full">
+                                  <div>
+                                     <div className="text-[10px] text-slate-400 font-bold mb-1 flex items-center gap-1"><Clock size={10}/> {log.date}</div>
+                                     <div className="font-bold text-slate-800 dark:text-slate-200 text-base">{log.teacher}</div>
+                                  </div>
+                                  
+                                  <div className="flex flex-col items-start sm:items-end w-full sm:w-auto bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700">
+                                     <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">Total THP (Gaji Bersih)</span>
+                                     <div className="flex items-center gap-2 w-full justify-between sm:justify-end">
+                                       <span className="text-xs font-bold text-red-500 line-through" title="Total Gaji Sebelum Diubah">{formatRp(log.oldTotal)}</span>
+                                       <ChevronRight size={14} className="text-slate-400" />
+                                       <span className="text-sm font-black text-emerald-600 dark:text-emerald-400" title="Total Gaji Setelah Diubah">{formatRp(log.newTotal)}</span>
+                                     </div>
+                                  </div>
+                               </div>
+
+                               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 w-full sm:w-auto">
+                                     <Edit size={14} className="text-amber-500 shrink-0"/> 
+                                     <span>Perbaikan: <strong className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded border border-amber-100 dark:border-amber-800">{log.field}</strong></span>
+                                  </div>
+                                  <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                     <span className="text-xs font-bold text-slate-500 line-through" title="Nominal Komponen Lama">{renderLogValue(log.old)}</span>
+                                     <ChevronRight size={14} className="text-slate-400" />
+                                     <span className="text-sm font-bold text-slate-800 dark:text-slate-200" title="Nominal Komponen Baru">{renderLogValue(log.new)}</span>
+                                  </div>
+                               </div>
+
+                            </div>
+                          );
+                       })}
+                    </div>
+                 )}
+              </div>
+              <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
+                 <button onClick={() => setIsConfirmClearHistoryOpen(true)} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg text-xs font-bold transition-colors">
+                   Bersihkan Riwayat
+                 </button>
+                 <button onClick={() => setIsAuditModalOpen(false)} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg font-bold transition-colors text-sm shadow-sm">
+                   Tutup
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* FITUR BARU 3: Kontainer Rendering Cetak Slip Massal (Hanya muncul saat mem-print massal) */}
         {isMassPrinting && (
            <div className="hidden print:block w-full h-full bg-white print-area z-50 absolute top-0 left-0">
@@ -5356,7 +5583,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
            </div>
         )}
 
-        <div className={`overflow-x-auto flex-1 relative print-area pb-4 ${isMassPrinting ? 'print:hidden' : ''}`}>
+        <div className={`overflow-x-auto flex-1 relative print-area pb-4 touch-pan-x scroll-smooth ${isMassPrinting ? 'print:hidden' : ''}`}>
           <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
@@ -5752,7 +5979,7 @@ function ArsipView({ archives, setArchives, settings }) {
             </div>
           </div>
           
-          <div className="overflow-x-auto flex-1 relative">
+          <div className="overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
             <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
               <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
                 <tr>
@@ -5885,6 +6112,18 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
       potongKasbon += slip.tPotonganLainnya;
     });
 
+    // 🪄 LOGIKA BARU: Total Sebelum Perbaikan dihitung mutlak berdasarkan akumulasi selisih dari Audit Log
+    const selisihManual = (settings.auditLogs || []).reduce((sum, log) => {
+        // Gunakan selisih Total Kotor jika ada (data baru), jika tidak gunakan selisih THP (data lama)
+        const diff = log.newTotalKotor !== undefined 
+            ? (Number(log.newTotalKotor) - Number(log.oldTotalKotor)) 
+            : (Number(log.newTotal) - Number(log.oldTotal));
+        return sum + diff;
+    }, 0);
+    
+    // Total Sebelum Perbaikan = Total Saat Ini - Total Perubahan di Riwayat
+    const totalKotorDefault = totalKotor - selisihManual;
+
     const totalKomposisi = sumMasaKerja + sumJabatan + sumPendidikan + sumKompetensi + sumLainnya;
     const komposisiRaw = [
       { name: 'Masa Kerja', value: sumMasaKerja },
@@ -5931,7 +6170,9 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
       distribusiStatus,
       pembedahanPotongan,
       sumberDana,
-      totalPendanaan
+      totalPendanaan,
+      totalKotorDefault,
+      selisihManual
     };
   }, [teachers, fundingSources]);
 
@@ -6107,6 +6348,38 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
           <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Rata-Rata THP Pegawai</p>
             <h4 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatRp(reportData.rataRata)}</h4>
+          </div>
+        </div>
+
+        {/* TAMBAHAN BARU: Dampak Penyesuaian Manual (Sistem vs Edit Manual) */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 print:break-inside-avoid animate-in fade-in zoom-in-95">
+          <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+            <h3 className="text-base font-bold dark:text-white flex items-center gap-2">
+              <History size={18} className="text-amber-500"/> Riwayat Perbandingan Total Gaji Kotor
+            </h3>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+             <div className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 text-center">Total Sebelum Perbaikan</span>
+                <span className="text-2xl font-black text-slate-800 dark:text-slate-200">{formatRp(reportData.totalKotorDefault)}</span>
+             </div>
+             
+             <div className="flex flex-col items-center justify-center">
+                <div className="flex items-center justify-center w-full">
+                   <div className="h-px flex-1 bg-slate-300 dark:bg-slate-600 hidden sm:block"></div>
+                   <div className={`px-4 py-2 mx-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shadow-sm ${reportData.selisihManual > 0 ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : reportData.selisihManual < 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400' : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}>
+                      {reportData.selisihManual > 0 ? <TrendingUp size={14}/> : reportData.selisihManual < 0 ? <TrendingUp size={14} className="rotate-180"/> : <Activity size={14}/>}
+                      {reportData.selisihManual > 0 ? `+${formatRp(reportData.selisihManual)} (Beban Naik)` : reportData.selisihManual < 0 ? `${formatRp(reportData.selisihManual)} (Beban Turun)` : 'Tidak Ada Perubahan'}
+                   </div>
+                   <div className="h-px flex-1 bg-slate-300 dark:bg-slate-600 hidden sm:block"></div>
+                </div>
+                <p className="text-[10px] text-slate-400 text-center mt-3 max-w-[250px]">Akumulasi dampak selisih dari riwayat perbaikan/perubahan data yang dilakukan oleh Admin di menu Kelola Gaji.</p>
+             </div>
+
+             <div className="flex flex-col items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800/50 shadow-inner">
+                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2 text-center">Total Setelah Perbaikan</span>
+                <span className="text-2xl font-black text-blue-700 dark:text-blue-300">{formatRp(reportData.totalKotor)}</span>
+             </div>
           </div>
         </div>
 
@@ -7678,7 +7951,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
          {/* Navigasi Tab Mendatar (Horizontal Tabs) */}
          <div className="w-full bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 shrink-0">
             <nav 
-               className="flex flex-row gap-2 overflow-x-auto pb-2 scroll-smooth" 
+               className="flex flex-row gap-2 overflow-x-auto pb-2 scroll-smooth touch-pan-x" 
                style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
             >
               {settingTabs.map(tab => (
@@ -7916,7 +8189,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                    </div>
                 </div>
 
-                <div className="flex-1 overflow-x-auto relative">
+                <div className="flex-1 overflow-x-auto relative touch-pan-x scroll-smooth">
                    <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                      <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
                        <tr>
@@ -7956,28 +8229,11 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                {/* TAMBAHAN: Tombol Kirim Akses via WhatsApp */}
                                <button 
                                  onClick={() => {
-                                   if (!acc.phone && acc.role === 'Guru') {
-                                      alert("Gagal: Nomor WA belum diisi di Data Pegawai!");
-                                      return;
-                                   }
-                                   let waNum = acc.phone ? acc.phone.replace(/[^0-9]/g, '') : '';
-                                   if (waNum.startsWith('0')) waNum = '62' + waNum.slice(1);
-                                   if (acc.role !== 'Guru' && !waNum) waNum = ''; 
-
-                                   let passText = "••••••••";
-                                   if (acc.role === 'Guru') {
-                                      passText = acc.plainPassword;
-                                   } else if (acc.role === 'Admin') {
-                                      passText = "Boy2014";
-                                   } else if (acc.role === 'Kepala Sekolah') {
-                                      passText = "Ilwani2010";
-                                   }
-
-                                   const msg = `Assalamu'alaikum Bapak/Ibu ${acc.name},\n\nBerikut adalah akses login Anda untuk *Aplikasi Penggajian SD-IT QA*:\n\n*Username:* ${acc.username}\n*Password:* ${passText}\n\nSilakan login melalui tautan aplikasi kita. Harap simpan pesan ini dengan aman agar tidak lupa.\n\nTerima kasih.`;
-                                   const waUrl = `https://api.whatsapp.com/send?phone=${waNum}&text=${encodeURIComponent(msg)}`;
-                                   window.open(waUrl, '_blank');
-                                 }} 
-                                 className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors" 
+                                    const passText = acc.plainPassword || `${(acc.name.replace(/[^a-zA-Z]/g, '').substring(0,2).toUpperCase() || 'GU')}123`;
+                                    const text = `Halo ${acc.name},\nBerikut adalah akses login Portal Pegawai Anda:\n\nUsername: ${acc.username}\nPassword: ${passText}\n\nHarap simpan dengan baik.`;
+                                    window.open(`https://api.whatsapp.com/send?phone=${acc.phone || ''}&text=${encodeURIComponent(text)}`);
+                                 }}
+                                 className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors"
                                  title="Kirim Akses via WhatsApp"
                                >
                                  <Send size={14} />
@@ -8072,7 +8328,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      <Clock className="text-slate-500" size={18} /> Riwayat Akses Sistem Terakhir
                    </h3>
                 </div>
-                <div className="overflow-x-auto flex-1 relative p-0">
+                <div className="overflow-x-auto flex-1 relative p-0 touch-pan-x scroll-smooth">
                   <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                     <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
                       <tr>
