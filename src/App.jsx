@@ -421,6 +421,9 @@ export default function App() {
         // 🛡️ TAMBALAN CERDAS (SISTEM PENYELAMAT DATA MUTLAK) 🛡️
         let serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
         
+        // TAMBALAN CERDAS: Mengambil data arsip dari Cloud jika tersedia di server
+        let serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : null;
+        
         // Cek isi memori lokal di browser saat ini
         const localTeachersStr = localStorage.getItem('payedu_teachers');
         const localTeachers = localTeachersStr ? JSON.parse(localTeachersStr) : [];
@@ -457,6 +460,7 @@ export default function App() {
         } else {
           setGeneralSettings(serverSettings);
           setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
+          if (serverArchives && serverArchives.length > 0) setArchives(serverArchives); // Sinkronisasi Arsip Cloud
           setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
         }
       }
@@ -6726,8 +6730,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
     
     // Map data dari archives global
     const extractedHistory = archives.map(arc => {
-      // Cari data guru ini pada saat arsip tersebut dibuat
-      const historicalData = arc.dataGuru.find(t => t.id === myData.id);
+      // TAMBALAN CERDAS: Cari berdasarkan ID ATAU Nama Lengkap. 
+      // Ini memperbaiki bug arsip hilang karena ID guru berubah menjadi G01QA (Auto-Migrasi)
+      const historicalData = arc.dataGuru.find(t => t.id === myData.id || (t.name && t.name.toLowerCase() === myData.name.toLowerCase()));
       if (!historicalData) return null; // Guru mungkin belum masuk pada bulan tersebut
 
       return {
@@ -6741,7 +6746,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
     }).filter(Boolean); // Buang yang null
 
     return extractedHistory;
-  }, [archives, myData.id]);
+  }, [archives, myData.id, myData.name]);
 
   // Ekstraksi Data Pinjaman Guru
   const loanItems = (myData.payroll?.potonganLainnya || []).filter(p => 
