@@ -421,9 +421,6 @@ export default function App() {
         // 🛡️ TAMBALAN CERDAS (SISTEM PENYELAMAT DATA MUTLAK) 🛡️
         let serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
         
-        // TAMBALAN CERDAS: Mengambil data arsip dari Cloud jika tersedia di server
-        let serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : null;
-        
         // Cek isi memori lokal di browser saat ini
         const localTeachersStr = localStorage.getItem('payedu_teachers');
         const localTeachers = localTeachersStr ? JSON.parse(localTeachersStr) : [];
@@ -460,7 +457,6 @@ export default function App() {
         } else {
           setGeneralSettings(serverSettings);
           setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
-          if (serverArchives && serverArchives.length > 0) setArchives(serverArchives); // Sinkronisasi Arsip Cloud
           setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
         }
       }
@@ -5190,19 +5186,31 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
          };
       }));
 
+      // PERBAIKAN BUG: Simpan nipy sebagai _archiveKey cadangan di setiap data guru,
+      // agar pencarian arsip tetap berhasil meskipun ID guru berubah akibat migrasi.
+      const optimizedTeachersWithKey = optimizedTeachers.map(t => ({
+        ...t,
+        _archiveKey: t.nipy || t.id // Fallback: gunakan nipy sebagai kunci pencarian
+      }));
+
       const newArchive = {
         id: generateUniqueId('arc-'),
         periode: bulan,
         dateArchived: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
         totalGaji: totalBersihBulanIni,
-        dataGuru: optimizedTeachers
+        dataGuru: optimizedTeachersWithKey
       };
 
       // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir agar tidak meluap
+      let updatedArchives = [];
       if (setArchives) {
         setArchives(prev => {
            const updated = [newArchive, ...prev];
-           return updated.length > 12 ? updated.slice(0, 12) : updated;
+           updatedArchives = updated.length > 12 ? updated.slice(0, 12) : updated;
+           // PERBAIKAN BUG: Simpan langsung ke localStorage sebagai failsafe,
+           // memastikan arsip tidak hilang jika useEffect belum sempat jalan.
+           safeStorageSet('payedu_archives', JSON.stringify(updatedArchives));
+           return updatedArchives;
         });
       }
 
@@ -5217,7 +5225,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
 
       // --- PERBAIKAN: Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama ---
-      postToGoogleSheets('ARCHIVE_PAYROLL', { periode: bulan, data: optimizedTeachers })
+      postToGoogleSheets('ARCHIVE_PAYROLL', { periode: bulan, data: optimizedTeachersWithKey })
         .then(() => postToGoogleSheets('SAVE_SETTINGS', newSettings))
         .catch(e => console.warn("Sinkronisasi cloud arsip tertunda (data lokal sudah aman):", e));
       
@@ -6730,9 +6738,13 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
     
     // Map data dari archives global
     const extractedHistory = archives.map(arc => {
-      // TAMBALAN CERDAS: Cari berdasarkan ID ATAU Nama Lengkap. 
-      // Ini memperbaiki bug arsip hilang karena ID guru berubah menjadi G01QA (Auto-Migrasi)
-      const historicalData = arc.dataGuru.find(t => t.id === myData.id || (t.name && t.name.toLowerCase() === myData.name.toLowerCase()));
+      // PERBAIKAN BUG: Cari berdasarkan id ATAU nipy (_archiveKey) sebagai fallback,
+      // agar arsip tetap tampil meskipun ID guru berubah akibat fitur migrasi ID.
+      const historicalData = arc.dataGuru.find(t => 
+        t.id === myData.id || 
+        (t.nipy && t.nipy === myData.nipy) ||
+        (t._archiveKey && (t._archiveKey === myData.id || t._archiveKey === myData.nipy))
+      );
       if (!historicalData) return null; // Guru mungkin belum masuk pada bulan tersebut
 
       return {
@@ -6746,7 +6758,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
     }).filter(Boolean); // Buang yang null
 
     return extractedHistory;
-  }, [archives, myData.id, myData.name]);
+  }, [archives, myData.id]);
 
   // Ekstraksi Data Pinjaman Guru
   const loanItems = (myData.payroll?.potonganLainnya || []).filter(p => 
