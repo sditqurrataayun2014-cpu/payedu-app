@@ -12,7 +12,7 @@ import {
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
   Info, MessageSquare, ChevronDown, ChevronUp, Send, History, Bell, BellRing,
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
-  Fingerprint, Cloud, CloudOff, RefreshCw // TAMBAHAN NO 4: Ikon Cloud Sinkronisasi
+  Fingerprint, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
@@ -266,7 +266,7 @@ const defaultGeneralSettings = {
   principalName: 'ILWANI, S.Pd.I', 
   signatureUrl: '', 
   address: 'Jl. Diponegoro Gg. Makam Pahlawan Kuala Pembuang Seruyan',
-  logoUrl: 'https://i.ibb.co.com/zVGjvWxV/httpsi-ibb-co-com-GQYf3-Hd81-removebg-preview-png.png',
+  logoUrl: 'https://i.ibb.co/zVGjvWxV/httpsi-ibb-co-com-GQYf3-Hd81-removebg-preview-png.png',
   avatarMaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png',
   avatarFemaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png',
   payrollStatus: 'Draft', 
@@ -1349,7 +1349,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
-      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} />;
+      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} user={user} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
       case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
       case 'portal_dashboard': 
@@ -5011,7 +5011,7 @@ function SlipDocument({ teacher, bulan, settings }) {
 }
 
 // Rekap Gaji View
-function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog }) {
+function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog, user }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: State Filter Status Guru
   const [selectedSlip, setSelectedSlip] = useState(null);
@@ -5146,87 +5146,81 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmArchiveOpen(false);
     setIsArchiving(true);
     try {
-      const result = await postToGoogleSheets('ARCHIVE_PAYROLL', {
-        periode: bulan,
-        data: teachers
-      });
-      
-      if (result.status === 'success') {
-        // --- SAVE TO LOCAL ARCHIVE STATE ---
-        const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
+      // --- PERBAIKAN: Simpan arsip ke lokal TERLEBIH DAHULU, lalu sinkronisasi ke cloud ---
+      const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
 
-        // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
-        const optimizedTeachers = teachers.map(t => {
-          const { payroll, ...restTeacher } = t;
-          const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
-          const { harian, ...restJamMengajar } = jamMengajar || {};
-          
-          return {
-            ...restTeacher,
-            payroll: {
-              ...restPayroll,
-              jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
-            }
-          };
-        });
-
-        // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang untuk bulan depan pada master data Guru
-        setTeachers(prev => prev.map(t => {
-           if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
-           
-           const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
-              if ((pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('pinjaman'))) {
-                 const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
-                 const newSisa = Math.max(0, currentSisa - pot.nominal);
-                 return { ...pot, sisaHutang: newSisa };
-              }
-              return pot;
-           });
-
-           return {
-              ...t,
-              payroll: {
-                 ...t.payroll,
-                 potonganLainnya: updatedPotongan
-              }
-           };
-        }));
-
-        const newArchive = {
-          id: generateUniqueId('arc-'),
-          periode: bulan,
-          dateArchived: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
-          totalGaji: totalBersihBulanIni,
-          dataGuru: optimizedTeachers
+      // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
+      const optimizedTeachers = teachers.map(t => {
+        const { payroll, ...restTeacher } = t;
+        const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
+        const { harian, ...restJamMengajar } = jamMengajar || {};
+        
+        return {
+          ...restTeacher,
+          payroll: {
+            ...restPayroll,
+            jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
+          }
         };
+      });
 
-        // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir agar tidak meluap
-        if(setArchives) {
-          setArchives(prev => {
-             const updated = [newArchive, ...prev];
-             return updated.length > 12 ? updated.slice(0, 12) : updated;
-          });
-        }
-        // -----------------------------------
-        
-        const currentPeriod = settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-        const [y, m] = currentPeriod.split('-');
-        const nextD = new Date(y, m, 1);
-        const nextPeriod = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
-        
-        // PERBAIKAN: Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
-        const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
-        setSettings(newSettings);
-        safeStorageSet('payedu_settings', JSON.stringify(newSettings));
-        postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal update periode:", e));
-        
-        setNotification({ isOpen: true, type: 'success', message: result.message || 'Gaji berhasil diarsipkan permanen! Periode telah otomatis diperbarui ke bulan berikutnya.' });
-      } else {
-        setNotification({ isOpen: true, type: 'error', message: 'Gagal mengarsipkan: ' + result.message });
+      // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang untuk bulan depan pada master data Guru
+      setTeachers(prev => prev.map(t => {
+         if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
+         
+         const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
+            if ((pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('pinjaman'))) {
+               const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
+               const newSisa = Math.max(0, currentSisa - pot.nominal);
+               return { ...pot, sisaHutang: newSisa };
+            }
+            return pot;
+         });
+
+         return {
+            ...t,
+            payroll: {
+               ...t.payroll,
+               potonganLainnya: updatedPotongan
+            }
+         };
+      }));
+
+      const newArchive = {
+        id: generateUniqueId('arc-'),
+        periode: bulan,
+        dateArchived: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+        totalGaji: totalBersihBulanIni,
+        dataGuru: optimizedTeachers
+      };
+
+      // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir agar tidak meluap
+      if (setArchives) {
+        setArchives(prev => {
+           const updated = [newArchive, ...prev];
+           return updated.length > 12 ? updated.slice(0, 12) : updated;
+        });
       }
+
+      const currentPeriod = settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+      const [y, m] = currentPeriod.split('-');
+      const nextD = new Date(y, m, 1);
+      const nextPeriod = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
+      const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
+      setSettings(newSettings);
+      safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+
+      // --- PERBAIKAN: Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama ---
+      postToGoogleSheets('ARCHIVE_PAYROLL', { periode: bulan, data: optimizedTeachers })
+        .then(() => postToGoogleSheets('SAVE_SETTINGS', newSettings))
+        .catch(e => console.warn("Sinkronisasi cloud arsip tertunda (data lokal sudah aman):", e));
+      
+      setNotification({ isOpen: true, type: 'success', message: 'Gaji berhasil diarsipkan! Periode telah otomatis diperbarui ke bulan berikutnya.' });
     } catch (error) {
       console.error(error);
-      setNotification({ isOpen: true, type: 'error', message: 'Terjadi kesalahan koneksi ke database. Pastikan perangkat Anda terhubung ke internet.' });
+      setNotification({ isOpen: true, type: 'error', message: 'Terjadi kesalahan saat mengarsipkan data. Silakan coba lagi.' });
     }
     setIsArchiving(false);
   };
@@ -5337,6 +5331,52 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       
+      {/* MODAL KONFIRMASI: Ajukan Approval */}
+      {isConfirmAjukanOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <Send size={40} />
+              </div>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Ajukan Approval Gaji?</h3>
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm">
+                Rekap gaji periode <strong className="text-slate-700 dark:text-slate-200">{bulan}</strong> akan dikunci dan diajukan ke Kepala Sekolah untuk disetujui. Pastikan seluruh data sudah benar sebelum melanjutkan.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setIsConfirmAjukanOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executeAjukanApproval} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
+                <Send size={16} /> Ya, Ajukan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI: Tutup Buku & Arsipkan */}
+      {isConfirmArchiveOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <Archive size={40} />
+              </div>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Tutup Buku & Arsipkan?</h3>
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm">
+                Data gaji periode <strong className="text-slate-700 dark:text-slate-200">{bulan}</strong> akan diarsipkan secara permanen dan periode akan otomatis berpindah ke bulan berikutnya. Tindakan ini <strong className="text-red-500">tidak dapat dibatalkan</strong>.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setIsConfirmArchiveOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executeArchive} disabled={isArchiving} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2 disabled:opacity-50">
+                <Lock size={16} /> {isArchiving ? 'Memproses...' : 'Ya, Arsipkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAMBAHAN: Modal Konfirmasi Notif Massal */}
       {isConfirmNotifMassalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -5455,12 +5495,12 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                    <Send size={16} /> Ajukan Approval
                 </button>
               )}
-              {settings?.payrollStatus === 'Pending' && (
+              {settings?.payrollStatus === 'Pending' && user?.role !== 'admin' && (
                 <button disabled className="flex-1 md:flex-none justify-center bg-amber-100 text-amber-500 dark:bg-amber-900/20 dark:text-amber-600 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm cursor-not-allowed opacity-70">
                    <Lock size={16} /> Pending Kepsek
                 </button>
               )}
-              {settings?.payrollStatus === 'Approved' && (
+              {(settings?.payrollStatus === 'Approved' || (user?.role === 'admin' && settings?.payrollStatus === 'Pending')) && (
                 <button onClick={handleArchive} disabled={isArchiving} className="flex-1 md:flex-none justify-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm disabled:opacity-50">
                    <Lock size={16} /> {isArchiving ? 'Memproses...' : 'Tutup Buku & Arsipkan'}
                 </button>
