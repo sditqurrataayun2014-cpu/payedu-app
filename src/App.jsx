@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbzQAAK2n6zmv6vYm-mYpzcQ0pmU7DcvfWTc5TNMHntaT0nACqcvfo497qLAnc46QwGN/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -463,30 +463,29 @@ export default function App() {
             console.warn("🛡️ Sistem Penyelamat Aktif: Mencegah penghapusan data lokal oleh server yang kosong.");
         }
         
-        // ✅ PATCH ARSIP CLOUD: Muat arsip dari server jika tersedia
-        // Hanya dijalankan saat load awal (bukan background sync) agar tidak menimpa state lokal
+        // ✅ [PATCH 1] ARSIP CLOUD: Muat arsip dari server saat load awal
         if (!isBackgroundSync && Array.isArray(data.data?.archives) && data.data.archives.length > 0) {
-          const cloudArchives = data.data.archives;
+          const cloudArchives = data.data.archives.map(arc => ({
+            ...arc,
+            // [BUG FIX #2] Pastikan dataGuru selalu array, tidak pernah undefined/null
+            dataGuru: Array.isArray(arc.dataGuru) ? arc.dataGuru : []
+          }));
 
-          // Cek apakah arsip lokal sudah ada dan lebih banyak → prioritaskan lokal
+          // Prioritaskan cloud jika lebih banyak atau sama dengan lokal
           const localArchivesStr = localStorage.getItem('payedu_archives');
           const localArchivesIndex = localArchivesStr ? JSON.parse(localArchivesStr) : [];
 
           if (cloudArchives.length >= localArchivesIndex.length) {
-            // Cloud lebih lengkap atau sama → pakai cloud, sinkronkan ke localStorage
+            // Simpan ke localStorage agar bisa dipakai offline
             cloudArchives.forEach(arc => {
-              if (arc.dataGuru && arc.dataGuru.length > 0) {
+              if (arc.dataGuru.length > 0) {
                 safeStorageSet(`payedu_arc_detail_${arc.id}`, JSON.stringify(arc.dataGuru));
               }
             });
             const indexOnly = cloudArchives.map(({ dataGuru, ...meta }) => meta);
             safeStorageSet('payedu_archives', JSON.stringify(indexOnly));
-
-            // Set state React dengan data arsip lengkap dari cloud
             setArchives(cloudArchives);
             console.log(`✅ Arsip cloud berhasil dimuat: ${cloudArchives.length} periode.`);
-          } else {
-            console.warn("🛡️ Arsip lokal lebih banyak dari cloud, mempertahankan arsip lokal.");
           }
         }
 
@@ -5298,8 +5297,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       setSettings(newSettings);
       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
 
-      // Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama
-      // ✅ PATCH ARSIP CLOUD: Kirim SELURUH indeks arsip (bukan hanya 1 periode) agar perangkat lain bisa memuat semua riwayat
+      // ✅ [PATCH 2] Kirim SELURUH arsip ke cloud (bukan hanya 1 periode) agar perangkat lain dapat semua riwayat
       postToGoogleSheets('SAVE_ARCHIVES', updatedArchives)
         .then(() => postToGoogleSheets('SAVE_SETTINGS', newSettings))
         .catch(e => console.warn("Sinkronisasi cloud arsip tertunda (data lokal sudah aman):", e));
@@ -6807,20 +6805,25 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   const waMessage = `Assalamu'alaikum Bendahara,\n\nSaya *${myData.name}* (NIPY: ${myData.nipy}).\nSaya ingin mengajukan pertanyaan/komplain terkait selisih gaji pada periode *${bulan}*.\n\nKeterangan Komplain:\n"${komplainText}"\n\nMohon bantuannya untuk dicek kembali. Terima kasih.`;
   const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
 
-  // PERBAIKAN KRUSIAL: Mengekstrak Data Riwayat dari Arsip Asli (Bukan Dummy)
+  // [BUG FIX #3] Riwayat Penerimaan Gaji — diperkuat dengan 3 lapis guard
   const riwayatAsli = useMemo(() => {
-    if (!archives) return [];
-    
-    // Map data dari archives global
+    if (!archives || archives.length === 0) return [];
+
     const extractedHistory = archives.map(arc => {
-      // PERBAIKAN BUG: Cari berdasarkan id ATAU nipy (_archiveKey) sebagai fallback,
-      // agar arsip tetap tampil meskipun ID guru berubah akibat fitur migrasi ID.
-      const historicalData = arc.dataGuru.find(t => 
-        t.id === myData.id || 
-        (t.nipy && t.nipy === myData.nipy) ||
-        (t._archiveKey && (t._archiveKey === myData.id || t._archiveKey === myData.nipy))
+      // [BUG FIX #2] Guard: dataGuru harus berupa array sebelum .find() dipanggil
+      // Jika undefined/null, skip periode ini agar tidak crash
+      const guruList = Array.isArray(arc.dataGuru) ? arc.dataGuru : [];
+      if (guruList.length === 0) return null;
+
+      // [BUG FIX #3] Perluas pencocokan: id, nipy, _archiveKey, dan name sebagai fallback terakhir
+      const historicalData = guruList.find(t =>
+        t.id === myData.id ||
+        t.id === user.id ||
+        (t.nipy && myData.nipy && t.nipy === myData.nipy) ||
+        (t._archiveKey && (t._archiveKey === myData.id || t._archiveKey === user.id || t._archiveKey === myData.nipy)) ||
+        (t.name && myData.name && t.name === myData.name) // Fallback nama jika semua ID berubah
       );
-      if (!historicalData) return null; // Guru mungkin belum masuk pada bulan tersebut
+      if (!historicalData) return null;
 
       return {
         idArsip: arc.id,
@@ -6828,12 +6831,12 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
         tanggal: arc.dateArchived,
         nominal: calculatePayroll(historicalData).totalBersih,
         status: 'Telah Disahkan',
-        dataHistoris: historicalData // Menyimpan wujud data masa lalu untuk dirender di PDF
+        dataHistoris: historicalData
       };
-    }).filter(Boolean); // Buang yang null
+    }).filter(Boolean);
 
     return extractedHistory;
-  }, [archives, myData.id]);
+  }, [archives, myData.id, myData.nipy, myData.name, user.id]);
 
   // Ekstraksi Data Pinjaman Guru
   const loanItems = (myData.payroll?.potonganLainnya || []).filter(p => 
