@@ -310,8 +310,24 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [archives, setArchives] = useState(() => {
-    const saved = localStorage.getItem('payedu_archives');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('payedu_archives');
+      if (!saved) return [];
+      const indexArr = JSON.parse(saved);
+      // ✅ PERBAIKAN STORAGE SPLIT: Gabungkan metadata indeks dengan detail dari key terpisah
+      return indexArr.map(meta => {
+        // Kalau dataGuru sudah ada di indeks (format lama), pakai langsung
+        if (meta.dataGuru) return meta;
+        // Format baru: baca detail dari key terpisah
+        try {
+          const detail = localStorage.getItem(`payedu_arc_detail_${meta.id}`);
+          return { ...meta, dataGuru: detail ? JSON.parse(detail) : [] };
+        } catch(e) { return { ...meta, dataGuru: [] }; }
+      });
+    } catch(e) {
+      console.warn('Data arsip korup, direset ke kosong:', e);
+      return [];
+    }
   });
 
   const [isLoadingDb, setIsLoadingDb] = useState(false);
@@ -593,11 +609,26 @@ export default function App() {
     }
   }, [loginHistory, isDataLoaded, hasConflict]);
 
+  const isArchivesInitialized = useRef(false);
   useEffect(() => {
-    // ✅ PERBAIKAN: Arsip selalu disimpan setiap kali berubah, TANPA menunggu isDataLoaded.
-    // Ini mencegah arsip hilang jika useEffect jalan sebelum proses load selesai.
+    // ✅ PERBAIKAN: Guard isFirstRender agar mount pertama tidak menimpa arsip yang sudah ada.
+    if (!isArchivesInitialized.current) {
+      isArchivesInitialized.current = true;
+      return;
+    }
     if (!hasConflict) {
-      safeStorageSet('payedu_archives', JSON.stringify(archives));
+      // ✅ PERBAIKAN STORAGE SPLIT: Simpan indeks (tanpa dataGuru) + detail per key terpisah
+      const indexOnly = archives.map(({ dataGuru, ...meta }) => {
+        // Pastikan detail tersimpan di key terpisah jika belum ada
+        if (dataGuru && dataGuru.length > 0) {
+          const detailKey = 'payedu_arc_detail_' + meta.id;
+          if (!localStorage.getItem(detailKey)) {
+            safeStorageSet(detailKey, JSON.stringify(dataGuru));
+          }
+        }
+        return meta;
+      });
+      safeStorageSet('payedu_archives', JSON.stringify(indexOnly));
     }
   }, [archives, hasConflict]);
 
@@ -849,7 +880,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
     // Simulasi proses loading validasi sesaat (UX)
     setTimeout(() => {
       // 1. Cek dari LocalStorage (jika akun dibuat via Pengaturan)
-      const savedAccounts = JSON.parse(localStorage.getItem('payedu_accounts')) || [];
+      const savedAccounts = (() => { try { return JSON.parse(localStorage.getItem('payedu_accounts')); } catch(e) { return null; } })() || [];
       
       // Hash inputan user sebelum membandingkan dengan database
       const hashedInputPassword = simpleHash(password);
@@ -2818,14 +2849,14 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     setTeachers(prev => prev.map(t => ({
       ...t,
       payroll: {
-        ...t.payroll,
+        ...(t.payroll || {}),
         jamMengajar: {
-          ...t.payroll.jamMengajar,
+          ...(t.payroll?.jamMengajar || {}),
           harian: Array(31).fill(''),
           realisasi: 0
         },
         disiplin: {
-          ...t.payroll.disiplin,
+          ...(t.payroll?.disiplin || {}),
           telat: 0
         }
       }
@@ -4921,7 +4952,7 @@ function SlipDocument({ teacher, bulan, settings }) {
                 <td className="border border-black p-1.5">
                   {pot.ket}
                   {/* TAMBAHAN POIN 4: Fitur Info Sisa Saldo Kasbon/Koperasi Dinamis */}
-                  {(pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('pinjaman')) && (
+                  {((pot.ket?.toLowerCase() || '').includes('koperasi') || (pot.ket?.toLowerCase() || '').includes('kasbon') || (pot.ket?.toLowerCase() || '').includes('pinjaman')) && (
                      <div className="text-[10px] text-slate-600 font-medium italic mt-0.5 ml-1">
                         *(Sisa Saldo Pinjaman/Kasbon: {formatRp(pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4))})
                      </div>
@@ -5168,7 +5199,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       setTeachers(prev => prev.map(t => {
          if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
          const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
-            if ((pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('pinjaman'))) {
+            if (((pot.ket?.toLowerCase() || '').includes('kasbon') || (pot.ket?.toLowerCase() || '').includes('koperasi') || (pot.ket?.toLowerCase() || '').includes('pinjaman'))) {
                const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
                return { ...pot, sisaHutang: Math.max(0, currentSisa - pot.nominal) };
             }
@@ -5191,17 +5222,41 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         dataGuru: optimizedTeachersWithKey
       };
 
-      // ✅ PERBAIKAN RACE CONDITION: Baca localStorage secara SINKRON terlebih dahulu,
-      // jangan andalkan nilai dari closure async setArchives yang belum tentu ter-update.
-      const existingArchivesRaw = localStorage.getItem('payedu_archives');
-      const existingArchives = existingArchivesRaw ? JSON.parse(existingArchivesRaw) : [];
-      const mergedArchives = [newArchive, ...existingArchives];
-      // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir
-      const updatedArchives = mergedArchives.length > 12 ? mergedArchives.slice(0, 12) : mergedArchives;
-
-      // ✅ PERBAIKAN URUTAN SIMPAN: Tulis ke localStorage DULU (sinkron & pasti berhasil),
-      // baru kemudian update state React — bukan sebaliknya.
-      safeStorageSet('payedu_archives', JSON.stringify(updatedArchives));
+      // ✅ PERBAIKAN STORAGE SPLIT: Simpan detail arsip di key TERPISAH per periode
+      // agar tidak memenuhi quota 5MB localStorage saat semua arsip digabung dalam 1 key.
+      // Key detail: 'payedu_arc_detail_{id}', Key indeks: 'payedu_archives' (hanya metadata ringan)
+      
+      // Simpan detail dataGuru arsip baru di key tersendiri
+      safeStorageSet(`payedu_arc_detail_${newArchive.id}`, JSON.stringify(newArchive.dataGuru));
+      
+      // Baca indeks arsip yang ada dari localStorage (hanya metadata, tanpa dataGuru)
+      let existingIndex = [];
+      try {
+        const raw = localStorage.getItem('payedu_archives');
+        existingIndex = raw ? JSON.parse(raw) : [];
+        // Pastikan tidak ada dataGuru yang ikut tersimpan di indeks (bersihkan data lama)
+        existingIndex = existingIndex.map(({ dataGuru, ...meta }) => meta);
+      } catch(e) { existingIndex = []; }
+      
+      // Arsip baru masuk ke indeks tanpa dataGuru (lebih ringan)
+      const { dataGuru: _dg, ...newArchiveMeta } = newArchive;
+      const mergedIndex = [newArchiveMeta, ...existingIndex];
+      // OPTIMASI: Batasi indeks maksimal 12 bulan, hapus detail arsip yang terbuang
+      if (mergedIndex.length > 12) {
+        const removed = mergedIndex.splice(12);
+        removed.forEach(arc => {
+          try { localStorage.removeItem(`payedu_arc_detail_${arc.id}`); } catch(e) {}
+        });
+      }
+      safeStorageSet('payedu_archives', JSON.stringify(mergedIndex));
+      
+      // Buat array lengkap (dengan dataGuru) untuk state React
+      const updatedArchives = [newArchive, ...existingIndex.map(meta => ({
+        ...meta,
+        dataGuru: (() => { try { return JSON.parse(localStorage.getItem(`payedu_arc_detail_${meta.id}`) || 'null') || []; } catch(e) { return []; } })()
+      }))];
+      if (mergedIndex.length < updatedArchives.length) updatedArchives.splice(mergedIndex.length);
+      
       if (setArchives) {
         setArchives(updatedArchives);
       }
@@ -7581,7 +7636,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun yang Jauh Lebih Mudah Dikelola
   useEffect(() => {
     // 1. Ambil data Admin/Kepsek dari memori lokal (bebas dari sinkronisasi awan)
-    const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
+    const adminAccs = (() => { try { return JSON.parse(localStorage.getItem('payedu_admin_accounts')); } catch(e) { return null; } })() || [
       { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
       { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
     ];
@@ -7690,7 +7745,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
          }
       } else {
          // SEDERHANA: Simpan Admin ke Local Storage terpisah
-         const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
+         const adminAccs = (() => { try { return JSON.parse(localStorage.getItem('payedu_admin_accounts')); } catch(e) { return null; } })() || [
            { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
            { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
          ];
@@ -7734,7 +7789,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
          setModal({ isOpen: false, type: null, data: null });
          return;
        }
-       const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [];
+       const adminAccs = (() => { try { return JSON.parse(localStorage.getItem('payedu_admin_accounts')); } catch(e) { return null; } })() || [];
        const updatedAdmins = adminAccs.filter(a => a.id !== modal.data.id);
        localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
        setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
