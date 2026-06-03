@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbzQAAK2n6zmv6vYm-mYpzcQ0pmU7DcvfWTc5TNMHntaT0nACqcvfo497qLAnc46QwGN/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -463,6 +463,33 @@ export default function App() {
             console.warn("🛡️ Sistem Penyelamat Aktif: Mencegah penghapusan data lokal oleh server yang kosong.");
         }
         
+        // ✅ PATCH ARSIP CLOUD: Muat arsip dari server jika tersedia
+        // Hanya dijalankan saat load awal (bukan background sync) agar tidak menimpa state lokal
+        if (!isBackgroundSync && Array.isArray(data.data?.archives) && data.data.archives.length > 0) {
+          const cloudArchives = data.data.archives;
+
+          // Cek apakah arsip lokal sudah ada dan lebih banyak → prioritaskan lokal
+          const localArchivesStr = localStorage.getItem('payedu_archives');
+          const localArchivesIndex = localArchivesStr ? JSON.parse(localArchivesStr) : [];
+
+          if (cloudArchives.length >= localArchivesIndex.length) {
+            // Cloud lebih lengkap atau sama → pakai cloud, sinkronkan ke localStorage
+            cloudArchives.forEach(arc => {
+              if (arc.dataGuru && arc.dataGuru.length > 0) {
+                safeStorageSet(`payedu_arc_detail_${arc.id}`, JSON.stringify(arc.dataGuru));
+              }
+            });
+            const indexOnly = cloudArchives.map(({ dataGuru, ...meta }) => meta);
+            safeStorageSet('payedu_archives', JSON.stringify(indexOnly));
+
+            // Set state React dengan data arsip lengkap dari cloud
+            setArchives(cloudArchives);
+            console.log(`✅ Arsip cloud berhasil dimuat: ${cloudArchives.length} periode.`);
+          } else {
+            console.warn("🛡️ Arsip lokal lebih banyak dari cloud, mempertahankan arsip lokal.");
+          }
+        }
+
         // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
           // TAMBALAN CERDAS 2: Beri toleransi waktu 5 detik (5000ms) untuk mencegah konflik palsu akibat delay server Google
@@ -5272,7 +5299,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
 
       // Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama
-      postToGoogleSheets('ARCHIVE_PAYROLL', { periode: bulan, data: optimizedTeachersWithKey })
+      // ✅ PATCH ARSIP CLOUD: Kirim SELURUH indeks arsip (bukan hanya 1 periode) agar perangkat lain bisa memuat semua riwayat
+      postToGoogleSheets('SAVE_ARCHIVES', updatedArchives)
         .then(() => postToGoogleSheets('SAVE_SETTINGS', newSettings))
         .catch(e => console.warn("Sinkronisasi cloud arsip tertunda (data lokal sudah aman):", e));
 
