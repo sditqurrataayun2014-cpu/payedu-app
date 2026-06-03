@@ -594,10 +594,12 @@ export default function App() {
   }, [loginHistory, isDataLoaded, hasConflict]);
 
   useEffect(() => {
-    if (isDataLoaded && !hasConflict) {
+    // ✅ PERBAIKAN: Arsip selalu disimpan setiap kali berubah, TANPA menunggu isDataLoaded.
+    // Ini mencegah arsip hilang jika useEffect jalan sebelum proses load selesai.
+    if (!hasConflict) {
       safeStorageSet('payedu_archives', JSON.stringify(archives));
     }
-  }, [archives, isDataLoaded, hasConflict]);
+  }, [archives, hasConflict]);
 
   // FITUR BARU 2: Keamanan Sesi Berwaktu (Auto-Logout) selama 15 Menit Inaktif
   useEffect(() => {
@@ -5146,7 +5148,6 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmArchiveOpen(false);
     setIsArchiving(true);
     try {
-      // --- PERBAIKAN: Simpan arsip ke lokal TERLEBIH DAHULU, lalu sinkronisasi ke cloud ---
       const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t).totalBersih, 0);
 
       // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
@@ -5154,12 +5155,11 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         const { payroll, ...restTeacher } = t;
         const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
         const { harian, ...restJamMengajar } = jamMengajar || {};
-        
         return {
           ...restTeacher,
           payroll: {
             ...restPayroll,
-            jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
+            jamMengajar: restJamMengajar
           }
         };
       });
@@ -5167,30 +5167,20 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang untuk bulan depan pada master data Guru
       setTeachers(prev => prev.map(t => {
          if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
-         
          const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
             if ((pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('pinjaman'))) {
                const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
-               const newSisa = Math.max(0, currentSisa - pot.nominal);
-               return { ...pot, sisaHutang: newSisa };
+               return { ...pot, sisaHutang: Math.max(0, currentSisa - pot.nominal) };
             }
             return pot;
          });
-
-         return {
-            ...t,
-            payroll: {
-               ...t.payroll,
-               potonganLainnya: updatedPotongan
-            }
-         };
+         return { ...t, payroll: { ...t.payroll, potonganLainnya: updatedPotongan } };
       }));
 
-      // PERBAIKAN BUG: Simpan nipy sebagai _archiveKey cadangan di setiap data guru,
-      // agar pencarian arsip tetap berhasil meskipun ID guru berubah akibat migrasi.
+      // PERBAIKAN BUG: Simpan nipy sebagai _archiveKey cadangan di setiap data guru
       const optimizedTeachersWithKey = optimizedTeachers.map(t => ({
         ...t,
-        _archiveKey: t.nipy || t.id // Fallback: gunakan nipy sebagai kunci pencarian
+        _archiveKey: t.nipy || t.id
       }));
 
       const newArchive = {
@@ -5201,34 +5191,36 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         dataGuru: optimizedTeachersWithKey
       };
 
-      // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir agar tidak meluap
-      let updatedArchives = [];
+      // ✅ PERBAIKAN RACE CONDITION: Baca localStorage secara SINKRON terlebih dahulu,
+      // jangan andalkan nilai dari closure async setArchives yang belum tentu ter-update.
+      const existingArchivesRaw = localStorage.getItem('payedu_archives');
+      const existingArchives = existingArchivesRaw ? JSON.parse(existingArchivesRaw) : [];
+      const mergedArchives = [newArchive, ...existingArchives];
+      // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir
+      const updatedArchives = mergedArchives.length > 12 ? mergedArchives.slice(0, 12) : mergedArchives;
+
+      // ✅ PERBAIKAN URUTAN SIMPAN: Tulis ke localStorage DULU (sinkron & pasti berhasil),
+      // baru kemudian update state React — bukan sebaliknya.
+      safeStorageSet('payedu_archives', JSON.stringify(updatedArchives));
       if (setArchives) {
-        setArchives(prev => {
-           const updated = [newArchive, ...prev];
-           updatedArchives = updated.length > 12 ? updated.slice(0, 12) : updated;
-           // PERBAIKAN BUG: Simpan langsung ke localStorage sebagai failsafe,
-           // memastikan arsip tidak hilang jika useEffect belum sempat jalan.
-           safeStorageSet('payedu_archives', JSON.stringify(updatedArchives));
-           return updatedArchives;
-        });
+        setArchives(updatedArchives);
       }
 
       const currentPeriod = settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
       const [y, m] = currentPeriod.split('-');
       const nextD = new Date(y, m, 1);
       const nextPeriod = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
-      
+
       // Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
       const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
       setSettings(newSettings);
       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
 
-      // --- PERBAIKAN: Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama ---
+      // Sinkronisasi ke cloud berjalan di background, tidak memblokir proses utama
       postToGoogleSheets('ARCHIVE_PAYROLL', { periode: bulan, data: optimizedTeachersWithKey })
         .then(() => postToGoogleSheets('SAVE_SETTINGS', newSettings))
         .catch(e => console.warn("Sinkronisasi cloud arsip tertunda (data lokal sudah aman):", e));
-      
+
       setNotification({ isOpen: true, type: 'success', message: 'Gaji berhasil diarsipkan! Periode telah otomatis diperbarui ke bulan berikutnya.' });
     } catch (error) {
       console.error(error);
