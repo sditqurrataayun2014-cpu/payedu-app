@@ -1227,6 +1227,10 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [absensiFilter, setAbsensiFilter] = useState('all');
 
+  // 🪄 FITUR BARU: State untuk Modal Pusat Sinkronisasi (Penyelesai Data Beda)
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isForceSyncing, setIsForceSyncing] = useState(false);
+
   // 🪄 FITUR BARU & DIPERBARUI: Mesin Audit Log Cloud & Anti-Spam Ketikan (Debounce)
   const latestTeachersRef = useRef(teachers);
   useEffect(() => { latestTeachersRef.current = teachers; }, [teachers]);
@@ -1503,8 +1507,9 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             {/* TAMBAHAN NO 4: Indikator Sinkronisasi Cloud (Status Online/Offline) */}
             {(user.role === 'admin' || user.role === 'Kepala Sekolah') && (
               <div 
-                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-300 cursor-help ${syncStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800/50' : 'bg-slate-100 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'}`} 
-                title={syncStatus === 'synced' ? "Data tersinkronisasi ke Cloud (Aman)" : syncStatus === 'syncing' ? "Menyimpan perubahan ke Cloud..." : "Koneksi terputus! Data saat ini hanya tersimpan secara lokal di perangkat Anda."}
+                onClick={() => setIsSyncModalOpen(true)}
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-300 cursor-pointer hover:scale-105 shadow-sm ${syncStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800/50' : 'bg-slate-100 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'}`} 
+                title="Klik untuk membuka Pusat Sinkronisasi Data"
               >
                 {syncStatus === 'synced' && <Cloud size={14} className="text-emerald-500" />}
                 {syncStatus === 'syncing' && <RefreshCw size={14} className="text-blue-500 animate-spin" />}
@@ -1607,6 +1612,72 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                <RefreshCw size={16} /> Muat Ulang Data Terbaru
              </button>
            </div>
+        )}
+
+        {/* 🪄 TAMBALAN CERDAS: MODAL PUSAT SINKRONISASI 🪄 */}
+        {isSyncModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                  <Cloud className="text-blue-500"/> Pusat Resolusi Data
+                </h3>
+                <button onClick={() => setIsSyncModalOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              </div>
+              <div className="p-6">
+                <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
+                  <h4 className="text-amber-800 dark:text-amber-400 font-bold mb-1 flex items-center gap-1.5"><AlertCircle size={16}/> Kenapa Data HP & Laptop Beda?</h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-300/80 leading-relaxed">
+                    Setiap perangkat (HP/Laptop) memiliki penyimpanan lokal masing-masing. Jika sinkronisasi ke awan (Cloud) sempat terputus, data mereka akan berjalan sendiri-sendiri. Silakan pilih salah satu perangkat yang datanya paling benar untuk dijadikan <strong>Data Utama (Master)</strong>.
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <button 
+                    onClick={async () => {
+                      if(!window.confirm("YAKIN? Data di Cloud dan di perangkat lain akan dihapus dan DITIMPA dengan data dari perangkat ini.")) return;
+                      setIsForceSyncing(true);
+                      try {
+                        const newTime = Date.now();
+                        const newSettings = { ...settings, lastModified: newTime };
+                        await postToGoogleSheets('SAVE_SETTINGS', newSettings);
+                        await postToGoogleSheets('SAVE_TEACHERS', teachers);
+                        await postToGoogleSheets('SAVE_ARCHIVES', archives);
+                        setSettings(newSettings);
+                        alert("Berhasil! Data di perangkat INI sekarang menjadi data utama di semua perangkat.");
+                        setIsSyncModalOpen(false);
+                      } catch(e) {
+                        alert("Gagal menghubungi Cloud. Pastikan internet stabil.");
+                      }
+                      setIsForceSyncing(false);
+                    }}
+                    disabled={isForceSyncing}
+                    className="w-full text-left p-4 rounded-xl border border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors group disabled:opacity-50"
+                  >
+                    <h4 className="font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2 mb-1">
+                      <Upload size={16}/> 1. Jadikan Perangkat Ini Sebagai Master
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Pilih ini jika data di perangkat (layar) yang sedang Anda lihat ini adalah data yang <strong className="text-slate-700 dark:text-slate-300">paling lengkap dan terbaru</strong>. Ini akan menimpa data di awan.</p>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      if(!window.confirm("YAKIN? Data yang ada di perangkat ini akan DIHAPUS dan DITIMPA dengan data dari Cloud.")) return;
+                      setIsSyncModalOpen(false);
+                      resolveConflict();
+                    }}
+                    disabled={isForceSyncing}
+                    className="w-full text-left p-4 rounded-xl border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors group disabled:opacity-50"
+                  >
+                    <h4 className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2 mb-1">
+                      <Download size={16}/> 2. Tarik Paksa Data dari Cloud
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Pilih ini jika data di perangkat ini salah/tertinggal, dan Anda ingin menarik data yang <strong className="text-slate-700 dark:text-slate-300">sudah tersimpan di Cloud/Perangkat lain</strong>.</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 touch-pan-y scroll-smooth ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}>
