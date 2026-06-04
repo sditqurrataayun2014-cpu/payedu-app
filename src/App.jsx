@@ -3274,6 +3274,26 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     }));
   };
 
+  // 🪄 TAMBALAN CERDAS: Fungsi untuk mengubah angka Telat langsung di tabel
+  const handleInlineTelatChange = (teacherId, newValue) => {
+    const telatVal = newValue === '' ? '' : Math.max(0, Number(newValue));
+    setTeachers(prev => prev.map(t => {
+      if (t.id === teacherId) {
+        return {
+          ...t,
+          payroll: {
+            ...(t.payroll || {}),
+            disiplin: {
+              ...(t.payroll?.disiplin || {}),
+              telat: telatVal
+            }
+          }
+        };
+      }
+      return t;
+    }));
+  };
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative pb-4 min-h-0">
       
