@@ -7478,8 +7478,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
               <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-4">
                 <TrendingUp size={16} className="text-indigo-500" /> Tren Take Home Pay Anda
               </h4>
-              <div className="h-40 w-full relative">
-                <ResponsiveContainer width="100%" height="300%">
+              {/* 🪄 PERBAIKAN: Mengubah tinggi menjadi h-48 dan height="100%" agar grafik proporsional dan tidak meluap */}
+              <div className="h-48 w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={[...riwayatAsli].reverse().slice(-6)} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.3} />
                     <XAxis dataKey="periode" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} dy={10} />
