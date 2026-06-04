@@ -107,9 +107,10 @@ const calculatePayroll = (teacher) => {
   let jamDihitung = 0;
   const targetWajib = p.jamMengajar?.wajib !== undefined && p.jamMengajar?.wajib !== '' ? (Number(p.jamMengajar.wajib) || 0) : (teacher.status === 'Tetap' ? 60 : 0);
   const jsjm = Number(p.jamMengajar?.jsjm) || 0; // TAMBAHAN: Jabatan Setara Jam Mengajar
+  const jamPlus = Number(p.jamMengajar?.jamPlus) || 0; // TAMBAHAN: Jam Tambahan Manual
   
-  // LOGIKA BARU: JSJM ditambahkan sebagai "jam bantuan" sebelum dikurangi target wajib
-  jamDihitung = Math.max(0, (realJam + jsjm) - targetWajib);
+  // LOGIKA BARU: JSJM dan Jam Plus ditambahkan sebagai "jam bantuan" sebelum dikurangi target wajib
+  jamDihitung = Math.max(0, (realJam + jsjm + jamPlus) - targetWajib);
   
   const tMengajar = jamDihitung * (Number(p.jamMengajar?.tarifJPL) || 0);
 
@@ -2964,7 +2965,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
 
   const handleExportExcel = () => {
     const daysHeaders = Array.from({ length: 31 }, (_, i) => `Tgl ${i + 1}`);
-    const headers = ['Nama Guru', ...daysHeaders, 'Total', 'Wajib', 'JSJM', 'Selisih', 'Telat', 'Tepat Waktu'];
+    const headers = ['Nama Guru', ...daysHeaders, 'Jam +', 'Total', 'Wajib', 'JSJM', 'Selisih', 'Telat', 'Tepat Waktu'];
     
     // Menggunakan pemisah titik koma (;) agar lebih rapi saat dibuka di Microsoft Excel region Indonesia
     const csvRows = [headers.join(';')];
@@ -2973,14 +2974,15 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
       const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
       const real = t.payroll?.jamMengajar?.realisasi || 0;
       const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
-      const selisih = (real + jsjm) - wajib;
+      const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
+      const selisih = (real + jsjm + jamPlus) - wajib;
       const telat = t.payroll?.disiplin?.telat || 0;
       const tepatWaktu = Math.max(0, real - telat);
       
       const dailyData = t.payroll?.jamMengajar?.harian || getDailyHours(real, t.id);
       const dailyString = dailyData.map(d => d || '').join(';');
       
-      const row = [`"${t.name}"`, dailyString, real, wajib, jsjm, selisih, telat, tepatWaktu];
+      const row = [`"${t.name}"`, dailyString, jamPlus, real, wajib, jsjm, selisih, telat, tepatWaktu];
       csvRows.push(row.join(';'));
     });
     
@@ -3274,6 +3276,26 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     }));
   };
 
+  // 🪄 FUNGSI BARU: Untuk mengubah Jam Tambahan (Jam +)
+  const handleInlineJamPlusChange = (teacherId, newValue) => {
+    const jamPlusVal = newValue === '' ? '' : Math.max(0, Number(newValue));
+    setTeachers(prev => prev.map(t => {
+      if (t.id === teacherId) {
+        return {
+          ...t,
+          payroll: {
+            ...(t.payroll || {}),
+            jamMengajar: {
+              ...(t.payroll?.jamMengajar || {}),
+              jamPlus: jamPlusVal
+            }
+          }
+        };
+      }
+      return t;
+    }));
+  };
+
   // 🪄 TAMBALAN CERDAS: Fungsi untuk mengubah angka Telat langsung di tabel
   const handleInlineTelatChange = (teacherId, newValue) => {
     const telatVal = newValue === '' ? '' : Math.max(0, Number(newValue));
@@ -3494,6 +3516,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                     {i + 1}
                   </th>
                 ))}
+                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" title="Tambahan Jam Manual">Jam +</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-blue-700 dark:text-blue-400">Total</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800">Wajib</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-purple-700 dark:text-purple-500" title="Jabatan Setara Jam Mengajar">JSJM</th>
@@ -3508,7 +3531,8 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                 const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
                 const real = t.payroll?.jamMengajar?.realisasi || 0;
                 const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
-                const selisih = (real + jsjm) - wajib; 
+                const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
+                const selisih = (real + jsjm + jamPlus) - wajib; 
                 const telat = t.payroll?.disiplin?.telat || 0;
                 const tepatWaktu = Math.max(0, real - telat); // Total jam dikurangi telat
                 
@@ -3547,6 +3571,18 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                         {jam}
                       </td>
                     ))}
+
+                    <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-emerald-50/30 dark:bg-emerald-900/10 align-middle">
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={t.payroll?.jamMengajar?.jamPlus !== undefined ? t.payroll?.jamMengajar?.jamPlus : ''} 
+                        onChange={(e) => handleInlineJamPlusChange(t.id, e.target.value)}
+                        className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold focus:ring-2 focus:ring-emerald-500 outline-none m-auto block shadow-sm transition-all"
+                        title="Tambahan Jam Manual"
+                        placeholder="0"
+                      />
+                    </td>
 
                     <td className="p-3 text-center font-black text-base border border-slate-400 dark:border-slate-500 text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20">
                       {real}
@@ -3603,7 +3639,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan="38" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan="39" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
           </table>
