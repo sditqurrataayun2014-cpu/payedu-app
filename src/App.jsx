@@ -5348,17 +5348,41 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         };
       });
 
-      // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang untuk bulan depan pada master data Guru
+      // 🪄 TAMBALAN CERDAS: Reset Jam Mengajar, Disiplin, dan Otomatis Potong Sisa Hutang
       setTeachers(prev => prev.map(t => {
-         if (!t.payroll?.potonganLainnya || t.payroll.potonganLainnya.length === 0) return t;
-         const updatedPotongan = t.payroll.potonganLainnya.map(pot => {
-            if (((pot.ket?.toLowerCase() || '').includes('kasbon') || (pot.ket?.toLowerCase() || '').includes('koperasi') || (pot.ket?.toLowerCase() || '').includes('pinjaman'))) {
-               const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
-               return { ...pot, sisaHutang: Math.max(0, currentSisa - pot.nominal) };
-            }
-            return pot;
-         });
-         return { ...t, payroll: { ...t.payroll, potonganLainnya: updatedPotongan } };
+         // 1. Potong Sisa Hutang (Kasbon/Koperasi)
+         let updatedPotongan = t.payroll?.potonganLainnya || [];
+         if (updatedPotongan.length > 0) {
+             updatedPotongan = updatedPotongan.map(pot => {
+                if (((pot.ket?.toLowerCase() || '').includes('kasbon') || (pot.ket?.toLowerCase() || '').includes('koperasi') || (pot.ket?.toLowerCase() || '').includes('pinjaman'))) {
+                   const currentSisa = pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4);
+                   return { ...pot, sisaHutang: Math.max(0, currentSisa - pot.nominal) };
+                }
+                return pot;
+             });
+         }
+
+         // 2. Reset Total Jam, Hari 1-31, Telat, dan Status Guru
+         return { 
+            ...t, 
+            payroll: { 
+               ...(t.payroll || {}), 
+               potonganLainnya: updatedPotongan,
+               jamMengajar: {
+                  ...(t.payroll?.jamMengajar || {}),
+                  harian: Array(31).fill(''), // Kosongkan absen harian
+                  realisasi: 0,               // Reset jam realisasi
+                  jamPlus: 0                  // Reset jam tambahan
+               },
+               disiplin: {
+                  ...(t.payroll?.disiplin || {}),
+                  telat: 0,                   // Reset angka telat
+                  hadir: 0                    // Reset angka kehadiran
+               },
+               isConfirmed: false,            // Reset status persetujuan guru
+               isNotified: false              // Reset status notifikasi guru
+            } 
+         };
       }));
 
       // PERBAIKAN BUG: Simpan nipy sebagai _archiveKey cadangan di setiap data guru
@@ -5419,8 +5443,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       const nextD = new Date(y, m, 1);
       const nextPeriod = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, '0')}`;
 
-      // Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
-      const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
+      // 🪄 SUPER SYNC: Paksa simpan perubahan dengan stempel waktu +100000 agar mereset perangkat lain (HP)
+      const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() + 100000 };
       setSettings(newSettings);
       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
 
