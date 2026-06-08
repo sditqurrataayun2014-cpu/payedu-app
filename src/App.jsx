@@ -991,6 +991,14 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
       }
 
       if (authUser) {
+        // 🪄 TAMBALAN CERDAS: Cek Mode Maintenance sebelum mengizinkan masuk
+        if (settings?.maintenanceMode && authUser.role === 'guru') {
+           recordLogin(authUser.name, 'Guru', 'Gagal (Sistem Maintenance)');
+           setError('Mohon maaf, Portal Pegawai saat ini sedang dalam Mode Perbaikan / Rekapitulasi oleh Administrator. Silakan coba kembali beberapa saat lagi.');
+           setIsLoading(false);
+           return; // Hentikan proses login untuk guru
+        }
+
         // Logika eksekusi fungsi "Ingat Saya"
         if (remember) {
           localStorage.setItem('payedu_saved_username', username);
@@ -1263,6 +1271,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
+  const [selectedGajiTab, setSelectedGajiTab] = useState(null); // 🪄 TAMBAHAN: Menyimpan tab spesifik form gaji
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [absensiFilter, setAbsensiFilter] = useState('all');
 
@@ -1437,8 +1446,9 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   ];
     const navItems = user.role === 'admin' ? adminNav : user.role === 'Kepala Sekolah' ? kepsekNav : guruNav;
 
-  const navigateToGaji = (teacherId) => {
+  const navigateToGaji = (teacherId, subTab = 'masaKerja') => {
     setSelectedGajiId(teacherId);
+    setSelectedGajiTab(subTab); // 🪄 Menangkap instruksi untuk membuka tab spesifik
     setActiveTab('gaji');
   };
 
@@ -1448,7 +1458,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
       case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />; // TAMBAHAN: Routing View Jadwal
-      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
+      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
       case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
@@ -4361,12 +4371,15 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
   const [insidentalForm, setInsidentalForm] = useState({ ket: '', tgl: 1, jam: 2 });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
   const [confirmGenerate, setConfirmGenerate] = useState(false);
-  const [confirmPublish, setConfirmPublish] = useState(false); // 🪄 TAMBAHAN: State Publikasi Roster
+  const [confirmPublish, setConfirmPublish] = useState(false); 
 
-  // 🪄 TAMBALAN CERDAS: State untuk Preview, Edit, dan Hapus Kegiatan Massal
+  // State untuk Preview, Edit, dan Hapus Kegiatan Massal
   const [previewActivity, setPreviewActivity] = useState(null);
   const [editActivity, setEditActivity] = useState(null);
   const [deleteActivity, setDeleteActivity] = useState(null);
+
+  // 🪄 TAMBALAN CERDAS: Ref untuk Input File Excel Roster
+  const rosterFileInputRef = useRef(null);
 
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
   const [y, m] = (settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-');
@@ -4409,6 +4422,162 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
         }
         return t;
      }));
+  };
+
+  // 🪄 FUNGSI BARU: Ekspor Template Roster ke CSV/Excel
+  const handleExportRosterCSV = () => {
+    const headers = ['ID Pegawai', 'Nama Lengkap', 'NIPY', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    const csvRows = [headers.join(';')];
+
+    // Menggunakan seluruh data teachers agar menjadi template utuh
+    teachers.forEach(t => {
+      const r = t.payroll?.roster || {};
+      const row = [
+        t.id,
+        `"${t.name}"`,
+        `"=""${t.nipy}"""`,
+        r['senin'] || 0,
+        r['selasa'] || 0,
+        r['rabu'] || 0,
+        r['kamis'] || 0,
+        r['jumat'] || 0,
+        r['sabtu'] || 0,
+        r['minggu'] || 0
+      ];
+      csvRows.push(row.join(';'));
+    });
+
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Template_Roster_Mengajar_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 🪄 FUNGSI BARU: Impor Roster dari CSV/Excel dengan Smart Parser
+  const handleImportRosterCSV = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsSaving(true);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const lines = text.split(/\r?\n/);
+      if (lines.length < 2) {
+         setIsSaving(false);
+         alert("Format file kosong atau tidak valid.");
+         return;
+      }
+
+      let separator = ',';
+      if (lines[0].includes(';')) separator = ';';
+      else if (lines[0].includes('\t')) separator = '\t';
+
+      // Parser CSV kebal banting
+      const parseCSVLine = (line, delimiter) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === delimiter && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current);
+        return result.map(val => {
+            let cln = val.trim();
+            if (cln.startsWith('="') && cln.endsWith('"')) cln = cln.substring(2, cln.length - 1);
+            if (cln.startsWith("'")) cln = cln.substring(1);
+            return cln;
+        });
+      };
+
+      const headers = parseCSVLine(lines[0], separator).map(h => h.toLowerCase());
+      const idIdx = headers.indexOf('id pegawai');
+      const nameIdx = headers.findIndex(h => h.includes('nama'));
+      
+      const dayIndices = {
+         senin: headers.indexOf('senin'),
+         selasa: headers.indexOf('selasa'),
+         rabu: headers.indexOf('rabu'),
+         kamis: headers.indexOf('kamis'),
+         jumat: headers.indexOf('jumat'),
+         sabtu: headers.indexOf('sabtu'),
+         minggu: headers.indexOf('minggu')
+      };
+
+      if (nameIdx === -1) {
+         setIsSaving(false);
+         alert('Gagal mendeteksi kolom. Pastikan file Excel yang diunggah memiliki kolom "Nama Lengkap". Disarankan untuk mengunduh template terlebih dahulu.');
+         return;
+      }
+
+      let updatedCount = 0;
+      const updatedTeachers = [...teachers];
+
+      for (let i = 1; i < lines.length; i++) {
+         if (!lines[i].trim()) continue;
+
+         const values = parseCSVLine(lines[i], separator);
+         const teacherId = idIdx !== -1 ? values[idIdx] : null;
+         const teacherName = values[nameIdx];
+
+         if (teacherName) {
+            // Pencocokan cerdas: Coba pakai ID dulu, kalau gagal, pakai Nama
+            const teacherIndex = updatedTeachers.findIndex(t => 
+                (teacherId && t.id === teacherId) || t.name.toLowerCase() === teacherName.toLowerCase()
+            );
+
+            if (teacherIndex !== -1) {
+               const newRoster = { ...(updatedTeachers[teacherIndex].payroll?.roster || {}) };
+               
+               // Tarik data per hari
+               Object.keys(dayIndices).forEach(day => {
+                  const colIdx = dayIndices[day];
+                  if (colIdx !== -1 && values[colIdx] !== undefined && values[colIdx] !== '') {
+                      // Paksa menjadi angka, jika bukan angka jadikan 0
+                      newRoster[day] = Math.max(0, Number(values[colIdx]) || 0);
+                  }
+               });
+
+               updatedTeachers[teacherIndex] = {
+                  ...updatedTeachers[teacherIndex],
+                  payroll: {
+                     ...(updatedTeachers[teacherIndex].payroll || {}),
+                     roster: newRoster
+                  }
+               };
+               updatedCount++;
+            }
+         }
+      }
+
+      setIsSaving(false);
+      if (updatedCount > 0) {
+        setTeachers(updatedTeachers);
+        alert(`Luar Biasa! Pemetaan Roster mingguan untuk ${updatedCount} guru telah berhasil diimpor dan diperbarui secara otomatis.`);
+      } else {
+        alert('Tidak ada data guru yang cocok untuk diperbarui. Pastikan nama atau ID sesuai dengan sistem.');
+      }
+      e.target.value = null; // Reset input agar bisa import file yang sama lagi
+    };
+    reader.readAsText(file);
   };
 
   const executeGenerateBulanIni = () => {
@@ -4801,7 +4970,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
             {activeTab === 'roster' && (
                <>
                   <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
-                     <div className="relative w-full md:w-64 shrink-0">
+                     <div className="relative w-full md:w-56 shrink-0">
                        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                        <input 
                          type="text" placeholder="Cari Nama Guru..." 
@@ -4809,14 +4978,24 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-pink-500 outline-none dark:text-white"
                        />
                      </div>
-                     <div className="flex flex-col sm:flex-row w-full md:w-auto gap-2">
+                     <div className="flex flex-wrap w-full md:w-auto gap-2 justify-end">
+                       
+                       {/* 🪄 TAMBALAN CERDAS: Tombol Impor & Ekspor Roster */}
+                       <input type="file" accept=".csv, .xlsx, .xls" ref={rosterFileInputRef} onChange={handleImportRosterCSV} className="hidden" />
+                       <button onClick={() => rosterFileInputRef.current?.click()} disabled={isSaving} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 border border-slate-300 dark:border-slate-600 disabled:opacity-70">
+                         <Upload size={16} /> <span className="hidden xl:inline">Impor Roster</span><span className="xl:hidden">Impor</span>
+                       </button>
+                       <button onClick={handleExportRosterCSV} disabled={isSaving} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70">
+                         <Download size={16} /> <span className="hidden xl:inline">Ekspor Template</span><span className="xl:hidden">Ekspor</span>
+                       </button>
+
                        <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
                          {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={16} />}
-                         {isSaving ? 'Memproses...' : 'Terapkan ke Portal Guru'}
+                         {isSaving ? 'Memproses...' : 'Terapkan ke Portal'}
                        </button>
                        <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="w-full sm:w-auto bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
                          {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={16} />}
-                         {isSaving ? 'Memproses...' : 'Terapkan ke Kalender Rekap'}
+                         {isSaving ? 'Memproses...' : 'Terapkan ke Absen'}
                        </button>
                      </div>
                   </div>
@@ -4992,7 +5171,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
 }
 
 // --- VIEW GAJI (DIKEMBALIKAN KARENA TERPOTONG) ---
-function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, settings, user, saveAuditLog }) {
+function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, externalSelectedTab, setExternalSelectedTab, settings, user, saveAuditLog }) {
   const [activeTabGaji, setActiveTabGaji] = useState('masaKerja');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
@@ -5002,6 +5181,65 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
+
+  // 🪄 FITUR BARU: State untuk Potongan Massal
+  const [isMassPotonganOpen, setIsMassPotonganOpen] = useState(false);
+  const [massForm, setMassForm] = useState({ ket: 'Potongan / Iuran Wajib', nominal: '', targetGroup: 'Semua' });
+  const [excludedIds, setExcludedIds] = useState([]);
+  const [massSearch, setMassSearch] = useState('');
+  const [isSavingMass, setIsSavingMass] = useState(false);
+
+  // 🪄 FITUR BARU: Menghitung daftar target potongan massal secara dinamis
+  const targetedTeachers = useMemo(() => {
+      return teachers.filter(t => {
+          if (massForm.targetGroup === 'L' && t.gender !== 'L') return false;
+          if (massForm.targetGroup === 'P' && t.gender !== 'P') return false;
+          if (massSearch && !t.name.toLowerCase().includes(massSearch.toLowerCase()) && !t.nipy.includes(massSearch)) return false;
+          return true;
+      });
+  }, [teachers, massForm.targetGroup, massSearch]);
+
+  const toggleExclude = (id) => {
+      setExcludedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleSaveMassPotongan = (e) => {
+      e.preventDefault();
+      if(!massForm.ket || !massForm.nominal) return;
+      setIsSavingMass(true);
+      setTimeout(() => {
+          let appliedCount = 0;
+          setTeachers(prev => prev.map(t => {
+              let match = false;
+              if (massForm.targetGroup === 'Semua') match = true;
+              else if (massForm.targetGroup === 'L' && t.gender === 'L') match = true;
+              else if (massForm.targetGroup === 'P' && t.gender === 'P') match = true;
+
+              // Abaikan jika masuk daftar Exception
+              if (excludedIds.includes(t.id)) match = false;
+
+              if (match) {
+                  appliedCount++;
+                  const p = t.payroll || {};
+                  const newPot = [...(p.potonganLainnya || []), { ket: massForm.ket, nominal: Number(massForm.nominal) }];
+                  
+                  // Rekam jejak di Audit Log jika disetel
+                  if (saveAuditLog) {
+                     saveAuditLog(t, `Potongan Massal: ${massForm.ket}`, 0, Number(massForm.nominal));
+                  }
+                  
+                  return { ...t, payroll: { ...p, potonganLainnya: newPot } };
+              }
+              return t;
+          }));
+          setIsSavingMass(false);
+          setIsMassPotonganOpen(false);
+          setMassForm({ ket: 'Potongan / Iuran Wajib', nominal: '', targetGroup: 'Semua' });
+          setExcludedIds([]);
+          setMassSearch('');
+          alert(`Luar Biasa! Potongan massal "${massForm.ket}" berhasil diterapkan kepada ${appliedCount} pegawai.`);
+      }, 800);
+  };
 
   useEffect(() => {
     if (externalSelectedId) {
@@ -5014,7 +5252,13 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
       }
       if (setExternalSelectedId) setExternalSelectedId(null);
     }
-  }, [externalSelectedId, setExternalSelectedId, teachers]);
+    
+    // 🪄 TAMBALAN CERDAS: Menangkap instruksi untuk membuka tab secara spesifik
+    if (externalSelectedTab) {
+      setActiveTabGaji(externalSelectedTab);
+      if (setExternalSelectedTab) setExternalSelectedTab(null);
+    }
+  }, [externalSelectedId, setExternalSelectedId, externalSelectedTab, setExternalSelectedTab, teachers]);
 
   // FUNGSI BARU: Mengubah TMT langsung di tabel Gaji dan mereset override nominal
   const handleInlineTmtChange = (teacherId, newYear) => {
@@ -5145,6 +5389,101 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative pb-4 min-h-0">
       
+      {/* 🪄 MODAL BARU: POTONGAN MASSAL DENGAN EXCEPTION LIST */}
+      {isMassPotonganOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><Trash className="text-red-500"/> Penerapan Potongan Massal</h3>
+              <button onClick={() => setIsMassPotonganOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="flex flex-col md:flex-row overflow-hidden flex-1">
+               {/* KIRI: Form Pengaturan Potongan */}
+               <div className="w-full md:w-[45%] lg:w-1/2 p-5 lg:p-6 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/20">
+                  <form id="massPotonganForm" onSubmit={handleSaveMassPotongan} className="space-y-5">
+                     <div className="bg-red-50 dark:bg-red-900/10 border-l-4 border-red-500 p-3 rounded-r-lg shadow-sm">
+                        <p className="text-[11px] text-red-800 dark:text-red-300 font-medium leading-relaxed">Gunakan fitur ini untuk menerapkan tagihan iuran wajib, sumbangan, atau potongan lainnya ke banyak pegawai secara serentak.</p>
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Keterangan / Nama Potongan</label>
+                        <input type="text" value={massForm.ket} onChange={e => setMassForm({...massForm, ket: e.target.value})} className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-red-500 outline-none dark:text-white shadow-sm" required placeholder="Cth: Iuran PGRI" />
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nominal Pemotongan (Rp)</label>
+                        <div className="relative">
+                           <span className="absolute left-3 top-2.5 text-slate-400 font-bold">Rp</span>
+                           <input type="number" min="1" value={massForm.nominal} onChange={e => setMassForm({...massForm, nominal: e.target.value})} className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm font-black text-red-600 dark:text-red-400 focus:ring-2 focus:ring-red-500 outline-none shadow-sm" required placeholder="150000" />
+                        </div>
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Target Golongan</label>
+                        <select value={massForm.targetGroup} onChange={e => setMassForm({...massForm, targetGroup: e.target.value})} className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-red-500 outline-none dark:text-white font-bold cursor-pointer shadow-sm">
+                           <option value="Semua">Semua Pegawai (Laki-laki & Perempuan)</option>
+                           <option value="L">Hanya Golongan Laki-laki</option>
+                           <option value="P">Hanya Golongan Perempuan</option>
+                        </select>
+                     </div>
+                     <div className="flex items-start gap-2 pt-2">
+                        <Info size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                           Sistem otomatis memfilter {targetedTeachers.length} target pegawai. Gunakan daftar di sebelah kanan untuk mengecualikan (membebaskan) guru tertentu dari pemotongan massal ini.
+                        </p>
+                     </div>
+                  </form>
+               </div>
+
+               {/* KANAN: Daftar Pengecualian */}
+               <div className="w-full md:w-[55%] lg:w-1/2 flex flex-col h-full bg-white dark:bg-slate-800 max-h-[50vh] md:max-h-full relative">
+                  <div className="p-4 lg:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 shrink-0 flex flex-col gap-3">
+                     <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5"><Users size={16}/> Daftar Pengecualian (Exception)</h4>
+                        <span className="text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 px-2.5 py-1 rounded-md border border-red-200 dark:border-red-800/50">
+                           {excludedIds.length} Dikecualikan
+                        </span>
+                     </div>
+                     <div className="relative">
+                        <Search className="absolute left-3 top-2 text-slate-400" size={14} />
+                        <input type="text" placeholder="Cari nama untuk dibebaskan dari potongan..." value={massSearch} onChange={e => setMassSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 outline-none dark:text-white focus:ring-1 focus:ring-red-500" />
+                     </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                     {targetedTeachers.map(t => {
+                        const isExcluded = excludedIds.includes(t.id);
+                        return (
+                           <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:-translate-y-0.5 ${isExcluded ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-600 bg-white dark:bg-slate-800'}`}>
+                              <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${isExcluded ? 'bg-red-500 border-red-500 text-white' : 'border-slate-300 dark:border-slate-500 bg-slate-50 dark:bg-slate-900'}`}>
+                                 {isExcluded && <CheckCircle size={14}/>}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <p className={`font-bold text-sm truncate ${isExcluded ? 'text-red-700 dark:text-red-400 line-through opacity-80' : 'text-slate-800 dark:text-slate-200'}`}>{t.name}</p>
+                                 <p className="text-[10px] text-slate-500">{t.position} • {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</p>
+                              </div>
+                              {isExcluded && <span className="text-[10px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 mr-1">Dikecualikan</span>}
+                           </label>
+                        )
+                     })}
+                     {targetedTeachers.length === 0 && (
+                        <div className="text-center py-10 opacity-60">
+                           <Users size={32} className="mx-auto mb-2 text-slate-400"/>
+                           <p className="text-xs font-bold text-slate-500">Tidak ada pegawai yang cocok dengan filter target.</p>
+                        </div>
+                     )}
+                  </div>
+               </div>
+            </div>
+
+            <div className="p-4 md:p-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setIsMassPotonganOpen(false)} className="px-6 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-bold transition-colors text-sm">Batal</button>
+              <button type="submit" form="massPotonganForm" disabled={isSavingMass || targetedTeachers.length === 0} className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed">
+                {isSavingMass ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Trash size={16} />}
+                {isSavingMass ? 'Memproses...' : `Terapkan ke ${targetedTeachers.length - excludedIds.length} Pegawai`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🪄 TAMBALAN CERDAS: Modal Pratinjau Slip Gaji */}
       {isSlipModalOpen && selectedSlip && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
@@ -5218,8 +5557,8 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-0">
           {/* Header Input Area */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
               <select 
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -5238,6 +5577,13 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
                 />
               </div>
+            </div>
+            
+            {/* 🪄 TOMBOL TRIGGER POTONGAN MASSAL */}
+            <div className="w-full md:w-auto flex justify-end">
+               <button onClick={() => setIsMassPotonganOpen(true)} className="w-full sm:w-auto bg-red-50 hover:bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors focus:ring-2 focus:ring-red-500 outline-none">
+                  <Trash size={16}/> Potongan Massal
+               </button>
             </div>
           </div>
 
@@ -7280,14 +7626,51 @@ function ArsipView({ archives, setArchives, settings }) {
                         ) : null}
                       </td>
                       <td className="p-4 text-center">
-                        <button 
-                          onClick={() => { setSelectedSlip(t); setIsSlipModalOpen(true); }}
-                          className="text-xs bg-slate-100 hover:bg-teal-50 dark:bg-slate-700 hover:text-teal-600 dark:hover:bg-teal-900/30 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-md font-bold transition-colors flex items-center gap-1.5 mx-auto border border-slate-200 dark:border-slate-600 dark:hover:border-teal-800"
-                        >
-                          <Eye size={14} /> Lihat Slip Gaji
-                        </button>
-                      </td>
-                    </tr>
+                        <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                           <button 
+                             onClick={() => setSelectedLoanHistory(loan)}
+                             className="p-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-md transition-colors shadow-sm border border-teal-100 dark:border-teal-800"
+                             title="Lihat Detail & Riwayat Progres"
+                           >
+                             <Activity size={16} />
+                           </button>
+                           
+                           {/* 🪄 TOMBOL PINTASAN CERDAS: Kalkulator Biru untuk Redirect Spesifik ke Tab Potongan Gaji Pegawai */}
+                           <button 
+                             onClick={() => onEditGaji(loan.teacherId, 'potongan')}
+                             className="p-2 bg-blue-50 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-300 rounded-md transition-all shadow-sm border border-blue-200 dark:border-blue-700 hover:-translate-y-0.5"
+                             title="Buka Form Potongan Gaji Pegawai Ini"
+                           >
+                             <Calculator size={16} />
+                           </button>
+
+                           <button 
+                             onClick={() => {
+                                setEditForm({
+                                   teacherId: loan.teacherId,
+                                   originalKet: loan.ket,
+                                   ket: loan.ket,
+                                   nominal: loan.nominal,
+                                   totalPinjaman: loan.totalPinjaman,
+                                   sisaHutang: loan.sisaHutang
+                                });
+                                setIsEditModalOpen(true);
+                             }}
+                             className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors shadow-sm border border-amber-100 dark:border-amber-800"
+                             title="Edit Sisa Saldo Pinjaman"
+                           >
+                             <Edit size={16} />
+                           </button>
+                           <button 
+                             onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
+                             className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors shadow-sm border border-red-100 dark:border-red-800"
+                             title="Hapus Tagihan Permanen"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                        </div>
+                     </td>
+                  </tr>
                   );
                 })}
               </tbody>
