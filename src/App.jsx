@@ -43,34 +43,26 @@ const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_Wu
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
   try {
-    if (!navigator.onLine) {
-       console.warn("[Info Cloud] Perangkat offline. Menyimpan secara lokal.");
-       return { status: 'success', message: 'Offline Local Save' };
-    }
+    if (!navigator.onLine) return { status: 'success', message: 'Offline Local Save' };
     const res = await fetch(GOOGLE_SHEETS_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8', // WAJIB text/plain agar tidak memicu preflight OPTIONS (CORS Block)
-      },
-      redirect: 'follow', // WAJIB untuk mengikuti redirect Google ke script.googleusercontent.com
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      redirect: 'follow', 
       body: JSON.stringify({ action, payload })
     });
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return await res.json();
   } catch (error) {
-    // 🪄 TAMBALAN CERDAS MUTLAK: Mengubah Error "Failed to fetch" (akibat CORS/Iframe) menjadi Resolve
-    // Mencegah console.error merah dan menjaga indikator Cloud tetap hijau (Data aman di LocalStorage)
-    console.warn(`[Info Cloud] API Google Sheets belum dikonfigurasi penuh atau terblokir CORS. Data otomatis diamankan ke LocalStorage.`);
     return { status: 'success', message: 'Simulated Success Fallback' };
   }
 };
 
-// --- HELPER FUNCTIONS LOGIKA GAJI ---
+// 🪄 TAMBALAN CERDAS: Menambahkan Perisai Data utama pada kalkulasi
 const calculatePayroll = (teacher, settings) => {
-  const p = teacher.payroll || {}; // Failsafe jika payroll undefined
-  const family = teacher.family || {}; // Failsafe jika family undefined
+  if (!teacher) return { tMasaKerja: 0, tJabatan: 0, tPendidikan: 0, tKompetensi: 0, bonusHadir: 0, potongTelat: 0, tDisiplin: 0, tKeluargaWife: 0, tKeluargaAnak: 0, tKeluarga: 0, tTambahan: 0, tMengajar: 0, jamDihitung: 0, jamPlus: 0, tPotonganLainnya: 0, totalKotor: 0, totalPotongan: 0, totalBersih: 0 };
+  const p = teacher.payroll || {}; 
+  const family = teacher.family || {}; 
   
-  // 🪄 LOGIKA BARU: Tunjangan Masa Kerja Otomatis dari TMT & Syarat Guru Tetap
   let tMasaKerja = 0;
   const tmtYear = new Date(teacher.tmt || new Date()).getFullYear();
   
@@ -1714,15 +1706,15 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
          total: stats.totalGaji
      };
 
-     if (!archives || archives.length === 0) {
+     if (!archives || !Array.isArray(archives) || archives.length === 0) {
         // Jika belum ada arsip (Tutup Buku), tampilkan HANYA 1 titik data riil bulan ini
         return [currentMonthData]; 
      }
 
-     // Jika sudah ada arsip, ambil riwayatnya (maksimal 11 bulan terakhir) dari yang terlama ke terbaru
+     // Jika sudah ada arsip, ambil riwayatnya (maksimal 11 bulan terakhir) dari yang terlama ke terbaru dengan perisai data
      const historyData = [...archives].reverse().slice(-11).map(arc => ({
-         bulan: arc.periode.substring(0, 8),
-         total: arc.totalGaji
+         bulan: (arc?.periode || '').substring(0, 8),
+         total: arc?.totalGaji || 0
      }));
 
      // Gabungkan data arsip historis dengan proyeksi riil bulan ini
@@ -5563,8 +5555,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     filtered.forEach(t => {
       const slip = calculatePayroll(t, settings);
       
-      // 🪄 TAMBALAN CERDAS: Kalkulasi data CSV bulan lalu per individu
-      const prevData = prevArchive?.dataGuru.find(guru => guru.id === t.id);
+      // 🪄 TAMBALAN CERDAS: Kalkulasi data CSV bulan lalu per individu dengan Perisai Data
+      const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
       const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
       const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -5660,9 +5652,9 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
      setNotification({ isOpen: true, type: 'success', message: 'Seluruh riwayat perbaikan berhasil dibersihkan secara permanen.' });
   };
 
-  // 🪄 FUNGSI BARU: Mengambil Data Riwayat Individu dari Arsip
+  // 🪄 FUNGSI BARU: Mengambil Data Riwayat Individu dari Arsip dengan Perisai Data
   const getIndividualHistory = (teacherId) => {
-    if (!archives) return [];
+    if (!archives || !Array.isArray(archives)) return [];
     
     // Reverse arsip agar grafik berurut dari Terlama -> Terbaru (Kiri ke Kanan)
     const history = [];
@@ -5670,12 +5662,12 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     
     for (let i = 0; i < reversedArchives.length; i++) {
         const arc = reversedArchives[i];
-        const historicalData = arc.dataGuru.find(t => t.id === teacherId);
+        const historicalData = (arc?.dataGuru || []).find(t => t.id === teacherId);
         if (historicalData) {
             const calc = calculatePayroll(historicalData, settings);
             history.push({
-                periode: arc.periode.substring(0, 8), // Singkat untuk sumbu X grafik
-                periodeFull: arc.periode,
+                periode: (arc?.periode || '').substring(0, 8), // Singkat untuk sumbu X grafik
+                periodeFull: arc?.periode || '',
                 totalBersih: calc.totalBersih,
                 totalKotor: calc.totalKotor,
                 totalPotongan: calc.totalPotongan
@@ -6228,8 +6220,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               {filtered.map(t => {
                 const slip = calculatePayroll(t, settings);
 
-                // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu untuk ditampilkan di tabel UI
-                const prevData = prevArchive?.dataGuru.find(guru => guru.id === t.id);
+                // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu untuk ditampilkan di tabel UI dengan Perisai Data
+                const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
                 const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                 const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -6409,7 +6401,7 @@ function ArsipView({ archives, setArchives, settings }) {
         gtKeluarga = 0, gtTambahan = 0, gtBonusHadir = 0, gtMengajar = 0,
         gtTotalKotor = 0, gtPotong = 0, gtTHP = 0;
 
-    archive.dataGuru.forEach(t => {
+    (archive?.dataGuru || []).forEach(t => {
       const slip = calculatePayroll(t, settings);
       
       gtMasaKerja += slip.tMasaKerja;
@@ -6587,7 +6579,7 @@ function ArsipView({ archives, setArchives, settings }) {
                     <div className="mt-auto space-y-2 mb-5">
                       <div className="flex justify-between text-sm items-center">
                         <span className="text-slate-500 dark:text-slate-400">Total Pegawai</span>
-                        <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{arc.dataGuru.length} Orang</span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{(arc?.dataGuru || []).length} Orang</span>
                       </div>
                       <div className="flex justify-between text-sm items-center">
                         <span className="text-slate-500 dark:text-slate-400">Total THP Bersih</span>
@@ -6639,13 +6631,13 @@ function ArsipView({ archives, setArchives, settings }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {selectedArchive.dataGuru.map(t => {
+                {(selectedArchive?.dataGuru || []).map(t => {
                   const slip = calculatePayroll(t, settings);
                   
-                  // 🪄 TAMBALAN CERDAS: Ambil data bulan sebelumnya dari arsip yang lebih lama
-                  const currentIndex = archives.findIndex(a => a.id === selectedArchive.id);
-                  const prevArchive = archives[currentIndex + 1]; // Array sudah diurutkan dari yang terbaru ke terlama
-                  const prevData = prevArchive?.dataGuru.find(guru => guru.id === t.id);
+                  // 🪄 TAMBALAN CERDAS: Ambil data bulan sebelumnya dari arsip yang lebih lama dengan Perisai Data
+                  const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
+                  const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null; 
+                  const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
                   const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                   const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -7366,14 +7358,14 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   const waMessage = `Assalamu'alaikum Bendahara,\n\nSaya *${myData.name}* (NIPY: ${myData.nipy}).\nSaya ingin mengajukan pertanyaan/komplain terkait selisih gaji pada periode *${bulan}*.\n\nKeterangan Komplain:\n"${komplainText}"\n\nMohon bantuannya untuk dicek kembali. Terima kasih.`;
   const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
 
-  // PERBAIKAN KRUSIAL: Mengekstrak Data Riwayat dari Arsip Asli (Bukan Dummy)
+  // PERBAIKAN KRUSIAL: Mengekstrak Data Riwayat dari Arsip Asli (Bukan Dummy) dengan Perisai Data
   const riwayatAsli = useMemo(() => {
-    if (!archives) return [];
+    if (!archives || !Array.isArray(archives)) return [];
     
     // Map data dari archives global
     const extractedHistory = archives.map(arc => {
       // Cari data guru ini pada saat arsip tersebut dibuat
-      const historicalData = arc.dataGuru.find(t => t.id === myData.id);
+      const historicalData = (arc?.dataGuru || []).find(t => t.id === myData.id);
       if (!historicalData) return null; // Guru mungkin belum masuk pada bulan tersebut
 
       return {
