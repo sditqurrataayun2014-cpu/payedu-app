@@ -63,26 +63,36 @@ const calculatePayroll = (teacher, settings) => {
   const p = teacher.payroll || {}; 
   const family = teacher.family || {}; 
   
+  const isTetap = teacher.status === 'Tetap'; // TAMBAHAN: Cek status mutlak pegawai
+  
   let tMasaKerja = 0;
   const tmtYear = new Date(teacher.tmt || new Date()).getFullYear();
   
-  // 🪄 PERBAIKAN: Abaikan nilai 0 bawaan sistem lama agar Master Tarif bisa bereaksi
-  let manualTenure = p.tunjanganMasaKerjaManual;
-  if (manualTenure === 0) manualTenure = '';
-
-  // 🪄 TAMBALAN CERDAS: Fitur Tunjangan Masa Kerja kini DIBUKA untuk Semua Status Pegawai
-  if (manualTenure !== undefined && manualTenure !== null && manualTenure !== "") {
-    tMasaKerja = Number(manualTenure) || 0; // Failsafe Mencegah NaN
+  // 🪄 PERBAIKAN: Tunjangan Masa Kerja HANYA untuk pegawai Tetap
+  if (!isTetap) {
+    tMasaKerja = 0;
   } else {
-    tMasaKerja = (settings?.masterRates?.TENURE_RATES || TENURE_RATES)[tmtYear] || 0;
+    let manualTenure = p.tunjanganMasaKerjaManual;
+    if (manualTenure === 0) manualTenure = '';
+
+    if (manualTenure !== undefined && manualTenure !== null && manualTenure !== "") {
+      tMasaKerja = Number(manualTenure) || 0; 
+    } else {
+      tMasaKerja = (settings?.masterRates?.TENURE_RATES || TENURE_RATES)[tmtYear] || 0;
+    }
   }
 
   const tJabatan = (p.jabatans || []).reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
   
-  // 🪄 PERBAIKAN: Abaikan nilai 0 bawaan sistem lama untuk Pendidikan
-  let manualEdu = p.pendidikan?.nominalOverride;
-  if (manualEdu === 0) manualEdu = '';
-  const tPendidikan = manualEdu !== undefined && manualEdu !== '' ? (Number(manualEdu) || 0) : ((settings?.masterRates?.EDU_RATES || EDU_RATES)[teacher.education] || 0);
+  // 🪄 PERBAIKAN: Tunjangan Pendidikan HANYA untuk pegawai Tetap
+  let tPendidikan = 0;
+  if (!isTetap) {
+    tPendidikan = 0;
+  } else {
+    let manualEdu = p.pendidikan?.nominalOverride;
+    if (manualEdu === 0) manualEdu = '';
+    tPendidikan = manualEdu !== undefined && manualEdu !== '' ? (Number(manualEdu) || 0) : ((settings?.masterRates?.EDU_RATES || EDU_RATES)[teacher.education] || 0);
+  }
   
   const tKompetensi = (p.kompetensi || []).reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
   
@@ -95,14 +105,18 @@ const calculatePayroll = (teacher, settings) => {
   const potongTelat = telat * (Number(p.disiplin?.tarifTelat) || 0);
   const tDisiplin = bonusHadir - potongTelat;
 
-  // PERBAIKAN: Tarif Tunjangan Keluarga Kini Menjadi Dinamis & Bisa Dikustomisasi (Mencegah NaN)
-  const tarifSuamiIstri = p.keluarga?.tarifSuamiIstri !== undefined && p.keluarga?.tarifSuamiIstri !== '' ? (Number(p.keluarga.tarifSuamiIstri) || 0) : 200000;
-  const tarifAnak = p.keluarga?.tarifAnak !== undefined && p.keluarga?.tarifAnak !== '' ? (Number(p.keluarga.tarifAnak) || 0) : 100000;
+  // 🪄 PERBAIKAN: Tunjangan Keluarga HANYA untuk pegawai Tetap
+  let tKeluarga = 0, tKeluargaWife = 0, tKeluargaAnak = 0;
+  if (!isTetap) {
+    tKeluarga = 0; tKeluargaWife = 0; tKeluargaAnak = 0;
+  } else {
+    const tarifSuamiIstri = p.keluarga?.tarifSuamiIstri !== undefined && p.keluarga?.tarifSuamiIstri !== '' ? (Number(p.keluarga.tarifSuamiIstri) || 0) : 200000;
+    const tarifAnak = p.keluarga?.tarifAnak !== undefined && p.keluarga?.tarifAnak !== '' ? (Number(p.keluarga.tarifAnak) || 0) : 100000;
 
-  // LOGIKA BARU: Tunjangan keluarga (istri/suami & anak) hanya diberikan jika statusnya "Menikah" (wife === 1)
-  const tKeluargaWife = Number(family.wife) === 1 ? tarifSuamiIstri : 0;
-  const tKeluargaAnak = Number(family.wife) === 1 ? (Number(family.children) || 0) * tarifAnak : 0;
-  const tKeluarga = tKeluargaWife + tKeluargaAnak;
+    tKeluargaWife = Number(family.wife) === 1 ? tarifSuamiIstri : 0;
+    tKeluargaAnak = Number(family.wife) === 1 ? (Number(family.children) || 0) * tarifAnak : 0;
+    tKeluarga = tKeluargaWife + tKeluargaAnak;
+  }
 
   const tTambahan = (p.insentifTambahan || []).reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
   const tPotonganLainnya = (p.potonganLainnya || []).reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
@@ -4713,45 +4727,52 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                     
                     {/* 1. MASA KERJA */}
                     {activeTabGaji === 'masaKerja' && (
-                      <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 items-end">
-                        <div className="w-full sm:w-1/4">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-emerald-600 dark:text-emerald-400">Tahun Masuk (TMT)</label>
-                          <div className="relative">
-                             <select 
-                               value={new Date(t.tmt || new Date()).getFullYear()}
-                               onChange={(e) => handleInlineTmtChange(t.id, e.target.value)}
-                               className="w-full p-2.5 border border-emerald-200 dark:border-emerald-700 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer hover:border-emerald-300 transition-colors"
-                             >
-                               {/* Batasi rentang dropdown tahun agar mentok di 2010 */}
-                               {Array.from({ length: Math.max(1, new Date().getFullYear() - 2009) }, (_, i) => new Date().getFullYear() - i).map(year => (
-                                  <option key={year} value={year}>{year}</option>
-                               ))}
-                             </select>
-                             <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
-                                <span className="text-[10px] bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200 px-2 py-0.5 rounded font-bold shadow-sm">
-                                   {Math.max(0, new Date().getFullYear() - new Date(t.tmt || new Date()).getFullYear())} Thn
-                                </span>
-                                <ChevronDown size={14} className="text-emerald-500" />
-                             </div>
+                      t.status === 'Tetap' ? (
+                        <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 items-end">
+                          <div className="w-full sm:w-1/4">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-emerald-600 dark:text-emerald-400">Tahun Masuk (TMT)</label>
+                            <div className="relative">
+                               <select 
+                                 value={new Date(t.tmt || new Date()).getFullYear()}
+                                 onChange={(e) => handleInlineTmtChange(t.id, e.target.value)}
+                                 className="w-full p-2.5 border border-emerald-200 dark:border-emerald-700 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer hover:border-emerald-300 transition-colors"
+                               >
+                                 {/* Batasi rentang dropdown tahun agar mentok di 2010 */}
+                                 {Array.from({ length: Math.max(1, new Date().getFullYear() - 2009) }, (_, i) => new Date().getFullYear() - i).map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                 ))}
+                               </select>
+                               <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
+                                  <span className="text-[10px] bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200 px-2 py-0.5 rounded font-bold shadow-sm">
+                                     {Math.max(0, new Date().getFullYear() - new Date(t.tmt || new Date()).getFullYear())} Thn
+                                  </span>
+                                  <ChevronDown size={14} className="text-emerald-500" />
+                               </div>
+                            </div>
+                          </div>
+                          
+                          <div className="w-full sm:w-1/3">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal Override</label>
+                            <div className="relative">
+                               <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
+                               <input type="number" 
+                                 value={(p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' && p.tunjanganMasaKerjaManual !== 0) ? p.tunjanganMasaKerjaManual : ((settings?.masterRates?.TENURE_RATES || TENURE_RATES)[new Date(t.tmt || new Date()).getFullYear()] || 0)}
+                                 onChange={e => {
+                                    const newVal = e.target.value === '' ? '' : Number(e.target.value);
+                                    if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja', p.tunjanganMasaKerjaManual || 0, newVal);
+                                    setTeachers(prev => prev.map(tc => tc.id === t.id ? { ...tc, payroll: { ...tc.payroll, tunjanganMasaKerjaManual: newVal } } : tc));
+                                 }}
+                                 className="w-full pl-10 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
+                               />
+                            </div>
                           </div>
                         </div>
-                        
-                        <div className="w-full sm:w-1/3">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal (Semua Status)</label>
-                          <div className="relative">
-                             <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
-                             <input type="number" 
-                               value={(p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' && p.tunjanganMasaKerjaManual !== 0) ? p.tunjanganMasaKerjaManual : ((settings?.masterRates?.TENURE_RATES || TENURE_RATES)[new Date(t.tmt || new Date()).getFullYear()] || 0)}
-                               onChange={e => {
-                                  const newVal = e.target.value === '' ? '' : Number(e.target.value);
-                                  if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja', p.tunjanganMasaKerjaManual || 0, newVal);
-                                  setTeachers(prev => prev.map(tc => tc.id === t.id ? { ...tc, payroll: { ...tc.payroll, tunjanganMasaKerjaManual: newVal } } : tc));
-                               }}
-                               className="w-full pl-10 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
-                             />
-                          </div>
+                      ) : (
+                        <div className="flex items-center justify-center p-5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+                           <Lock className="text-slate-400 dark:text-slate-500 mr-3" size={24} />
+                           <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Tunjangan Masa Kerja Terkunci (Hanya Pegawai Tetap)</p>
                         </div>
-                      </div>
+                      )
                     )}
 
                     {/* 2. JABATAN */}
@@ -4788,41 +4809,48 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
 
                     {/* 3. PENDIDIKAN */}
                     {activeTabGaji === 'pendidikan' && (
-                      <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 items-end">
-                        <div className="w-full sm:w-1/3">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 text-emerald-600 dark:text-emerald-400">Tingkat Pendidikan</label>
-                          <select 
-                            value={p.pendidikan?.tingkat || t.education} 
-                            onChange={e => {
-                               const newTingkat = e.target.value;
-                               if (saveAuditLog) saveAuditLog(t, 'Tingkat Pendidikan', p.pendidikan?.tingkat || t.education, newTingkat);
-                               setTeachers(prev => prev.map(tc => {
-                                  if (tc.id === t.id) {
-                                     return {
-                                        ...tc, education: newTingkat,
-                                        payroll: { ...(tc.payroll || {}), pendidikan: { ...(tc.payroll?.pendidikan || {}), tingkat: newTingkat, nominalOverride: '' } }
-                                     };
-                                  }
-                                  return tc;
-                               }));
-                            }}
-                            className="w-full p-2.5 border border-emerald-200 dark:border-emerald-700 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer"
-                          >
-                            {['S2', 'S1', 'Diploma', 'SMA/Pondok'].map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
-                          </select>
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Nominal Override</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
-                            <input type="number" 
-                              value={(p.pendidikan?.nominalOverride !== undefined && p.pendidikan?.nominalOverride !== '' && p.pendidikan?.nominalOverride !== 0) ? p.pendidikan.nominalOverride : ((settings?.masterRates?.EDU_RATES || EDU_RATES)[t.education] || 0)}
-                              onChange={e => handleUpdatePayrollObj(t.id, 'pendidikan', 'nominalOverride', e.target.value === '' ? '' : Number(e.target.value))}
-                              className="w-full pl-10 pr-4 py-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
-                            />
+                      t.status === 'Tetap' ? (
+                        <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 items-end">
+                          <div className="w-full sm:w-1/3">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 text-emerald-600 dark:text-emerald-400">Tingkat Pendidikan</label>
+                            <select 
+                              value={p.pendidikan?.tingkat || t.education} 
+                              onChange={e => {
+                                 const newTingkat = e.target.value;
+                                 if (saveAuditLog) saveAuditLog(t, 'Tingkat Pendidikan', p.pendidikan?.tingkat || t.education, newTingkat);
+                                 setTeachers(prev => prev.map(tc => {
+                                    if (tc.id === t.id) {
+                                       return {
+                                          ...tc, education: newTingkat,
+                                          payroll: { ...(tc.payroll || {}), pendidikan: { ...(tc.payroll?.pendidikan || {}), tingkat: newTingkat, nominalOverride: '' } }
+                                       };
+                                    }
+                                    return tc;
+                                 }));
+                              }}
+                              className="w-full p-2.5 border border-emerald-200 dark:border-emerald-700 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500 appearance-none cursor-pointer"
+                            >
+                              {['S2', 'S1', 'Diploma', 'SMA/Pondok'].map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Nominal Override</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
+                              <input type="number" 
+                                value={(p.pendidikan?.nominalOverride !== undefined && p.pendidikan?.nominalOverride !== '' && p.pendidikan?.nominalOverride !== 0) ? p.pendidikan.nominalOverride : ((settings?.masterRates?.EDU_RATES || EDU_RATES)[t.education] || 0)}
+                                onChange={e => handleUpdatePayrollObj(t.id, 'pendidikan', 'nominalOverride', e.target.value === '' ? '' : Number(e.target.value))}
+                                className="w-full pl-10 pr-4 py-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-center p-5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+                           <Lock className="text-slate-400 dark:text-slate-500 mr-3" size={24} />
+                           <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Tunjangan Pendidikan Terkunci (Hanya Pegawai Tetap)</p>
+                        </div>
+                      )
                     )}
 
                     {/* 4. KOMPETENSI */}
@@ -4855,22 +4883,29 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
 
                     {/* 5. KELUARGA */}
                     {activeTabGaji === 'keluarga' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 items-end">
-                         <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Pasangan</label>
-                            <input type="number" value={p.keluarga?.tarifSuamiIstri !== undefined ? p.keluarga.tarifSuamiIstri : 200000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifSuamiIstri', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
-                         </div>
-                         <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Per Anak</label>
-                            <input type="number" value={p.keluarga?.tarifAnak !== undefined ? p.keluarga.tarifAnak : 100000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifAnak', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
-                         </div>
-                         <div className="lg:col-span-2 flex items-center gap-4 bg-slate-100 dark:bg-slate-700/50 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600">
-                            <div className="text-[10px] text-slate-500 font-bold uppercase w-24">Profil Sistem:</div>
-                            <div className="flex-1 font-bold text-sm text-slate-700 dark:text-slate-200">
-                               {t.family?.wife === 1 ? 'Menikah' : t.family?.wife === 2 ? 'Menikah (Pasangan 1 Yayasan)' : 'Lajang'}, {t.family?.children || 0} Anak
-                            </div>
-                         </div>
-                      </div>
+                      t.status === 'Tetap' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 items-end">
+                           <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Pasangan</label>
+                              <input type="number" value={p.keluarga?.tarifSuamiIstri !== undefined ? p.keluarga.tarifSuamiIstri : 200000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifSuamiIstri', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
+                           </div>
+                           <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Per Anak</label>
+                              <input type="number" value={p.keluarga?.tarifAnak !== undefined ? p.keluarga.tarifAnak : 100000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifAnak', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
+                           </div>
+                           <div className="lg:col-span-2 flex items-center gap-4 bg-slate-100 dark:bg-slate-700/50 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600">
+                              <div className="text-[10px] text-slate-500 font-bold uppercase w-24">Profil Sistem:</div>
+                              <div className="flex-1 font-bold text-sm text-slate-700 dark:text-slate-200">
+                                 {t.family?.wife === 1 ? 'Menikah' : t.family?.wife === 2 ? 'Menikah (Pasangan 1 Yayasan)' : 'Lajang'}, {t.family?.children || 0} Anak
+                              </div>
+                           </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center p-5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
+                           <Lock className="text-slate-400 dark:text-slate-500 mr-3" size={24} />
+                           <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Tunjangan Keluarga Terkunci (Hanya Pegawai Tetap)</p>
+                        </div>
+                      )
                     )}
 
                     {/* 6. DISIPLIN & MENGAJAR */}
