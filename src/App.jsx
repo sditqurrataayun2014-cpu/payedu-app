@@ -2951,7 +2951,8 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   // 🪄 FUNGSI BARU: Edit Pinjaman Permanen
   const handleEditSubmit = (e) => {
      e.preventDefault();
-     if (!editForm.nominal || !editForm.totalPinjaman || editForm.sisaHutang === '') return;
+     // PERBAIKAN: Mengizinkan angka 0 untuk disimpan dengan memeriksa secara spesifik jika nilai string kosong ('')
+     if (editForm.nominal === '' || editForm.totalPinjaman === '' || editForm.sisaHutang === '') return;
 
      setIsSaving(true);
      setTimeout(() => {
@@ -3495,6 +3496,23 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                      <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                            <button 
+                             onClick={() => setSelectedLoanHistory(loan)}
+                             className="p-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-md transition-colors shadow-sm border border-teal-100 dark:border-teal-800"
+                             title="Lihat Detail & Riwayat Progres"
+                           >
+                             <Activity size={16} />
+                           </button>
+                           
+                           {/* 🪄 TOMBOL PINTASAN CERDAS: Kalkulator Biru untuk Redirect Spesifik ke Tab Potongan Gaji Pegawai */}
+                           <button 
+                             onClick={() => onEditGaji(loan.teacherId, 'potongan')}
+                             className="p-2 bg-blue-50 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-300 rounded-md transition-all shadow-sm border border-blue-200 dark:border-blue-700 hover:-translate-y-0.5"
+                             title="Buka Form Potongan Gaji Pegawai Ini"
+                           >
+                             <Calculator size={16} />
+                           </button>
+
+                           <button 
                              onClick={() => {
                                 setEditForm({
                                    teacherId: loan.teacherId,
@@ -3506,14 +3524,14 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                                 });
                                 setIsEditModalOpen(true);
                              }}
-                             className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors"
+                             className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors shadow-sm border border-amber-100 dark:border-amber-800"
                              title="Edit Sisa Saldo Pinjaman"
                            >
                              <Edit size={16} />
                            </button>
                            <button 
                              onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
-                             className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors"
+                             className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors shadow-sm border border-red-100 dark:border-red-800"
                              title="Hapus Tagihan Permanen"
                            >
                              <Trash2 size={16} />
@@ -5451,7 +5469,8 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                      {targetedTeachers.map(t => {
                         const isExcluded = excludedIds.includes(t.id);
                         return (
-                           <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:-translate-y-0.5 ${isExcluded ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-600 bg-white dark:bg-slate-800'}`}>
+                           // PERBAIKAN: Mengganti tag label menjadi div dan menambahkan event onClick untuk memicu checklist pengecualian
+                           <div key={t.id} onClick={() => toggleExclude(t.id)} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all hover:-translate-y-0.5 ${isExcluded ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-600 bg-white dark:bg-slate-800'}`}>
                               <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${isExcluded ? 'bg-red-500 border-red-500 text-white' : 'border-slate-300 dark:border-slate-500 bg-slate-50 dark:bg-slate-900'}`}>
                                  {isExcluded && <CheckCircle size={14}/>}
                               </div>
@@ -5460,7 +5479,7 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                                  <p className="text-[10px] text-slate-500">{t.position} • {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</p>
                               </div>
                               {isExcluded && <span className="text-[10px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 mr-1">Dikecualikan</span>}
-                           </label>
+                           </div>
                         )
                      })}
                      {targetedTeachers.length === 0 && (
@@ -7626,50 +7645,16 @@ function ArsipView({ archives, setArchives, settings }) {
                         ) : null}
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                           <button 
-                             onClick={() => setSelectedLoanHistory(loan)}
-                             className="p-2 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-md transition-colors shadow-sm border border-teal-100 dark:border-teal-800"
-                             title="Lihat Detail & Riwayat Progres"
-                           >
-                             <Activity size={16} />
-                           </button>
-                           
-                           {/* 🪄 TOMBOL PINTASAN CERDAS: Kalkulator Biru untuk Redirect Spesifik ke Tab Potongan Gaji Pegawai */}
-                           <button 
-                             onClick={() => onEditGaji(loan.teacherId, 'potongan')}
-                             className="p-2 bg-blue-50 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-300 rounded-md transition-all shadow-sm border border-blue-200 dark:border-blue-700 hover:-translate-y-0.5"
-                             title="Buka Form Potongan Gaji Pegawai Ini"
-                           >
-                             <Calculator size={16} />
-                           </button>
-
-                           <button 
-                             onClick={() => {
-                                setEditForm({
-                                   teacherId: loan.teacherId,
-                                   originalKet: loan.ket,
-                                   ket: loan.ket,
-                                   nominal: loan.nominal,
-                                   totalPinjaman: loan.totalPinjaman,
-                                   sisaHutang: loan.sisaHutang
-                                });
-                                setIsEditModalOpen(true);
-                             }}
-                             className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors shadow-sm border border-amber-100 dark:border-amber-800"
-                             title="Edit Sisa Saldo Pinjaman"
-                           >
-                             <Edit size={16} />
-                           </button>
-                           <button 
-                             onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
-                             className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors shadow-sm border border-red-100 dark:border-red-800"
-                             title="Hapus Tagihan Permanen"
-                           >
-                             <Trash2 size={16} />
-                           </button>
-                        </div>
-                     </td>
+                        <button 
+                          onClick={() => {
+                            setSelectedSlip(t);
+                            setIsSlipModalOpen(true);
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 w-full max-w-[140px] mx-auto shadow-sm"
+                        >
+                          <FileText size={14} /> Lihat Slip
+                        </button>
+                      </td>
                   </tr>
                   );
                 })}
@@ -9234,30 +9219,6 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
         {activeSection === 'portal_riwayat' && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          {/* FITUR BARU: Grafik Mini Tren Gaji Pribadi */}
-          {riwayatAsli.length > 0 && (
-            <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
-              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-4">
-                <TrendingUp size={16} className="text-indigo-500" /> Tren Take Home Pay Anda
-              </h4>
-              <div className="h-40 w-full relative">
-                {/* 🪄 PERBAIKAN: Mengubah height dari 300% menjadi 100% agar tidak tumpang tindih */}
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={[...riwayatAsli].reverse().slice(-6)} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.3} />
-                    <XAxis dataKey="periode" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} dy={10} />
-                    <RechartsTooltip 
-                      formatter={(value) => formatRp(value)}
-                      labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    />
-                    <Line type="monotone" dataKey="nominal" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
             <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
               <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
