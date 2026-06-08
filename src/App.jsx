@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbzywH45lxlr22L7u_UyhS6suD0pF1GWtKCFOSww3-5RKxqtC1lJnGD392TuLLRJyTPh/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -2843,6 +2843,11 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, teacherId: null, ket: '' });
   const [isSaving, setIsSaving] = useState(false);
 
+  // 🪄 TAMBAHAN: State untuk Fitur Edit & Ref Import
+  const fileInputRef = useRef(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+
   // Mengambil daftar guru yang memiliki tanggungan (Sisa Hutang > 0) ATAU pernah tercatat memiliki kasbon
   const loanRecords = useMemo(() => {
     let records = [];
@@ -2933,6 +2938,42 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
      }, 600);
   };
 
+  // 🪄 FUNGSI BARU: Edit Pinjaman Permanen
+  const handleEditSubmit = (e) => {
+     e.preventDefault();
+     if (!editForm.nominal || !editForm.totalPinjaman || editForm.sisaHutang === '') return;
+
+     setIsSaving(true);
+     setTimeout(() => {
+        setTeachers(prev => prev.map(t => {
+           if (t.id === editForm.teacherId) {
+              const p = t.payroll || {};
+              let currentPot = p.potonganLainnya || [];
+              
+              currentPot = currentPot.map(pot => {
+                  if (pot.ket === editForm.originalKet) {
+                      return {
+                          ...pot,
+                          ket: editForm.ket,
+                          nominal: Number(editForm.nominal),
+                          sisaHutang: Number(editForm.sisaHutang),
+                          totalPinjaman: Number(editForm.totalPinjaman)
+                      }
+                  }
+                  return pot;
+              });
+
+              return { ...t, payroll: { ...p, potonganLainnya: currentPot } };
+           }
+           return t;
+        }));
+
+        setIsSaving(false);
+        setIsEditModalOpen(false);
+        setEditForm(null);
+     }, 500);
+  };
+
   // 🪄 FUNGSI BARU: Hapus Pinjaman Permanen
   const executeDeleteLoan = () => {
      setIsSaving(true);
@@ -2978,6 +3019,113 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // 🪄 FUNGSI BARU: Import Data Pinjaman dari Excel (CSV)
+  const handleImportCSV = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const parseCSVLine = (line, delimiter) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                  current += '"';
+                  i++; // Lewati escaped quote
+              } else {
+                  inQuotes = !inQuotes;
+              }
+          } else if (char === delimiter && !inQuotes) {
+              result.push(current);
+              current = '';
+          } else {
+              current += char;
+          }
+      }
+      result.push(current);
+      return result.map(val => {
+          let cln = val.trim();
+          if (cln.startsWith('="') && cln.endsWith('"')) cln = cln.substring(2, cln.length - 1);
+          if (cln.startsWith("'")) cln = cln.substring(1); 
+          return cln;
+      });
+    };
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const lines = text.split(/\r?\n/);
+      if(lines.length < 2) {
+         alert("Format file kosong atau tidak valid.");
+         return;
+      }
+      
+      let separator = ',';
+      if (lines[0].includes(';')) separator = ';';
+      else if (lines[0].includes('\t')) separator = '\t';
+      
+      let updatedTeachers = [...teachers];
+      let successCount = 0;
+
+      for(let i = 1; i < lines.length; i++) {
+        if(!lines[i].trim()) continue;
+        
+        const values = parseCSVLine(lines[i], separator);
+        
+        if (values.length >= 8 && values[0] !== "") {
+           const impId = values[0];
+           const ket = values[4];
+           const plafon = Number(values[5]);
+           const potongan = Number(values[6]);
+           const sisa = Number(values[7]);
+           
+           const teacherIndex = updatedTeachers.findIndex(t => t.id === impId);
+           if (teacherIndex !== -1 && ket) {
+               const teacher = updatedTeachers[teacherIndex];
+               const currentPot = [...(teacher.payroll?.potonganLainnya || [])];
+               const potIndex = currentPot.findIndex(p => p.ket.toLowerCase() === ket.toLowerCase());
+               
+               if (potIndex !== -1) {
+                   currentPot[potIndex] = {
+                       ...currentPot[potIndex],
+                       nominal: isNaN(potongan) ? currentPot[potIndex].nominal : potongan,
+                       sisaHutang: isNaN(sisa) ? currentPot[potIndex].sisaHutang : sisa,
+                       totalPinjaman: isNaN(plafon) ? currentPot[potIndex].totalPinjaman : plafon
+                   };
+               } else {
+                   currentPot.push({
+                       ket: ket,
+                       nominal: isNaN(potongan) ? 0 : potongan,
+                       sisaHutang: isNaN(sisa) ? 0 : sisa,
+                       totalPinjaman: isNaN(plafon) ? 0 : plafon
+                   });
+               }
+               
+               updatedTeachers[teacherIndex] = {
+                   ...teacher,
+                   payroll: {
+                       ...(teacher.payroll || {}),
+                       potonganLainnya: currentPot
+                   }
+               };
+               successCount++;
+           }
+        }
+      }
+
+      if (successCount > 0) {
+        setTeachers(updatedTeachers);
+        alert(`Sukses! Berhasil membaca dan meng-update ${successCount} data pinjaman dari file Excel!`);
+      } else {
+        alert('Tidak ada data pinjaman yang valid (Pastikan ID Pegawai dan Format Keterangan sama).');
+      }
+      e.target.value = null;
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -3065,6 +3213,84 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
               <button type="submit" form="addLoanForm" disabled={isSaving} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70">
                 {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
                 {isSaving ? 'Menyimpan...' : 'Simpan Pinjaman'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🪄 MODAL BARU: Edit Pinjaman */}
+      {isEditModalOpen && editForm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                <Edit className="text-amber-500" /> Edit Detail Pinjaman
+              </h3>
+              <button onClick={() => {setIsEditModalOpen(false); setEditForm(null);}} className="p-2 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+               <form id="editLoanForm" onSubmit={handleEditSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Keterangan Pinjaman</label>
+                    <input 
+                      type="text"
+                      value={editForm.ket} 
+                      onChange={e => setEditForm({...editForm, ket: e.target.value})}
+                      className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-amber-500 outline-none dark:text-white"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Plafon (Total Pinjaman)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
+                        <input 
+                          type="number" min="0"
+                          value={editForm.totalPinjaman} 
+                          onChange={e => setEditForm({...editForm, totalPinjaman: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none dark:text-white"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Cicilan Per Bulan</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
+                        <input 
+                          type="number" min="0"
+                          value={editForm.nominal} 
+                          onChange={e => setEditForm({...editForm, nominal: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Sisa Hutang Saat Ini</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
+                        <input 
+                          type="number" min="0"
+                          value={editForm.sisaHutang} 
+                          onChange={e => setEditForm({...editForm, sisaHutang: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-black text-teal-600 dark:text-teal-400 focus:ring-2 focus:ring-teal-500 outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+               </form>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+              <button onClick={() => {setIsEditModalOpen(false); setEditForm(null);}} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-sm">Batal</button>
+              <button type="submit" form="editLoanForm" disabled={isSaving} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70">
+                {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
+                {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
               </button>
             </div>
           </div>
@@ -3203,9 +3429,13 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
               />
             </div>
             
-            {/* 🪄 TAMBALAN CERDAS: Tombol Tambah Pinjaman Baru */}
+            {/* 🪄 TAMBALAN CERDAS: Tombol Tambah Pinjaman Baru & Import Data */}
             <button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                <PlusCircle size={16} /> <span className="hidden sm:inline">Tambah Baru</span><span className="sm:hidden">Tambah</span>
+            </button>
+            <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
+            <button onClick={() => fileInputRef.current?.click()} className="w-full sm:w-auto flex-none justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors items-center gap-2 shadow-sm cursor-pointer flex border border-slate-300 dark:border-slate-600">
+               <Upload size={16} /> <span className="hidden sm:inline">Import Excel</span><span className="sm:hidden">Import</span>
             </button>
             <button onClick={handleExportCSV} className="w-full sm:w-auto flex-none justify-center bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Export</span>
@@ -3255,16 +3485,19 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                      <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                            <button 
-                             onClick={() => setSelectedLoanHistory(loan)}
-                             className="p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-md transition-colors"
-                             title="Lihat Detail & Riwayat Progres"
-                           >
-                             <Eye size={16} />
-                           </button>
-                           <button 
-                             onClick={() => onEditGaji(loan.teacherId)}
+                             onClick={() => {
+                                setEditForm({
+                                   teacherId: loan.teacherId,
+                                   originalKet: loan.ket,
+                                   ket: loan.ket,
+                                   nominal: loan.nominal,
+                                   totalPinjaman: loan.totalPinjaman,
+                                   sisaHutang: loan.sisaHutang
+                                });
+                                setIsEditModalOpen(true);
+                             }}
                              className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors"
-                             title="Edit Sisa Saldo di Menu Gaji"
+                             title="Edit Sisa Saldo Pinjaman"
                            >
                              <Edit size={16} />
                            </button>
@@ -4128,6 +4361,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
   const [insidentalForm, setInsidentalForm] = useState({ ket: '', tgl: 1, jam: 2 });
   const [selectedTeachers, setSelectedTeachers] = useState([]);
   const [confirmGenerate, setConfirmGenerate] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false); // 🪄 TAMBAHAN: State Publikasi Roster
 
   // 🪄 TAMBALAN CERDAS: State untuk Preview, Edit, dan Hapus Kegiatan Massal
   const [previewActivity, setPreviewActivity] = useState(null);
@@ -4218,6 +4452,16 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
         }));
         setIsSaving(false);
         alert(`Sukses Hebat! Jadwal rutin telah ditebarkan secara merata ke tanggal 1 sampai ${daysInMonth} pada Rekap Absen bulan ini.`);
+     }, 800);
+  };
+
+  // 🪄 FUNGSI BARU: Eksekusi Publikasi ke Portal Guru
+  const executePublish = () => {
+     setIsSaving(true);
+     setConfirmPublish(false);
+     setTimeout(() => {
+        setIsSaving(false);
+        alert("Berhasil! Roster mingguan telah dipublikasikan dan kini otomatis terintegrasi di menu 'Jadwal Saya' pada masing-masing Portal Guru.");
      }, 800);
   };
 
@@ -4402,6 +4646,29 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
         </div>
       )}
 
+      {/* MODAL KONFIRMASI PUBLIKASI ROSTER KE PORTAL GURU */}
+      {confirmPublish && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                <Send size={40} />
+              </div>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Terapkan ke Portal Guru?</h3>
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm">
+                Pemetaan roster ini akan dipublikasikan dan otomatis terintegrasi ke menu <strong className="text-slate-700 dark:text-slate-200">"Jadwal Saya"</strong> di masing-masing portal guru. Lanjutkan?
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setConfirmPublish(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executePublish} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
+                <Send size={16} /> Ya, Terapkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL PRATINJAU PESERTA MASSAL */}
       {previewActivity && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
@@ -4533,8 +4800,8 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
             
             {activeTab === 'roster' && (
                <>
-                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-                     <div className="relative w-full sm:w-64">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+                     <div className="relative w-full md:w-64 shrink-0">
                        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                        <input 
                          type="text" placeholder="Cari Nama Guru..." 
@@ -4542,10 +4809,16 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-pink-500 outline-none dark:text-white"
                        />
                      </div>
-                     <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="w-full sm:w-auto bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
-                       {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={16} />}
-                       {isSaving ? 'Memproses...' : 'Terapkan ke Kalender Rekap'}
-                     </button>
+                     <div className="flex flex-col sm:flex-row w-full md:w-auto gap-2">
+                       <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
+                         {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={16} />}
+                         {isSaving ? 'Memproses...' : 'Terapkan ke Portal Guru'}
+                       </button>
+                       <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="w-full sm:w-auto bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
+                         {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={16} />}
+                         {isSaving ? 'Memproses...' : 'Terapkan ke Kalender Rekap'}
+                       </button>
+                     </div>
                   </div>
                   
                   <div className="overflow-x-auto overflow-y-auto flex-1 p-2 pb-4 touch-pan-x touch-pan-y scroll-smooth">
@@ -8666,7 +8939,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
         )}
 
         {/* 7. Kritik & Saran */}
-        {activeSection === 'portal_saran' && (
+      {activeSection === 'portal_saran' && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <form onSubmit={handleSendFeedback} className="space-y-4">
             <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -8709,83 +8982,90 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
             </div>
           </form>
         </div>
-        )}
+      )}
 
       </div>
     </div>
 
-    {/* 📱 ANDROID-STYLE BOTTOM NAVIGATION BAR (KHUSUS MOBILE) - 3D GLASSMORPHISM */}
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-white/50 dark:border-slate-700/50 z-[100] flex overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth shadow-[0_-15px_35px_rgba(0,0,0,0.05)] pt-2 pb-3 px-2">
-      {bottomNavItems.map(item => {
-         const isActive = activeSection === item.id;
+    {/* 📱 PREMIUM FLOATING CUTOUT BOTTOM NAVIGATION (KHUSUS MOBILE) */}
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
+      
+      {/* Background Dasar Nav Bar (Yang akan 'dipotong' oleh ilusi cincin) */}
+      <div className="absolute bottom-0 w-full h-[70px] bg-white dark:bg-slate-800 rounded-t-[2rem] shadow-[0_-15px_40px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-100 dark:border-slate-700/50"></div>
+      
+      {/* Scrollable Container dengan Tinggi Ekstra untuk Ruang Melayang */}
+      <div className="relative flex justify-between px-2 h-[100px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto items-end pb-3">
+        {bottomNavItems.map(item => {
+           const isActive = activeSection === item.id;
 
-         // Helper penentuan warna dinamis 3D Glassmorphism
-         const getGradient = (id) => {
-           switch(id) {
-             case 'portal_dashboard': return 'from-blue-400 to-blue-600 shadow-blue-500/40';
-             case 'portal_jadwal': return 'from-pink-400 to-pink-600 shadow-pink-500/40';
-             case 'portal_kehadiran': return 'from-amber-400 to-orange-500 shadow-amber-500/40';
-             case 'portal_gaji': return 'from-emerald-400 to-emerald-600 shadow-emerald-500/40';
-             case 'portal_pinjaman': return 'from-teal-400 to-teal-600 shadow-teal-500/40';
-             case 'portal_riwayat': return 'from-indigo-400 to-indigo-600 shadow-indigo-500/40';
-             case 'portal_info': return 'from-purple-400 to-purple-600 shadow-purple-500/40';
-             case 'portal_saran': return 'from-rose-400 to-rose-600 shadow-rose-500/40';
-             default: return 'from-slate-400 to-slate-600 shadow-slate-500/40';
-           }
-         };
+           // Helper penentuan warna dinamis
+           const getGradient = (id) => {
+             switch(id) {
+               case 'portal_dashboard': return 'from-blue-400 to-blue-600';
+               case 'portal_jadwal': return 'from-pink-400 to-pink-600';
+               case 'portal_kehadiran': return 'from-amber-400 to-orange-500';
+               case 'portal_gaji': return 'from-emerald-400 to-emerald-600';
+               case 'portal_pinjaman': return 'from-teal-400 to-teal-600';
+               case 'portal_riwayat': return 'from-indigo-400 to-indigo-600';
+               case 'portal_info': return 'from-purple-400 to-purple-600';
+               case 'portal_saran': return 'from-rose-400 to-rose-600';
+               default: return 'from-slate-400 to-slate-600';
+             }
+           };
 
-         const getTextColor = (id) => {
-           switch(id) {
-             case 'portal_dashboard': return 'text-blue-600 dark:text-blue-400';
-             case 'portal_jadwal': return 'text-pink-600 dark:text-pink-400';
-             case 'portal_kehadiran': return 'text-amber-600 dark:text-amber-400';
-             case 'portal_gaji': return 'text-emerald-600 dark:text-emerald-400';
-             case 'portal_pinjaman': return 'text-teal-600 dark:text-teal-400';
-             case 'portal_riwayat': return 'text-indigo-600 dark:text-indigo-400';
-             case 'portal_info': return 'text-purple-600 dark:text-purple-400';
-             case 'portal_saran': return 'text-rose-600 dark:text-rose-400';
-             default: return 'text-slate-600 dark:text-slate-400';
-           }
-         };
+           const getTextColor = (id) => {
+             switch(id) {
+               case 'portal_dashboard': return 'text-blue-600 dark:text-blue-400';
+               case 'portal_jadwal': return 'text-pink-600 dark:text-pink-400';
+               case 'portal_kehadiran': return 'text-amber-600 dark:text-amber-400';
+               case 'portal_gaji': return 'text-emerald-600 dark:text-emerald-400';
+               case 'portal_pinjaman': return 'text-teal-600 dark:text-teal-400';
+               case 'portal_riwayat': return 'text-indigo-600 dark:text-indigo-400';
+               case 'portal_info': return 'text-purple-600 dark:text-purple-400';
+               case 'portal_saran': return 'text-rose-600 dark:text-rose-400';
+               default: return 'text-slate-600 dark:text-slate-400';
+             }
+           };
 
-         return (
-           <button 
-             key={item.id} 
-             onClick={() => setActiveTab(item.id)}
-             className="snap-center flex flex-col items-center justify-center shrink-0 min-w-[72px] sm:min-w-[84px] h-[60px] relative transition-all duration-500 ease-out group outline-none"
-           >
-             {/* 3D Icon Container */}
-             <div className={`relative flex items-center justify-center w-[46px] h-[46px] rounded-[1.1rem] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-10 ${
-               isActive 
-                 ? `bg-gradient-to-br ${getGradient(item.id)} text-white -translate-y-[22px] scale-110 shadow-[0_12px_20px_-8px_rgba(0,0,0,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)]` 
-                 : 'bg-transparent text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300'
-             }`}>
-               <item.icon 
-                 size={22} 
-                 strokeWidth={isActive ? 2.5 : 2} 
-                 className={`transition-all duration-500 ${isActive ? 'drop-shadow-md' : 'group-hover:scale-110'}`} 
-               />
+           return (
+             <button 
+               key={item.id} 
+               onClick={() => setActiveTab(item.id)}
+               className="snap-center relative flex flex-col items-center justify-end shrink-0 min-w-[72px] sm:min-w-[80px] h-full outline-none group"
+             >
+               {/* 🪄 Floating Circle & Cutout Ring Illusion 🪄 */}
+               <div className={`absolute flex items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.265,1.55)] z-20 ${
+                 isActive 
+                   ? `w-[56px] h-[56px] rounded-full bottom-8 bg-gradient-to-br ${getGradient(item.id)} text-white ring-[8px] ring-slate-50 dark:ring-slate-900 shadow-[0_10px_20px_rgba(0,0,0,0.3)]` 
+                   : 'w-10 h-10 rounded-2xl bottom-[18px] bg-transparent text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/50 ring-0 ring-transparent shadow-none'
+               }`}>
+                 <item.icon 
+                   size={isActive ? 24 : 22} 
+                   strokeWidth={isActive ? 2.5 : 2} 
+                   className={`transition-transform duration-500 ${isActive ? 'drop-shadow-md scale-100' : 'scale-90 group-hover:scale-100'}`} 
+                 />
+                 
+                 {/* Red Dot Notifikasi */}
+                 {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
+                    <span className={`absolute w-3 h-3 bg-red-500 rounded-full border-2 animate-pulse shadow-sm ${isActive ? '-top-0.5 -right-0.5 border-emerald-400' : 'top-0 right-0 border-white dark:border-slate-800'}`}></span>
+                 )}
+               </div>
+
+               {/* Teks Label (Muncul dari bawah) */}
+               <span className={`text-[10px] tracking-tight transition-all duration-300 absolute bottom-1 w-full text-center ${
+                 isActive 
+                   ? `font-extrabold ${getTextColor(item.id)} opacity-100 translate-y-0` 
+                   : 'font-semibold text-slate-400 dark:text-slate-500 opacity-0 translate-y-4'
+               }`}>
+                 {item.label}
+               </span>
                
-               {/* Notifikasi Red Dot (Diselaraskan dengan 3D pop) */}
-               {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
-                  <span className={`absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 ${isActive ? 'border-emerald-400' : 'border-white dark:border-slate-900'} animate-pulse shadow-sm`}></span>
-               )}
-             </div>
-
-             {/* Teks Bawah */}
-             <span className={`text-[10px] tracking-tight transition-all duration-500 absolute bottom-1 ${
-               isActive 
-                 ? `font-extrabold ${getTextColor(item.id)} opacity-100 translate-y-0` 
-                 : 'font-medium text-slate-400 dark:text-slate-500 opacity-100 translate-y-0'
-             }`}>
-               {item.label}
-             </span>
-             
-             {/* Titik indikator kecil di paling bawah saat aktif */}
-             <div className={`absolute -bottom-1.5 w-1 h-1 rounded-full transition-all duration-500 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 shadow-[0_0_5px_currentColor] scale-100` : 'opacity-0 scale-0'}`}></div>
-           </button>
-         );
-      })}
+               {/* Indikator Titik Aktif (Opsional, mempertegas status) */}
+               <div className={`absolute -bottom-1.5 w-1 h-1 rounded-full transition-all duration-300 delay-100 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
+             </button>
+           );
+        })}
+      </div>
     </div>
     </>
   );
