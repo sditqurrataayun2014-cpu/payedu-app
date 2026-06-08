@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbx-31rSDBzdzEy5PHxmQx7v05CPN5xkLqxAlzkxgFSpZkOKZwdYIBWs4KfSIbZ_XVOd/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -633,24 +633,25 @@ export default function App() {
   }, [teachers, isDataLoaded, hasConflict]);
 
   // 🪄 TAMBALAN CERDAS: Push Otomatis ke Cloud setiap ada perubahan di Arsip, Feedback, atau Log
+  // PERBAIKAN: Menghapus batasan "length > 0" agar saat data dihapus habis (kosong), perubahannya tetap ditarik/dihapus oleh server
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_feedbacks', JSON.stringify(feedbacks));
-      if (feedbacks.length > 0) postToGoogleSheets('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
+      postToGoogleSheets('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
     }
   }, [feedbacks, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_loginHistory', JSON.stringify(loginHistory));
-      if (loginHistory.length > 0) postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
+      postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
     }
   }, [loginHistory, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_archives', JSON.stringify(archives));
-      if (archives.length > 0) postToGoogleSheets('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
+      postToGoogleSheets('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
     }
   }, [archives, isDataLoaded, hasConflict]);
 
@@ -5763,31 +5764,44 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     const customTanggal = new Date(archiveDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
     try {
-      const result = await postToGoogleSheets('ARCHIVE_PAYROLL', {
-        periode: customBulan, // Pakai bulan custom
-        data: teachers
+      // 🪄 TAMBALAN CERDAS: Susun Data Arsip Terlebih Dahulu Sebelum Menembak ke Server
+      const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t, settings).totalBersih, 0);
+
+      // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
+      const optimizedTeachers = teachers.map(t => {
+        const { payroll, ...restTeacher } = t;
+        const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
+        const { harian, ...restJamMengajar } = jamMengajar || {};
+        
+        return {
+          ...restTeacher,
+          payroll: {
+            ...restPayroll,
+            jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
+          }
+        };
       });
+
+      const newArchive = {
+        id: generateUniqueId('arc-'),
+        periode: customBulan, // Pakai bulan custom
+        dateArchived: customTanggal, // Pakai tanggal custom
+        totalGaji: totalBersihBulanIni,
+        dataGuru: optimizedTeachers
+      };
+
+      // Tentukan array arsip final (Maksimal 12 bulan terakhir agar JSON Google Sheets tidak jebol)
+      const updatedArchivesArray = [newArchive, ...(archives || [])].slice(0, 12);
+
+      // 🪄 TAMBALAN CERDAS: Menggunakan endpoint "SAVE_ARCHIVES" secara utuh, bukan "ARCHIVE_PAYROLL" yang sudah usang
+      const result = await postToGoogleSheets('SAVE_ARCHIVES', updatedArchivesArray);
       
       if (result.status === 'success') {
-        // --- SAVE TO LOCAL ARCHIVE STATE ---
-        const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t, settings).totalBersih, 0);
+        // --- TERAPKAN KE STATE LOKAL SECARA PERMANEN ---
+        if (setArchives) setArchives(updatedArchivesArray);
+        safeStorageSet('payedu_archives', JSON.stringify(updatedArchivesArray));
 
-        // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
-        const optimizedTeachers = teachers.map(t => {
-          const { payroll, ...restTeacher } = t;
-          const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
-          const { harian, ...restJamMengajar } = jamMengajar || {};
-          
-          return {
-            ...restTeacher,
-            payroll: {
-              ...restPayroll,
-              jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
-            }
-          };
-        });
-
-        // 🪄 TAMBALAN CERDAS: Otomatis memotong Sisa Hutang & Reset Absensi secara menyeluruh untuk bulan baru
+        // 🪄 Reset Absensi dan Sisa Hutang untuk Bulan Baru
         setTeachers(prev => prev.map(t => {
            // 1. Logika Pemotongan Sisa Hutang Kasbon
            let updatedPotongan = t.payroll?.potonganLainnya || [];
@@ -5824,23 +5838,6 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               }
            };
         }));
-
-        const newArchive = {
-          id: generateUniqueId('arc-'),
-          periode: customBulan, // Pakai bulan custom
-          dateArchived: customTanggal, // Pakai tanggal custom
-          totalGaji: totalBersihBulanIni,
-          dataGuru: optimizedTeachers
-        };
-
-        // OPTIMASI MEMORI TAHAP 2: Batasi Arsip Lokal maksimal 12 bulan terakhir agar tidak meluap
-        if(setArchives) {
-          setArchives(prev => {
-             const updated = [newArchive, ...prev];
-             return updated.length > 12 ? updated.slice(0, 12) : updated;
-          });
-        }
-        // -----------------------------------
         
         // 🪄 Auto-Shift periode ke bulan berikutnya berdasarkan input Admin
         const [y, m] = archivePeriod.split('-');
@@ -5854,6 +5851,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.warn("Sinkronisasi tertunda:", e));
         
         setNotification({ isOpen: true, type: 'success', message: 'Tutup buku berhasil! Data telah diarsipkan secara permanen.' });
+      } else {
+        throw new Error("Respon server gagal");
       }
     } catch (err) {
       setNotification({ isOpen: true, type: 'error', message: 'Terjadi kesalahan saat memproses arsip. Pastikan koneksi internet stabil.' });
