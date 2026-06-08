@@ -1429,6 +1429,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     { id: 'jadwal', label: 'Jadwal Mengajar', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' }, // DIPINDAH: Menu Jadwal
     { id: 'rekapabsensi', label: 'Rekap Absen', icon: FileText, color: 'text-white', glow: 'shadow-orange-500/50', bg: 'bg-gradient-to-br from-orange-400 via-orange-500 to-orange-700 border border-orange-300/50 dark:border-orange-600/50' },
     { id: 'gaji', label: 'Komponen Gaji', icon: Calculator, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
+    { id: 'pinjaman', label: 'Rekap Pinjaman', icon: CreditCard, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
     { id: 'rekap', label: 'Rekap Gaji', icon: FileText, color: 'text-white', glow: 'shadow-rose-500/50', bg: 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700 border border-rose-300/50 dark:border-rose-600/50' },
     { id: 'laporan', label: 'Laporan Detail', icon: BarChart3, color: 'text-white', glow: 'shadow-indigo-500/50', bg: 'bg-gradient-to-br from-indigo-400 via-indigo-500 to-indigo-700 border border-indigo-300/50 dark:border-indigo-600/50' },
     { id: 'arsip', label: 'Manajemen Arsip', icon: Archive, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
@@ -2833,6 +2834,14 @@ function DataGuruView({ teachers, setTeachers }) {
 function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   const [search, setSearch] = useState('');
   
+  // 🪄 TAMBALAN CERDAS: State untuk Fitur Tambah, Detail Riwayat, dan Hapus
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ teacherId: '', ket: 'Kasbon Sekolah', nominal: '', totalPinjaman: '' });
+  
+  const [selectedLoanHistory, setSelectedLoanHistory] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, teacherId: null, ket: '' });
+  const [isSaving, setIsSaving] = useState(false);
+
   // Mengambil daftar guru yang memiliki tanggungan (Sisa Hutang > 0) ATAU pernah tercatat memiliki kasbon
   const loanRecords = useMemo(() => {
     let records = [];
@@ -2849,6 +2858,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
           if (kasbonItems.length > 0) {
              kasbonItems.forEach(item => {
                 const sisaHutang = item.sisaHutang !== undefined ? item.sisaHutang : (item.nominal * 4); // Fallback asumsi awal 4 bulan cicilan
+                const totalPinjaman = item.totalPinjaman !== undefined ? item.totalPinjaman : (item.nominal * 10); // Plafon fallback
                 records.push({
                    teacherId: t.id,
                    name: t.name,
@@ -2857,6 +2867,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                    ket: item.ket,
                    nominal: item.nominal,
                    sisaHutang: sisaHutang,
+                   totalPinjaman: totalPinjaman,
                    isLunas: sisaHutang <= 0
                 });
              });
@@ -2885,8 +2896,61 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
     return loanRecords.reduce((sum, item) => sum + (!item.isLunas ? item.nominal : 0), 0);
   }, [loanRecords]);
 
+  // 🪄 FUNGSI BARU: Tambah Pinjaman Baru
+  const handleAddSubmit = (e) => {
+     e.preventDefault();
+     if (!addForm.teacherId || !addForm.nominal || !addForm.totalPinjaman) return;
+
+     setIsSaving(true);
+     setTimeout(() => {
+        setTeachers(prev => prev.map(t => {
+           if (t.id === addForm.teacherId) {
+              const p = t.payroll || {};
+              const currentPot = p.potonganLainnya || [];
+              
+              // Mencegah duplikasi nama pinjaman untuk guru yang sama
+              if (currentPot.some(x => x.ket.toLowerCase() === addForm.ket.toLowerCase())) {
+                 alert('Peringatan: Pinjaman dengan keterangan ini sudah ada. Harap bedakan namanya (cth: Kasbon Tahap 2).');
+                 return t;
+              }
+
+              const newLoan = {
+                 ket: addForm.ket,
+                 nominal: Number(addForm.nominal),
+                 sisaHutang: Number(addForm.totalPinjaman),
+                 totalPinjaman: Number(addForm.totalPinjaman)
+              };
+
+              return { ...t, payroll: { ...p, potonganLainnya: [...currentPot, newLoan] } };
+           }
+           return t;
+        }));
+
+        setIsSaving(false);
+        setIsAddModalOpen(false);
+        setAddForm({ teacherId: '', ket: 'Kasbon Sekolah', nominal: '', totalPinjaman: '' });
+     }, 600);
+  };
+
+  // 🪄 FUNGSI BARU: Hapus Pinjaman Permanen
+  const executeDeleteLoan = () => {
+     setIsSaving(true);
+     setTimeout(() => {
+        setTeachers(prev => prev.map(t => {
+           if (t.id === confirmDelete.teacherId) {
+              const p = t.payroll || {};
+              const newPot = (p.potonganLainnya || []).filter(item => item.ket !== confirmDelete.ket);
+              return { ...t, payroll: { ...p, potonganLainnya: newPot } };
+           }
+           return t;
+        }));
+        setIsSaving(false);
+        setConfirmDelete({ isOpen: false, teacherId: null, ket: '' });
+     }, 500);
+  };
+
   const handleExportCSV = () => {
-    const headers = ['ID Pegawai', 'Nama Lengkap', 'NIPY', 'Status', 'Keterangan Pinjaman', 'Potongan / Bulan', 'Sisa Hutang', 'Status Pelunasan'];
+    const headers = ['ID Pegawai', 'Nama Lengkap', 'NIPY', 'Status', 'Keterangan Pinjaman', 'Plafon Awal', 'Potongan / Bulan', 'Sisa Hutang', 'Status Pelunasan'];
     const csvRows = [headers.join(';')];
     
     filteredLoans.forEach(r => {
@@ -2896,6 +2960,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
         `"=""${r.nipy}"""`, 
         r.status, 
         `"${r.ket}"`, 
+        r.totalPinjaman,
         r.nominal, 
         r.sisaHutang,
         r.isLunas ? 'LUNAS' : 'Belum Lunas'
@@ -2917,11 +2982,186 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative pb-4 min-h-0">
       
+      {/* 🪄 MODAL BARU: Tambah Pinjaman */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                <PlusCircle className="text-teal-500" /> Input Pinjaman Baru
+              </h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+               <form id="addLoanForm" onSubmit={handleAddSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Pilih Pegawai Peminjam</label>
+                    <select 
+                      value={addForm.teacherId} 
+                      onChange={e => setAddForm({...addForm, teacherId: e.target.value})}
+                      className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white cursor-pointer font-medium"
+                      required
+                    >
+                      <option value="">-- Pilih Pegawai --</option>
+                      {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.nipy})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Jenis Pinjaman / Keterangan</label>
+                    <input 
+                      list="loan-types"
+                      value={addForm.ket} 
+                      onChange={e => setAddForm({...addForm, ket: e.target.value})}
+                      className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                      placeholder="Cth: Kasbon Sekolah" required
+                    />
+                    <datalist id="loan-types">
+                       <option value="Kasbon Sekolah" />
+                       <option value="Pinjaman Koperasi" />
+                       <option value="Potongan Barang" />
+                    </datalist>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Total Pinjaman (Plafon)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
+                        <input 
+                          type="number" min="1"
+                          value={addForm.totalPinjaman} 
+                          onChange={e => setAddForm({...addForm, totalPinjaman: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-amber-600 dark:text-amber-400 focus:ring-2 focus:ring-amber-500 outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Cicilan Per Bulan</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
+                        <input 
+                          type="number" min="1"
+                          value={addForm.nominal} 
+                          onChange={e => setAddForm({...addForm, nominal: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {addForm.totalPinjaman && addForm.nominal && (
+                     <div className="mt-2 p-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg text-xs text-teal-700 dark:text-teal-400 font-medium flex items-center gap-2">
+                        <Info size={14}/>
+                        Estimasi Pelunasan: <strong>{Math.ceil(Number(addForm.totalPinjaman) / Number(addForm.nominal))} Bulan</strong>
+                     </div>
+                  )}
+               </form>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-sm">Batal</button>
+              <button type="submit" form="addLoanForm" disabled={isSaving} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70">
+                {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
+                {isSaving ? 'Menyimpan...' : 'Simpan Pinjaman'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🪄 MODAL BARU: Hapus Pinjaman */}
+      {confirmDelete.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={40} />
+              </div>
+              <h3 className="text-xl font-bold dark:text-white mb-2">Hapus Pinjaman?</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 leading-relaxed">
+                Anda yakin ingin menghapus data <strong className="text-slate-700 dark:text-slate-200">"{confirmDelete.ket}"</strong> secara permanen dari sistem?
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setConfirmDelete({ isOpen: false, teacherId: null, ket: '' })} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executeDeleteLoan} disabled={isSaving} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2 disabled:opacity-70">
+                {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Trash2 size={16} />}
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🪄 MODAL BARU: Detail & Riwayat Pinjaman (Visualisasi Progres) */}
+      {selectedLoanHistory && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-teal-50 dark:bg-teal-900/30 shrink-0">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 rounded-lg shadow-sm">
+                    <Activity size={20} />
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-teal-800 dark:text-teal-300 leading-tight">Detail Riwayat Pinjaman</h3>
+                    <p className="text-[10px] text-teal-600/80 dark:text-teal-500 font-medium">{selectedLoanHistory.name}</p>
+                 </div>
+              </div>
+              <button onClick={() => setSelectedLoanHistory(null)} className="p-2 hover:bg-teal-100 dark:hover:bg-teal-800/50 rounded-full text-teal-600 transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+               <h4 className="text-xl font-black text-slate-800 dark:text-white text-center mb-1">{selectedLoanHistory.ket}</h4>
+               <p className="text-xs text-slate-500 text-center mb-6">Informasi progres pelunasan dan sisa saldo hutang pegawai.</p>
+               
+               <div className="space-y-4">
+                  <div className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                     <span className="text-sm font-semibold text-slate-500">Plafon Pinjaman Awal</span>
+                     <span className="font-bold text-slate-800 dark:text-white">{formatRp(selectedLoanHistory.totalPinjaman)}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-4 bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-800/30">
+                     <span className="text-sm font-semibold text-rose-600 dark:text-rose-400">Potongan Bulanan</span>
+                     <span className="font-bold text-rose-700 dark:text-rose-300">-{formatRp(selectedLoanHistory.nominal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-4 bg-teal-50 dark:bg-teal-900/10 rounded-xl border border-teal-100 dark:border-teal-800/30 shadow-inner">
+                     <span className="text-sm font-semibold text-teal-600 dark:text-teal-400">Sisa Hutang Saat Ini</span>
+                     <span className="font-black text-lg text-teal-700 dark:text-teal-300">{formatRp(selectedLoanHistory.sisaHutang)}</span>
+                  </div>
+               </div>
+
+               {/* Progress Bar Visual */}
+               <div className="mt-8">
+                  <div className="flex justify-between items-end mb-2">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
+                    <span className="text-sm font-black text-teal-600 dark:text-teal-400">
+                       {selectedLoanHistory.totalPinjaman > 0 ? (((selectedLoanHistory.totalPinjaman - selectedLoanHistory.sisaHutang) / selectedLoanHistory.totalPinjaman) * 100).toFixed(0) : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-4 overflow-hidden shadow-inner">
+                    <div className="bg-gradient-to-r from-teal-400 to-emerald-500 h-full rounded-full transition-all duration-1000 relative" style={{ width: `${selectedLoanHistory.totalPinjaman > 0 ? (((selectedLoanHistory.totalPinjaman - selectedLoanHistory.sisaHutang) / selectedLoanHistory.totalPinjaman) * 100) : 0}%` }}>
+                    </div>
+                  </div>
+                  <p className="text-center text-[10px] text-slate-400 font-medium mt-3 flex justify-center items-center gap-1">
+                     <Info size={12}/> Estimasi Lunas: <strong className="text-slate-600 dark:text-slate-300">{Math.ceil(selectedLoanHistory.sisaHutang / selectedLoanHistory.nominal)} Bulan Kedepan</strong>
+                  </p>
+               </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end shrink-0">
+              <button onClick={() => setSelectedLoanHistory(null)} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg font-bold transition-colors text-sm shadow-sm w-full sm:w-auto">
+                Tutup Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
         <div className="relative z-10">
           <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><CreditCard className="text-teal-100" /> Buku Pemantauan Kasbon</h1>
-          <p className="text-teal-50 text-sm">Monitor transparansi piutang, potongan cicilan bulanan, dan sisa hutang pegawai.</p>
+          <p className="text-teal-50 text-sm">Monitor transparansi piutang, kelola pinjaman baru, dan sisa hutang pegawai.</p>
         </div>
         <CreditCard size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
@@ -2933,7 +3173,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
             </div>
             <div>
                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Total Sisa Piutang Berjalan</p>
-               <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400">{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalPiutang)}</h3>
+               <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400">{formatRp(totalPiutang)}</h3>
             </div>
          </div>
          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
@@ -2942,7 +3182,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
             </div>
             <div>
                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Estimasi Potongan Bulan Ini</p>
-               <h3 className="text-2xl font-black text-teal-600 dark:text-teal-400">{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(totalPotonganBulanan)}</h3>
+               <h3 className="text-2xl font-black text-teal-600 dark:text-teal-400">{formatRp(totalPotonganBulanan)}</h3>
             </div>
          </div>
       </div>
@@ -2962,6 +3202,10 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
               />
             </div>
             
+            {/* 🪄 TAMBALAN CERDAS: Tombol Tambah Pinjaman Baru */}
+            <button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
+               <PlusCircle size={16} /> <span className="hidden sm:inline">Tambah Baru</span><span className="sm:hidden">Tambah</span>
+            </button>
             <button onClick={handleExportCSV} className="w-full sm:w-auto flex-none justify-center bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Export</span>
             </button>
@@ -2974,15 +3218,16 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
               <tr>
                 <th className="p-4 font-bold">Nama Pegawai & Status</th>
                 <th className="p-4 font-bold">Keterangan Pinjaman</th>
-                <th className="p-4 font-bold text-right text-rose-500">Potongan Bulanan</th>
-                <th className="p-4 font-bold text-right text-teal-600">Sisa Hutang (Saldo)</th>
+                <th className="p-4 font-bold text-right text-slate-500 dark:text-slate-400">Plafon</th>
+                <th className="p-4 font-bold text-right text-rose-500">Potongan/Bulan</th>
+                <th className="p-4 font-bold text-right text-teal-600">Sisa Hutang</th>
                 <th className="p-4 font-bold text-center">Status</th>
-                <th className="p-4 font-bold text-center">Aksi / Penyesuaian</th>
+                <th className="p-4 font-bold text-center">Aksi Manajemen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                {filteredLoans.map((loan, idx) => (
-                  <tr key={`${loan.teacherId}-${idx}`} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${loan.isLunas ? 'opacity-60 grayscale-[50%]' : ''}`}>
+                  <tr key={`${loan.teacherId}-${idx}`} className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group ${loan.isLunas ? 'opacity-60 grayscale-[50%]' : ''}`}>
                      <td className="p-4">
                         <div className={`font-bold ${loan.isLunas ? 'text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>{loan.name}</div>
                         <div className="text-[10px] text-slate-500 mt-0.5">{loan.nipy} • {loan.status}</div>
@@ -2990,12 +3235,15 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                      <td className="p-4">
                         <div className="font-semibold text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={loan.ket}>{loan.ket}</div>
                      </td>
+                     <td className="p-4 text-right font-medium text-slate-500 dark:text-slate-400">
+                        {formatRp(loan.totalPinjaman)}
+                     </td>
                      <td className="p-4 text-right font-medium text-rose-500">
-                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(loan.nominal)}
+                        {formatRp(loan.nominal)}
                      </td>
                      <td className="p-4 text-right">
                         <span className={`font-black tracking-tight text-[13px] px-3 py-1.5 rounded-lg border shadow-sm ${loan.isLunas ? 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:border-slate-700' : 'bg-teal-50 text-teal-700 border-teal-100 dark:bg-teal-900/30 dark:border-teal-800 dark:text-teal-400'}`}>
-                           {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(loan.sisaHutang)}
+                           {formatRp(loan.sisaHutang)}
                         </span>
                      </td>
                      <td className="p-4 text-center">
@@ -3004,18 +3252,34 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                         </span>
                      </td>
                      <td className="p-4 text-center">
-                        <button 
-                           onClick={() => onEditGaji(loan.teacherId)}
-                           className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-md font-bold transition-colors flex items-center justify-center gap-1.5 mx-auto"
-                           title="Lakukan penyelesaian tunai atau edit sisa hutang di menu Gaji"
-                        >
-                           <Edit size={14} /> Atur Saldo
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                           <button 
+                             onClick={() => setSelectedLoanHistory(loan)}
+                             className="p-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-md transition-colors"
+                             title="Lihat Detail & Riwayat Progres"
+                           >
+                             <Eye size={16} />
+                           </button>
+                           <button 
+                             onClick={() => onEditGaji(loan.teacherId)}
+                             className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors"
+                             title="Edit Sisa Saldo di Menu Gaji"
+                           >
+                             <Edit size={16} />
+                           </button>
+                           <button 
+                             onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
+                             className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors"
+                             title="Hapus Tagihan Permanen"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                        </div>
                      </td>
                   </tr>
                ))}
                {filteredLoans.length === 0 && (
-                  <tr><td colSpan="6" className="p-8 text-center text-slate-500">Tidak ada tanggungan pinjaman atau kasbon pegawai ditemukan.</td></tr>
+                  <tr><td colSpan="7" className="p-8 text-center text-slate-500">Tidak ada tanggungan pinjaman atau kasbon pegawai ditemukan.</td></tr>
                )}
             </tbody>
           </table>
@@ -4615,7 +4879,7 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji</h3>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
-            <div className="overflow-y-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
+            <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
               <SlipDocument teacher={selectedSlip} bulan={bulan} settings={settings} />
             </div>
             <div className="p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
@@ -5065,7 +5329,7 @@ function SlipDocument({ teacher, bulan, settings }) {
   const tanggalCetak = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="bg-white p-4 md:p-6 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full relative min-h-auto flex flex-col font-sans" style={{ maxWidth: '215.9mm' }} id="printable-area">
+    <div className="bg-white p-4 md:p-6 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full min-w-[750px] relative min-h-auto flex flex-col font-sans" style={{ maxWidth: '215.9mm' }} id="printable-area">
       
       {/* TAMBAHAN: Watermark Logo Sekolah (Transparan 4%) */}
       {settings?.logoUrl && (
@@ -6554,7 +6818,7 @@ function ArsipView({ archives, setArchives, settings }) {
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-teal-500"/> Arsip Slip Gaji ({selectedArchive.periode})</h3>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
-            <div className="overflow-y-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
+            <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
               {/* Slip Document dipanggil dengan data guru arsip lama, bukan data guru saat ini */}
               <SlipDocument teacher={selectedSlip} bulan={selectedArchive.periode} settings={settings} />
             </div>
@@ -7628,7 +7892,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji Saya</h3>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
-            <div className="overflow-y-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
+            <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
               {/* PERBAIKAN: Jika ada data historis yang dipilih, render itu. Jika tidak, render data bulan ini. */}
               {selectedHistorySlip ? (
                  <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
@@ -8303,7 +8567,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                 <TrendingUp size={16} className="text-indigo-500" /> Tren Take Home Pay Anda
               </h4>
               <div className="h-40 w-full relative">
-                <ResponsiveContainer width="100%" height="300%">
+                {/* 🪄 PERBAIKAN: Mengubah height dari 300% menjadi 100% agar tidak tumpang tindih */}
+                <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={[...riwayatAsli].reverse().slice(-6)} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.3} />
                     <XAxis dataKey="periode" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} dy={10} />
@@ -9113,37 +9378,54 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         <Settings size={140} className="absolute -right-10 -bottom-10 text-slate-300/50 dark:text-slate-600/30 transform rotate-12 pointer-events-none" />
       </div>
 
-      <div className="flex flex-col gap-6 flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
          
-         {/* Navigasi Tab Mendatar (Horizontal Tabs) */}
-         <div className="w-full bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 shrink-0">
-            <nav 
-               className="flex flex-row gap-2 overflow-x-auto pb-2 scroll-smooth touch-pan-x" 
-               style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
-            >
-              {settingTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTabSetting(tab.id)}
-                  className={`flex-1 flex items-center justify-center sm:justify-start gap-3 px-4 py-3 rounded-lg text-left transition-all duration-200 group min-w-[180px] shrink-0 ${
-                    activeTabSetting === tab.id
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-sm'
-                      : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white shadow-sm' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
-                    <tab.icon size={18} />
+         {/* Navigasi Tab Vertikal & Dropdown */}
+         <div className="w-full md:w-64 xl:w-72 shrink-0">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:sticky md:top-0">
+               
+               {/* Dropdown Mobile (Tampil di Layar Kecil) */}
+               <div className="md:hidden">
+                  <div className="relative">
+                     <select
+                        value={activeTabSetting}
+                        onChange={(e) => setActiveTabSetting(e.target.value)}
+                        className="w-full p-3.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none cursor-pointer"
+                     >
+                        {settingTabs.map(tab => (
+                           <option key={tab.id} value={tab.id}>{tab.label} - {tab.desc}</option>
+                        ))}
+                     </select>
+                     <ChevronDown size={18} className="absolute right-4 top-4 text-slate-500 pointer-events-none" />
                   </div>
-                  <div>
-                    <div className={`font-bold text-sm whitespace-nowrap ${activeTabSetting === tab.id ? 'text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white'}`}>{tab.label}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block mt-0.5 font-medium whitespace-nowrap">{tab.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </nav>
+               </div>
+
+               {/* Sidebar Desktop (Tampil di Layar Menengah ke Atas) */}
+               <nav className="hidden md:flex flex-col gap-1.5">
+                  {settingTabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTabSetting(tab.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
+                        activeTabSetting === tab.id
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-sm'
+                          : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      }`}
+                    >
+                      <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
+                        <tab.icon size={18} />
+                      </div>
+                      <div>
+                        <div className={`font-bold text-sm ${activeTabSetting === tab.id ? 'text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white'}`}>{tab.label}</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{tab.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+               </nav>
+            </div>
          </div>
 
-         {/* Area Konten Tab (Bawah Navigasi) */}
+         {/* Area Konten Tab */}
          <div className="flex-1 w-full bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col min-h-[500px]">
             
             {/* TAB: UMUM */}
