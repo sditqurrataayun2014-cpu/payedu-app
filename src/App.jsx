@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbx-31rSDBzdzEy5PHxmQx7v05CPN5xkLqxAlzkxgFSpZkOKZwdYIBWs4KfSIbZ_XVOd/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbzDynCy1eqEiiOUTCZ85zQJRlrWiJf-Fa9mDIUI676Dykega7Gcio_5Y9PWD3PCJWn4/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -5767,17 +5767,36 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       // 🪄 TAMBALAN CERDAS: Susun Data Arsip Terlebih Dahulu Sebelum Menembak ke Server
       const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t, settings).totalBersih, 0);
 
-      // OPTIMASI MEMORI TAHAP 1: Memangkas (*pruning*) array harian (31 elemen) yang memboroskan ruang penyimpanan lokal
+      // 🪄 OPTIMASI MEMORI SUPER KETAT: Memangkas data sensitif (Password, Rekening) & data panjang agar JSON muat di limit Google Sheets (50.000 karakter)
       const optimizedTeachers = teachers.map(t => {
-        const { payroll, ...restTeacher } = t;
-        const { jamMengajar, isNotified, isConfirmed, ...restPayroll } = payroll || {};
-        const { harian, ...restJamMengajar } = jamMengajar || {};
-        
         return {
-          ...restTeacher,
+          id: t.id,
+          name: t.name,
+          nipy: t.nipy,
+          gender: t.gender,
+          education: t.education,
+          status: t.status,
+          position: t.position,
+          tmt: t.tmt,
+          family: t.family,
           payroll: {
-            ...restPayroll,
-            jamMengajar: restJamMengajar // Disimpan tanpa rincian array 'harian'
+             tahunMasaKerja: t.payroll?.tahunMasaKerja,
+             tunjanganMasaKerjaManual: t.payroll?.tunjanganMasaKerjaManual,
+             jabatans: t.payroll?.jabatans,
+             pendidikan: t.payroll?.pendidikan,
+             kompetensi: t.payroll?.kompetensi,
+             keluarga: t.payroll?.keluarga,
+             disiplin: { telat: t.payroll?.disiplin?.telat, tarifHadir: t.payroll?.disiplin?.tarifHadir, tarifTelat: t.payroll?.disiplin?.tarifTelat },
+             insentifTambahan: t.payroll?.insentifTambahan,
+             potonganLainnya: t.payroll?.potonganLainnya,
+             kegiatanInsidental: t.payroll?.kegiatanInsidental,
+             jamMengajar: {
+                wajib: t.payroll?.jamMengajar?.wajib,
+                realisasi: t.payroll?.jamMengajar?.realisasi,
+                tarifJPL: t.payroll?.jamMengajar?.tarifJPL,
+                jsjm: t.payroll?.jamMengajar?.jsjm,
+                jamPlus: t.payroll?.jamMengajar?.jamPlus
+             }
           }
         };
       });
