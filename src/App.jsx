@@ -459,49 +459,67 @@ export default function App() {
         const localSettingsStr = localStorage.getItem('payedu_settings');
         const parsedLocal = localSettingsStr ? JSON.parse(localSettingsStr) : null;
 
-        // 🪄 PERBAIKAN 2: Sistem Penyelamat Data agar data ketikan manual tidak tertimpa server yang terlambat
         if (parsedLocal && parsedLocal.lastModified > (serverSettings.lastModified || 0)) {
             console.warn("🛡️ Data perangkat lebih baru! Mencegah penimpaan data.");
             serverSettings = parsedLocal;
             serverTeachers = localTeachers;
         }
-        // LOGIKA ANTI-HAPUS: 
-        // Jika server Google Sheet kosong (0) TAPI memori perangkat lokal punya data, JANGAN DIHAPUS!
-        // Paksa server untuk menarik (menyerap) data dari memori perangkat ini.
         else if (serverTeachers.length === 0 && localTeachers.length > 0) {
             serverTeachers = localTeachers;
-            
-            // Secara diam-diam tembak data lokal yang selamat ini ke server Google Sheets
-            postToGoogleSheets('SAVE_TEACHERS', serverTeachers)
-               .catch(e => console.error("Penyelamatan data gagal:", e));
-               
+            postToGoogleSheets('SAVE_TEACHERS', serverTeachers).catch(e => console.error("Penyelamatan data gagal:", e));
             console.warn("🛡️ Sistem Penyelamat Aktif: Mencegah penghapusan data lokal oleh server yang kosong.");
         }
+
+        // 🪄 TAMBALAN CERDAS: Tarik dan Sinkronisasi Arsip Lintas Perangkat
+        let serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : [];
+        const localArchivesStr = localStorage.getItem('payedu_archives');
+        const localArchives = localArchivesStr ? JSON.parse(localArchivesStr) : [];
+        if (serverArchives.length === 0 && localArchives.length > 0) {
+            serverArchives = localArchives;
+            // Paksa push arsip lokal dari laptop ke Cloud agar HP bisa membacanya
+            postToGoogleSheets('SAVE_ARCHIVES', serverArchives).catch(e => console.error("Penyelamatan arsip gagal:", e));
+        }
+
+        let serverFeedbacks = Array.isArray(data.data?.feedbacks) ? data.data.feedbacks : [];
+        const localFeedbacksStr = localStorage.getItem('payedu_feedbacks');
+        const localFeedbacks = localFeedbacksStr ? JSON.parse(localFeedbacksStr) : [];
+        if (serverFeedbacks.length === 0 && localFeedbacks.length > 0) {
+            serverFeedbacks = localFeedbacks;
+            postToGoogleSheets('SAVE_FEEDBACKS', serverFeedbacks).catch(e => console.error("Penyelamatan feedback gagal:", e));
+        }
+
+        let serverLogs = Array.isArray(data.data?.loginHistory) ? data.data.loginHistory : [];
+        const localLogsStr = localStorage.getItem('payedu_loginHistory');
+        const localLogs = localLogsStr ? JSON.parse(localLogsStr) : [];
+        if (serverLogs.length === 0 && localLogs.length > 0) {
+            serverLogs = localLogs;
+            postToGoogleSheets('SAVE_LOGS', serverLogs).catch(e => console.error("Penyelamatan log gagal:", e));
+        }
         
-        // CEK KONFLIK: Jika sedang background sync, periksa apakah stempel waktu server lebih baru
         if (isBackgroundSync) {
-          // TAMBALAN CERDAS 2: Beri toleransi waktu 5 detik (5000ms) untuk mencegah konflik palsu akibat delay server Google
           if (serverSettings.lastModified > (generalSettings.lastModified + 5000)) {
-             setHasConflict(true); // Kunci Auto-Save!
-             return; // Hentikan proses penimpaan state lokal
+             setHasConflict(true); 
+             return; 
           }
         } else {
           setGeneralSettings(serverSettings);
-          setTeachers(serverTeachers); // Terapkan data (walaupun kosong) ke sistem
-          setHasConflict(false); // Buka kunci setelah sinkronisasi manual berhasil
+          setTeachers(serverTeachers); 
+          // 🪄 Terapkan arsip & data pelengkap dari Cloud ke State Aplikasi HP Anda
+          setArchives(serverArchives);
+          setFeedbacks(serverFeedbacks);
+          setLoginHistory(serverLogs);
+          setHasConflict(false); 
         }
       }
     } catch (err) {
-      // 🪄 TAMBALAN CERDAS: Menyembunyikan error gagal ambil (Failed to fetch) agar tidak merah di console
       console.warn("[Info Cloud] Menggunakan basis data LocalStorage karena URL Google Sheets belum dapat diakses.");
-      setHasConflict(false); // Pastikan layar tidak terkunci (blur)
+      setHasConflict(false); 
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
       setIsDataLoaded(true);
     }
   };
 
-  // Mengambil data dari Google Sheets saat aplikasi pertama kali dimuat
   useEffect(() => {
     fetchCloudData();
   }, []);
@@ -614,25 +632,28 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict]);
 
+  // 🪄 TAMBALAN CERDAS: Push Otomatis ke Cloud setiap ada perubahan di Arsip, Feedback, atau Log
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_feedbacks', JSON.stringify(feedbacks));
+      if (feedbacks.length > 0) postToGoogleSheets('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
     }
   }, [feedbacks, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_loginHistory', JSON.stringify(loginHistory));
+      if (loginHistory.length > 0) postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
     }
   }, [loginHistory, isDataLoaded, hasConflict]);
 
   useEffect(() => {
     if (isDataLoaded && !hasConflict) {
       safeStorageSet('payedu_archives', JSON.stringify(archives));
+      if (archives.length > 0) postToGoogleSheets('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
     }
   }, [archives, isDataLoaded, hasConflict]);
 
-  // FITUR BARU 2: Keamanan Sesi Berwaktu (Auto-Logout) selama 15 Menit Inaktif
   useEffect(() => {
     if (!user) return;
 
