@@ -68,18 +68,14 @@ const calculatePayroll = (teacher, settings) => {
   let tMasaKerja = 0;
   const tmtYear = new Date(teacher.tmt || new Date()).getFullYear();
   
-  // 🪄 PERBAIKAN: Tunjangan Masa Kerja HANYA untuk pegawai Tetap
-  if (!isTetap) {
+  // 🪄 PERBAIKAN: Tunjangan Masa Kerja bisa di-edit manual (override) mutlak oleh Admin
+  let manualTenure = p.tunjanganMasaKerjaManual;
+  if (manualTenure !== undefined && manualTenure !== null && manualTenure !== "") {
+    tMasaKerja = Number(manualTenure) || 0; 
+  } else if (!isTetap) {
     tMasaKerja = 0;
   } else {
-    let manualTenure = p.tunjanganMasaKerjaManual;
-    if (manualTenure === 0) manualTenure = '';
-
-    if (manualTenure !== undefined && manualTenure !== null && manualTenure !== "") {
-      tMasaKerja = Number(manualTenure) || 0; 
-    } else {
-      tMasaKerja = (settings?.masterRates?.TENURE_RATES || TENURE_RATES)[tmtYear] || 0;
-    }
+    tMasaKerja = (settings?.masterRates?.TENURE_RATES || TENURE_RATES)[tmtYear] || 0;
   }
 
   const tJabatan = (p.jabatans || []).reduce((sum, j) => sum + (Number(j.nominal) || 0), 0);
@@ -4727,7 +4723,6 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                     
                     {/* 1. MASA KERJA */}
                     {activeTabGaji === 'masaKerja' && (
-                      t.status === 'Tetap' ? (
                         <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in zoom-in-95 items-end">
                           <div className="w-full sm:w-1/4">
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-emerald-600 dark:text-emerald-400">Tahun Masuk (TMT)</label>
@@ -4752,27 +4747,31 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                           </div>
                           
                           <div className="w-full sm:w-1/3">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nominal Override</label>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex justify-between">
+                              <span>Nominal Override</span>
+                              {t.status !== 'Tetap' && <span className="text-amber-500 flex items-center gap-1"><Edit size={10}/> Khusus Manual</span>}
+                            </label>
                             <div className="relative">
                                <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
                                <input type="number" 
-                                 value={(p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '' && p.tunjanganMasaKerjaManual !== 0) ? p.tunjanganMasaKerjaManual : ((settings?.masterRates?.TENURE_RATES || TENURE_RATES)[new Date(t.tmt || new Date()).getFullYear()] || 0)}
+                                 value={(p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '') ? p.tunjanganMasaKerjaManual : (t.status === 'Tetap' ? ((settings?.masterRates?.TENURE_RATES || TENURE_RATES)[new Date(t.tmt || new Date()).getFullYear()] || 0) : '')}
                                  onChange={e => {
                                     const newVal = e.target.value === '' ? '' : Number(e.target.value);
                                     if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja', p.tunjanganMasaKerjaManual || 0, newVal);
                                     setTeachers(prev => prev.map(tc => tc.id === t.id ? { ...tc, payroll: { ...tc.payroll, tunjanganMasaKerjaManual: newVal } } : tc));
                                  }}
-                                 className="w-full pl-10 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
+                                 className={`w-full pl-10 pr-3 py-2.5 border rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${t.status !== 'Tetap' && (p.tunjanganMasaKerjaManual === undefined || p.tunjanganMasaKerjaManual === '') ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white'}`}
+                                 placeholder={t.status === 'Tetap' ? '' : '0 (Default Tidak Tetap)'}
                                />
                             </div>
                           </div>
+
+                          {t.status !== 'Tetap' && (
+                             <div className="hidden lg:flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-800 text-xs font-medium">
+                                <Info size={14} className="shrink-0"/> Non-Tetap: Isi "Override" untuk memberi tunjangan manual.
+                             </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-center p-5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95">
-                           <Lock className="text-slate-400 dark:text-slate-500 mr-3" size={24} />
-                           <p className="text-sm font-bold text-slate-500 dark:text-slate-400">Tunjangan Masa Kerja Terkunci (Hanya Pegawai Tetap)</p>
-                        </div>
-                      )
                     )}
 
                     {/* 2. JABATAN */}
