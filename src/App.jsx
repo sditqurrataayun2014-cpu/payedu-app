@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxDjbm0ZMEOS7CsqUoqnRkPceTFIimEMFiHQKwxKYwig9RZvv0buI3P5PCzQj_BUZn7/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -422,7 +422,7 @@ export default function App() {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
       
-      // 🪄 PERBAIKAN 1: Tambahkan anti-cache agar Browser selalu menarik data PALING BARU, bukan data usang dari cache
+      // 🪄 PERBAIKAN 1: Tambahkan anti-cache agar Browser selalu menarik data PALING BARU
       const res = await fetch(`${GOOGLE_SHEETS_API_URL}?t=${Date.now()}`, { cache: 'no-store' });
       
       if (!res.ok) throw new Error("Network response was not ok");
@@ -430,89 +430,36 @@ export default function App() {
       const data = JSON.parse(text);
       
       if (data.status === 'success') {
-        // PERBAIKAN BUG: Melindungi Pengaturan Sistem agar tidak terhapus jika Google Sheet dikosongkan manual
-        let serverSettings = defaultGeneralSettings;
-        
-        if (data.data?.settings && Object.keys(data.data.settings).length > 0) {
-            serverSettings = data.data.settings;
-        } else {
-            // Jika server kehilangan data pengaturan, pulihkan dari memori lokal (Failsafe Cerdas)
-            const localSettingsStr = localStorage.getItem('payedu_settings');
-            if (localSettingsStr) {
-                const parsedLocal = JSON.parse(localSettingsStr);
-                if (parsedLocal && parsedLocal.appName) {
-                    serverSettings = parsedLocal;
-                    // Kirim ulang ke server secara diam-diam agar JSON Google Sheet kembali normal
-                    postToGoogleSheets('SAVE_SETTINGS', { ...serverSettings, lastModified: Date.now() })
-                        .catch(e => console.error("Failsafe save settings error:", e));
-                }
-            }
-        }
-        
-        // 🛡️ TAMBALAN CERDAS (SISTEM PENYELAMAT DATA MUTLAK) 🛡️
-        let serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
-        
-        // Cek isi memori lokal di browser saat ini
-        const localTeachersStr = localStorage.getItem('payedu_teachers');
-        const localTeachers = localTeachersStr ? JSON.parse(localTeachersStr) : [];
-        
-        const localSettingsStr = localStorage.getItem('payedu_settings');
-        const parsedLocal = localSettingsStr ? JSON.parse(localSettingsStr) : null;
-
-        if (parsedLocal && parsedLocal.lastModified > (serverSettings.lastModified || 0)) {
-            console.warn("🛡️ Data perangkat lebih baru! Mencegah penimpaan data.");
-            serverSettings = parsedLocal;
-            serverTeachers = localTeachers;
-        }
-        else if (serverTeachers.length === 0 && localTeachers.length > 0) {
-            serverTeachers = localTeachers;
-            postToGoogleSheets('SAVE_TEACHERS', serverTeachers).catch(e => console.error("Penyelamatan data gagal:", e));
-            console.warn("🛡️ Sistem Penyelamat Aktif: Mencegah penghapusan data lokal oleh server yang kosong.");
-        }
-
-        // 🪄 TAMBALAN CERDAS: Tarik dan Sinkronisasi Arsip Lintas Perangkat
-        let serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : [];
-        const localArchivesStr = localStorage.getItem('payedu_archives');
-        const localArchives = localArchivesStr ? JSON.parse(localArchivesStr) : [];
-        if (serverArchives.length === 0 && localArchives.length > 0) {
-            serverArchives = localArchives;
-            // Paksa push arsip lokal dari laptop ke Cloud agar HP bisa membacanya
-            postToGoogleSheets('SAVE_ARCHIVES', serverArchives).catch(e => console.error("Penyelamatan arsip gagal:", e));
-        }
-
-        let serverFeedbacks = Array.isArray(data.data?.feedbacks) ? data.data.feedbacks : [];
-        const localFeedbacksStr = localStorage.getItem('payedu_feedbacks');
-        const localFeedbacks = localFeedbacksStr ? JSON.parse(localFeedbacksStr) : [];
-        if (serverFeedbacks.length === 0 && localFeedbacks.length > 0) {
-            serverFeedbacks = localFeedbacks;
-            postToGoogleSheets('SAVE_FEEDBACKS', serverFeedbacks).catch(e => console.error("Penyelamatan feedback gagal:", e));
-        }
-
-        let serverLogs = Array.isArray(data.data?.loginHistory) ? data.data.loginHistory : [];
-        const localLogsStr = localStorage.getItem('payedu_loginHistory');
-        const localLogs = localLogsStr ? JSON.parse(localLogsStr) : [];
-        if (serverLogs.length === 0 && localLogs.length > 0) {
-            serverLogs = localLogs;
-            postToGoogleSheets('SAVE_LOGS', serverLogs).catch(e => console.error("Penyelamatan log gagal:", e));
-        }
+        const serverSettings = data.data?.settings && Object.keys(data.data.settings).length > 0 ? data.data.settings : defaultGeneralSettings;
+        const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
+        const serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : [];
+        const serverFeedbacks = Array.isArray(data.data?.feedbacks) ? data.data.feedbacks : [];
+        const serverLogs = Array.isArray(data.data?.loginHistory) ? data.data.loginHistory : [];
         
         if (isBackgroundSync) {
-          if (serverSettings.lastModified > (generalSettings.lastModified + 5000)) {
+          if (serverSettings.lastModified > (generalSettings.lastModified + 5000) && !isPushingDataRef.current) {
              setHasConflict(true); 
              return; 
           }
         } else {
+          // 🪄 PERBAIKAN MUTLAK: SERVER ADALAH RAJA (Tolak semua perlawanan memori lokal)
           setGeneralSettings(serverSettings);
           setTeachers(serverTeachers); 
-          // 🪄 Terapkan arsip & data pelengkap dari Cloud ke State Aplikasi HP Anda
           setArchives(serverArchives);
           setFeedbacks(serverFeedbacks);
           setLoginHistory(serverLogs);
+          
+          safeStorageSet('payedu_settings', JSON.stringify(serverSettings));
+          safeStorageSet('payedu_teachers', JSON.stringify(serverTeachers));
+          safeStorageSet('payedu_archives', JSON.stringify(serverArchives));
+          safeStorageSet('payedu_feedbacks', JSON.stringify(serverFeedbacks));
+          safeStorageSet('payedu_loginHistory', JSON.stringify(serverLogs));
+          
           setHasConflict(false); 
         }
       }
     } catch (err) {
-      console.warn("[Info Cloud] Menggunakan basis data LocalStorage karena URL Google Sheets belum dapat diakses.");
+      console.warn("[Info Cloud] Gagal menjangkau server. Menggunakan data sisa di LocalStorage.", err);
       setHasConflict(false); 
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
@@ -524,16 +471,15 @@ export default function App() {
     fetchCloudData();
   }, []);
 
-  // TAMBAHAN: Radar Latar Belakang (Polling) mengecek versi data
+  // Radar Latar Belakang (Polling) mengecek versi data
   useEffect(() => {
-    if (!isDataLoaded || !user || hasConflict) return; // Jangan polling jika belum login atau sedang konflik
+    if (!isDataLoaded || !user || hasConflict) return; 
 
     const pollInterval = setInterval(() => {
-       // TAMBALAN CERDAS 3: Jangan tarik data jika aplikasi kita sendiri sedang sibuk nge-push data ke server
        if (!isPushingDataRef.current) {
-          fetchCloudData(true); // Lakukan background check
+          fetchCloudData(true); 
        }
-    }, 45000); // DIPERLAMA: Dari 15 detik menjadi 45 detik agar lalu lintas jaringan ke Google Sheet lebih stabil
+    }, 45000); 
 
     return () => clearInterval(pollInterval);
   }, [isDataLoaded, user, generalSettings.lastModified, hasConflict]);
@@ -542,7 +488,6 @@ export default function App() {
   useEffect(() => {
     if (!isDataLoaded || hasConflict || teachers.length === 0) return;
     
-    // Cek apakah masih ada ID yang berformat acak (G-xxxx)
     const needsMigration = teachers.some(t => String(t.id).includes('-') || String(t.id).length > 8);
     
     if (needsMigration) {
@@ -551,8 +496,6 @@ export default function App() {
           const paddedNumber = String(index + 1).padStart(2, '0');
           return { ...t, id: `G${paddedNumber}QA` };
        });
-       
-       // Menyimpan state otomatis memicu auto-save ke Google Sheets & sinkronisasi akun
        setTeachers(updatedTeachers);
        alert("✨ PEMBARUAN SISTEM: Seluruh ID & Username Pegawai telah berhasil dirapikan menjadi format berurutan (G01QA, G02QA, dst) secara otomatis!");
     }
@@ -566,7 +509,6 @@ export default function App() {
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
-    // Mencegah Infinite Loop: Abaikan jika yang berubah HANYA stempel waktu (lastModified)
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
     if (lastSavedSettingsRef.current === currentDataStr) return;
     lastSavedSettingsRef.current = currentDataStr;
@@ -575,10 +517,9 @@ export default function App() {
     setSyncStatus('syncing');
 
     const payloadWithTime = { ...generalSettings, lastModified: Date.now() };
-    // Update state lokal, tapi loop akan terhenti di iterasi berikutnya berkat `lastSavedSettingsRef`
     setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
 
-    isPushingDataRef.current = true; // Kunci Radar Background
+    isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
       postToGoogleSheets('SAVE_SETTINGS', payloadWithTime)
@@ -588,7 +529,6 @@ export default function App() {
          setSyncStatus('error');
       })
       .finally(() => {
-         // Buka kunci radar setelah 3 detik untuk memastikan Sheets sudah stabil menyerap data
          setTimeout(() => { isPushingDataRef.current = false; }, 3000);
       });
     }, 1500);
@@ -599,7 +539,6 @@ export default function App() {
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
 
-    // Mencegah Infinite Loop pada data Pegawai
     const currentTeachersStr = JSON.stringify(teachers);
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
     lastSavedTeachersRef.current = currentTeachersStr;
@@ -609,14 +548,13 @@ export default function App() {
 
     const newTimestamp = Date.now();
     
-    // 🪄 PERBAIKAN MUTLAK 1: Gunakan 'prev' state untuk mencegah bug penimpaan (Stale Closure)
     setGeneralSettings(prev => {
        const newSettings = { ...prev, lastModified: newTimestamp };
        safeStorageSet('payedu_settings', JSON.stringify(newSettings));
        return newSettings;
     });
 
-    isPushingDataRef.current = true; // Kunci Radar Background
+    isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
       postToGoogleSheets('SAVE_TEACHERS', teachers)
@@ -9857,24 +9795,43 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
      setConfirmResetDb({ isOpen: true, keyword: '' });
   };
 
-  const executeResetDatabase = () => {
-     if (confirmResetDb.keyword === 'RESET PEGAWAI') {
+  // 🪄 PERBAIKAN MUTLAK: FACTORY RESET (Sapu bersih lokal & server)
+  const executeResetDatabase = async () => {
+     if (confirmResetDb.keyword === 'RESET TOTAL') {
+        setIsSaving(true);
+        
+        // 1. Kosongkan Data di Tampilan (State)
         setTeachers([]);
+        if(setArchives) setArchives([]);
+        if(setFeedbacks) setFeedbacks([]);
+        if(setLoginHistory) setLoginHistory([]);
+
+        // 2. Sapu Bersih Memori Lokal (LocalStorage) di Laptop yang sedang dipakai
+        localStorage.removeItem('payedu_teachers');
+        localStorage.removeItem('payedu_archives');
+        localStorage.removeItem('payedu_feedbacks');
+        localStorage.removeItem('payedu_loginHistory');
+
         setConfirmResetDb({ isOpen: false, keyword: '' });
         
-        // TAMBALAN CERDAS: Memaksa penyimpanan ulang settings sesaat setelah reset
-        // Mencegah bug di mana backend Google Apps Script secara tidak sengaja menghapus setting saat array guru kosong
-        setTimeout(() => {
-           const payloadWithTime = { ...settings, lastModified: Date.now() };
-           fetch(GOOGLE_SHEETS_API_URL, {
-             method: 'POST',
-             body: JSON.stringify({ action: 'SAVE_SETTINGS', payload: payloadWithTime })
-           }).catch(e => console.error("Gagal menyelamatkan pengaturan:", e));
-        }, 500);
-
-        setTimeout(() => alert("Proses eksekusi berhasil. Seluruh data pegawai telah dibersihkan dari database, namun Pengaturan Logo & Sekolah tetap aman!"), 300);
+        // 3. Tembak Perintah Sapu Bersih ke Server (Google Sheets)
+        try {
+           await Promise.allSettled([
+              postToGoogleSheets('SAVE_TEACHERS', []),
+              postToGoogleSheets('SAVE_ARCHIVES', []),
+              postToGoogleSheets('SAVE_FEEDBACKS', []),
+              postToGoogleSheets('SAVE_LOGS', [])
+           ]);
+           setIsSaving(false);
+           alert("✨ FACTORY RESET BERHASIL! ✨\n\nSeluruh data pegawai, arsip, dan riwayat di perangkat ini maupun di Server Cloud telah dibersihkan secara total.\n\nAplikasi Anda kini kembali seperti baru pertama kali digunakan!");
+           window.location.reload(); // Muat ulang paksa halaman
+        } catch (e) {
+           setIsSaving(false);
+           alert("Gagal terhubung ke server, namun memori perangkat ini telah dibersihkan.");
+           window.location.reload();
+        }
      } else {
-        alert("Reset dibatalkan. Konfirmasi ketikan tidak sesuai.");
+        alert("Reset dibatalkan. Kata kunci yang Anda ketik salah. Pastikan mengetik: RESET TOTAL");
      }
   };
 
@@ -9906,6 +9863,47 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
              <AlertCircle size={24} className="shrink-0" />
              <p className="text-sm font-medium">{notification.message}</p>
              <button onClick={() => setNotification({ isOpen: false, type: '', message: '' })} className="p-1 hover:bg-black/10 rounded-full transition-colors ml-auto"><X size={16}/></button>
+          </div>
+        </div>
+      )}
+
+      {/* 🪄 MODAL BARU: KONFIRMASI FACTORY RESET DATABASE */}
+      {confirmResetDb.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border-2 border-red-500">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-slate-800 shadow-sm">
+                <Trash2 size={36} />
+              </div>
+              <h3 className="text-xl font-black dark:text-white mb-2 text-red-600">FACTORY RESET (BAHAYA)</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 leading-relaxed">
+                Tindakan ini akan <strong>MENGHAPUS PERMANEN</strong> seluruh data Pegawai, Rekap Gaji, Arsip Bulan Lalu, dan Riwayat Login dari Server dan Perangkat ini. Aplikasi akan kembali kosong seperti baru.
+              </p>
+              
+              <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800/50 mt-4 text-left">
+                 <label className="block text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wider mb-2">
+                    Ketik <span className="bg-red-200 dark:bg-red-800 px-1.5 py-0.5 rounded text-black dark:text-white">RESET TOTAL</span> untuk melanjutkan:
+                 </label>
+                 <input 
+                    type="text" 
+                    value={confirmResetDb.keyword}
+                    onChange={(e) => setConfirmResetDb({...confirmResetDb, keyword: e.target.value})}
+                    placeholder="Ketik di sini..."
+                    className="w-full p-3 border border-red-300 dark:border-red-600 rounded-lg text-sm font-black focus:ring-2 focus:ring-red-500 outline-none text-center"
+                 />
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setConfirmResetDb({ isOpen: false, keyword: '' })} className="px-5 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors w-full">Batal</button>
+              <button 
+                onClick={executeResetDatabase} 
+                disabled={isSaving || confirmResetDb.keyword !== 'RESET TOTAL'}
+                className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-md transition-colors w-full flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? <RefreshCw size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                {isSaving ? 'Menyapu Bersih...' : 'Ya, Sapu Bersih!'}
+              </button>
+            </div>
           </div>
         </div>
       )}
