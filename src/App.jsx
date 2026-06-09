@@ -6257,6 +6257,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   const [isConfirmArchiveOpen, setIsConfirmArchiveOpen] = useState(false);
   const [isConfirmAjukanOpen, setIsConfirmAjukanOpen] = useState(false);
   const [isConfirmNotifMassalOpen, setIsConfirmNotifMassalOpen] = useState(false); // Modal Notif Massal
+  const [isSendingNotif, setIsSendingNotif] = useState(false); // 🪄 TAMBAHAN: State Loading Notif
   const [isConfirmClearHistoryOpen, setIsConfirmClearHistoryOpen] = useState(false); // TAMBAHAN: Modal Bersihkan Riwayat
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
   
@@ -6336,15 +6337,26 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     }));
   };
 
-  const handleKirimNotif = (id) => {
+  const handleKirimNotif = async (id) => {
     if(settings?.payrollStatus !== 'Approved') {
        setNotification({ isOpen: true, type: 'error', message: 'Akses Ditolak: Gaji belum disetujui (Approved) oleh Kepala Sekolah.' });
        return;
     }
-    setTeachers(prev => prev.map(t => 
+    const updatedTeachers = teachers.map(t => 
       t.id === id ? { ...t, payroll: { ...t.payroll, isNotified: true, isConfirmed: false } } : t
-    ));
-    setNotification({ isOpen: true, type: 'success', message: 'Notifikasi transfer gaji berhasil dikirim ke portal guru.' });
+    );
+    
+    setTeachers(updatedTeachers);
+
+    try {
+        // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga
+        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        setNotification({ isOpen: true, type: 'success', message: 'Notifikasi transfer gaji berhasil dikirim ke portal guru.' });
+    } catch (e) {
+        console.error(e);
+        setNotification({ isOpen: true, type: 'error', message: 'Gagal sinkronisasi ke Cloud. Pastikan koneksi Anda stabil.' });
+    }
   };
 
   // TAMBAHAN: Fungsi Pengiriman Notifikasi Massal
@@ -6356,16 +6368,33 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     setIsConfirmNotifMassalOpen(true);
   };
 
-  const executeKirimNotifMassal = () => {
-    setIsConfirmNotifMassalOpen(false);
-    setTeachers(prev => prev.map(t => {
+  const executeKirimNotifMassal = async () => {
+    setIsSendingNotif(true);
+
+    const updatedTeachers = teachers.map(t => {
       // Hanya kirim notif jika status guru belum mengonfirmasi penerimaan
       if (!t.payroll?.isConfirmed) {
         return { ...t, payroll: { ...t.payroll, isNotified: true, isConfirmed: false } };
       }
       return t;
-    }));
-    setNotification({ isOpen: true, type: 'success', message: 'Luar Biasa! Notifikasi berhasil dikirim secara massal ke portal seluruh guru.' });
+    });
+    
+    setTeachers(updatedTeachers);
+
+    try {
+        // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga secara Massal
+        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        
+        setIsConfirmNotifMassalOpen(false);
+        setNotification({ isOpen: true, type: 'success', message: 'Luar Biasa! Notifikasi berhasil dikirim secara massal ke portal seluruh guru dan disinkronkan ke server.' });
+    } catch (e) {
+        console.error(e);
+        setIsConfirmNotifMassalOpen(false);
+        setNotification({ isOpen: true, type: 'error', message: 'Gagal sinkronisasi ke Cloud. Pastikan koneksi Anda stabil.' });
+    } finally {
+        setIsSendingNotif(false);
+    }
   };
 
   // PERBAIKAN: Mengganti window.confirm dengan modal custom
@@ -6373,16 +6402,21 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
      setIsConfirmAjukanOpen(true);
   };
 
-  const executeAjukanApproval = () => {
+  const executeAjukanApproval = async () => {
      setIsConfirmAjukanOpen(false);
      
      // PERBAIKAN: Paksa simpan langsung ke Local Storage dan Server agar permanen tanpa jeda (bypass debounce)
      const newSettings = { ...settings, payrollStatus: 'Pending', lastModified: Date.now() };
      setSettings(newSettings);
      safeStorageSet('payedu_settings', JSON.stringify(newSettings));
-     postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan ajuan ke server:", e));
      
-     setNotification({ isOpen: true, type: 'success', message: 'Draft Gaji berhasil diajukan! Status telah dikunci ke server.' });
+     try {
+         await postToGoogleSheets('SAVE_SETTINGS', newSettings);
+         setNotification({ isOpen: true, type: 'success', message: 'Draft Gaji berhasil diajukan! Status telah dikunci ke server.' });
+     } catch (e) {
+         console.error("Gagal simpan ajuan ke server:", e);
+         setNotification({ isOpen: true, type: 'error', message: 'Gagal sinkronisasi ke server. Pastikan koneksi internet stabil.' });
+     }
   };
 
   const handleArchive = () => {
@@ -6745,9 +6779,10 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               </p>
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
-              <button onClick={() => setIsConfirmNotifMassalOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
-              <button onClick={executeKirimNotifMassal} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
-                <BellRing size={16} /> Ya, Kirim Semua
+              <button onClick={() => setIsConfirmNotifMassalOpen(false)} disabled={isSendingNotif} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full disabled:opacity-70">Batal</button>
+              <button onClick={executeKirimNotifMassal} disabled={isSendingNotif} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2 disabled:opacity-70">
+                {isSendingNotif ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <BellRing size={16} />}
+                {isSendingNotif ? 'Mengirim...' : 'Ya, Kirim Semua'}
               </button>
             </div>
           </div>
