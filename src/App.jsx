@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxRssJ5O8glh7Ue2f-8lUsCviCM8WMoIhyG3NCLifowPPbe-hh51-CqvJzaj4gfa_XY/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxDjbm0ZMEOS7CsqUoqnRkPceTFIimEMFiHQKwxKYwig9RZvv0buI3P5PCzQj_BUZn7/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -349,15 +349,14 @@ export default function App() {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [syncStatus, setSyncStatus] = useState('synced');
   const [hasConflict, setHasConflict] = useState(false);
-  const isPushingDataRef = useRef(false);
 
-  // 🪄 PERBAIKAN MUTLAK: Deklarasi Kunci Pelatuk (Ref) Terpusat Sejak Detik Pertama
-  // Mengunci senjata Auto-Save agar tidak menembak data kosong ke server saat Hard Refresh
-  const lastSavedSettingsRef = useRef(JSON.stringify({ ...generalSettings, lastModified: 0 }));
-  const lastSavedTeachersRef = useRef(JSON.stringify(teachers));
-  const lastSavedArchivesRef = useRef(JSON.stringify(archives));
-  const lastSavedFeedbacksRef = useRef(JSON.stringify(feedbacks));
-  const lastSavedLogsRef = useRef(JSON.stringify(loginHistory));
+  // 🪄 PERBAIKAN MUTLAK: Mengembalikan dan mendeklarasikan SEMUA Kunci Pelatuk (Ref) Terpusat
+  const isPushingDataRef = useRef(false);
+  const lastSavedSettingsRef = useRef('');
+  const lastSavedTeachersRef = useRef('');
+  const lastSavedArchivesRef = useRef('');
+  const lastSavedFeedbacksRef = useRef('');
+  const lastSavedLogsRef = useRef('');
 
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
