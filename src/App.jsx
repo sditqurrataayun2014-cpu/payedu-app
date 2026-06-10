@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxRssJ5O8glh7Ue2f-8lUsCviCM8WMoIhyG3NCLifowPPbe-hh51-CqvJzaj4gfa_XY/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -351,6 +351,14 @@ export default function App() {
   const [hasConflict, setHasConflict] = useState(false);
   const isPushingDataRef = useRef(false);
 
+  // 🪄 PERBAIKAN MUTLAK: Deklarasi Kunci Pelatuk (Ref) Terpusat Sejak Detik Pertama
+  // Mengunci senjata Auto-Save agar tidak menembak data kosong ke server saat Hard Refresh
+  const lastSavedSettingsRef = useRef(JSON.stringify({ ...generalSettings, lastModified: 0 }));
+  const lastSavedTeachersRef = useRef(JSON.stringify(teachers));
+  const lastSavedArchivesRef = useRef(JSON.stringify(archives));
+  const lastSavedFeedbacksRef = useRef(JSON.stringify(feedbacks));
+  const lastSavedLogsRef = useRef(JSON.stringify(loginHistory));
+
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
@@ -505,10 +513,6 @@ export default function App() {
        alert("✨ PEMBARUAN SISTEM: Seluruh ID & Username Pegawai telah berhasil dirapikan menjadi format berurutan (G01QA, G02QA, dst) secara otomatis!");
     }
   }, [isDataLoaded, teachers, hasConflict]);
-
-  // TAMBAHAN: Ref untuk mencegah infinite loop pada Auto-Save
-  const lastSavedSettingsRef = useRef('');
-  const lastSavedTeachersRef = useRef('');
 
   // Menyimpan pengaturan ke browser dan Google Sheets secara otomatis (Debounce 1.5 detik)
   useEffect(() => {
@@ -7326,15 +7330,31 @@ function ArsipView({ archives, setArchives, settings }) {
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState(null);
   
-  // TAMBAHAN NO 3: State Loading PDF
   const [isExportingPDF, setIsExportingPDF] = useState(false);
-  
-  // TAMBAHAN: Custom Modal Hapus Arsip
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
+  const [confirmPurge, setConfirmPurge] = useState(false);
 
-  const filteredArchives = (archives || []).filter(arc => 
-    arc.periode.toLowerCase().includes(search.toLowerCase())
-  );
+  // 🪄 FITUR BARU: Pemisahan Tahun Dinamis (Auto-Archiving Tahunan)
+  const availableYears = useMemo(() => {
+    const ySet = new Set();
+    (archives || []).forEach(arc => {
+       const parts = arc.periode.split(' ');
+       // Ambil bagian tahun (misal: "Mei 2024" -> "2024")
+       if (parts.length > 1) ySet.add(parts[1]);
+    });
+    const arr = Array.from(ySet).sort().reverse();
+    return arr.length > 0 ? arr : [new Date().getFullYear().toString()];
+  }, [archives]);
+
+  const [activeYear, setActiveYear] = useState(availableYears[0]);
+
+  // Filter Arsip Berdasarkan Pencarian dan Tab Tahun Aktif
+  const filteredArchives = (archives || []).filter(arc => {
+    const matchSearch = arc.periode.toLowerCase().includes(search.toLowerCase());
+    const parts = arc.periode.split(' ');
+    const matchYear = parts.length > 1 ? parts[1] === activeYear : false;
+    return matchSearch && matchYear;
+  });
 
   const handleDeleteArchive = (id) => {
     setConfirmDelete({ isOpen: true, id });
@@ -7344,6 +7364,40 @@ function ArsipView({ archives, setArchives, settings }) {
     setArchives(prev => prev.filter(arc => arc.id !== confirmDelete.id));
     if(selectedArchive?.id === confirmDelete.id) setSelectedArchive(null);
     setConfirmDelete({ isOpen: false, id: null });
+  };
+
+  // 🪄 FITUR BARU: Ekspor Full Database 1 Tahun ke JSON
+  const handleBackupYearly = () => {
+     const yearData = (archives || []).filter(arc => arc.periode.includes(activeYear));
+     if(yearData.length === 0) return alert('Tidak ada data arsip untuk tahun ini.');
+
+     const backupData = {
+        appName: settings.appName,
+        timestamp: new Date().toISOString(),
+        type: 'YEARLY_DATABASE_ARCHIVE',
+        year: activeYear,
+        totalMonths: yearData.length,
+        archives: yearData
+     };
+     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+     const url = URL.createObjectURL(blob);
+     const link = document.createElement('a');
+     link.href = url;
+     link.setAttribute('download', `DB_ARSIP_GAJI_FULL_${activeYear}.json`);
+     document.body.appendChild(link);
+     link.click();
+     document.body.removeChild(link);
+
+     alert(`✅ Backup Database Tahun ${activeYear} Berhasil!\n\nFile JSON telah diunduh. Simpan file ini baik-baik ke dalam Harddisk/Google Drive Anda sebagai arsip offline permanen sekolah.`);
+  };
+
+  // 🪄 FITUR BARU: Tutup Buku Tahunan (Hapus dari Server untuk menjaga performa kilat)
+  const executePurgeYear = () => {
+     const newArchives = (archives || []).filter(arc => !arc.periode.includes(activeYear));
+     setArchives(newArchives);
+     setConfirmPurge(false);
+     alert(`🚀 Pembersihan Server Berhasil!\n\nData tahun ${activeYear} telah dihapus dari memori server Google Sheets secara permanen. Aplikasi Anda sekarang akan berjalan jauh lebih ringan dan secepat kilat!`);
+     // Catatan: Efek useEffect utama di App.jsx akan otomatis me-lempar state 'newArchives' ini ke Google Sheets!
   };
 
   const handleExportCSV = (archive) => {
@@ -7421,7 +7475,7 @@ function ArsipView({ archives, setArchives, settings }) {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       
-      {/* MODAL KONFIRMASI HAPUS ARSIP */}
+      {/* MODAL KONFIRMASI HAPUS ARSIP 1 BULAN */}
       {confirmDelete.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
@@ -7444,6 +7498,29 @@ function ArsipView({ archives, setArchives, settings }) {
         </div>
       )}
 
+      {/* MODAL KONFIRMASI PURGE (BERSIHKAN 1 TAHUN FULL) */}
+      {confirmPurge && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-slate-800">
+                <Archive size={36} />
+              </div>
+              <h3 className="text-xl font-black dark:text-white mb-2 text-red-600">Hapus Data Tahun {activeYear}?</h3>
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm leading-relaxed">
+                Pastikan Anda telah melakukan <strong className="text-slate-700 dark:text-slate-200">"Backup Database"</strong> terlebih dahulu. Tindakan ini akan mengosongkan memori Server Google Sheets dari seluruh arsip tahun {activeYear} agar performa aplikasi kembali secepat kilat.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">
+              <button onClick={() => setConfirmPurge(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors w-full">Batal</button>
+              <button onClick={executePurgeYear} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors w-full flex justify-center items-center gap-2">
+                <Trash2 size={16} /> Ya, Kosongkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Cetak Ulang Slip Gaji */}
       {isSlipModalOpen && selectedSlip && selectedArchive && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -7453,7 +7530,6 @@ function ArsipView({ archives, setArchives, settings }) {
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
             <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
-              {/* Slip Document dipanggil dengan data guru arsip lama, bukan data guru saat ini */}
               <SlipDocument teacher={selectedSlip} bulan={selectedArchive.periode} settings={settings} />
             </div>
             <div className="p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
@@ -7486,24 +7562,57 @@ function ArsipView({ archives, setArchives, settings }) {
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Archive className="text-teal-100" /> Manajemen Arsip Gaji</h1>
-          <p className="text-teal-50 text-sm">Lihat kembali dan cetak ulang data penggajian bulan-bulan sebelumnya yang telah ditutup buku.</p>
+          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Archive className="text-teal-100" /> Manajemen Arsip Tahunan</h1>
+          <p className="text-teal-50 text-sm max-w-2xl">Lihat, cetak ulang, dan kelola database penggajian berdasarkan tahun berjalan. Optimalkan kecepatan server dengan fitur Auto-Archiving.</p>
         </div>
         <FolderOpen size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
 
       {!selectedArchive ? (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-            <h3 className="text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Buku Gaji</h3>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Cari Periode (Cth: Maret)..." 
-                value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
-              />
+
+          {/* 🪄 TAB TAHUNAN DINAMIS */}
+          <div className="bg-slate-100 dark:bg-slate-900/80 p-2 flex overflow-x-auto hide-scrollbar gap-2 border-b border-slate-200 dark:border-slate-700">
+             {availableYears.map(year => (
+                <button
+                   key={year}
+                   onClick={() => setActiveYear(year)}
+                   className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap shadow-sm ${activeYear === year ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 border border-transparent'}`}
+                >
+                   Arsip Tahun {year}
+                </button>
+             ))}
+          </div>
+
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mx-4 mt-4 rounded-xl flex gap-3 shadow-sm items-start">
+             <Info size={20} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+             <div>
+               <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-1">Optimasi Database Otomatis</h4>
+               <p className="text-xs text-blue-700 dark:text-blue-400/80 leading-relaxed">
+                 Sistem ini telah dirancang untuk menjaga performa memuat agar tetap secepat kilat. Biasakan untuk melakukan <strong className="font-extrabold text-blue-800 dark:text-blue-300">Backup Database Tahunan</strong> secara berkala, lalu klik <strong className="font-extrabold text-red-600 dark:text-red-400">Bersihkan Server</strong> untuk mengosongkan tahun yang sudah lampau.
+               </p>
+             </div>
+          </div>
+
+          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shrink-0 mt-2">
+            <h3 className="text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Buku Gaji {activeYear}</h3>
+            
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <div className="relative w-full lg:w-48">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Cari Periode..." 
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-sm"
+                />
+              </div>
+              <button onClick={handleBackupYearly} className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                 <Download size={14}/> Backup Database {activeYear}
+              </button>
+              <button onClick={() => setConfirmPurge(true)} className="flex-1 lg:flex-none bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-3 py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-sm">
+                 <Trash2 size={14}/> Bersihkan Server
+              </button>
             </div>
           </div>
           
@@ -7512,7 +7621,7 @@ function ArsipView({ archives, setArchives, settings }) {
               {filteredArchives.length === 0 ? (
                 <div className="col-span-full p-10 text-center text-slate-500 flex flex-col items-center">
                   <FolderOpen size={48} className="mb-3 opacity-20" />
-                  <p className="font-bold">Belum ada arsip buku gaji yang tersimpan.</p>
+                  <p className="font-bold">Belum ada arsip buku gaji yang tersimpan untuk tahun {activeYear}.</p>
                   <p className="text-sm mt-1">Lakukan <span className="font-semibold text-slate-600 dark:text-slate-300">"Tutup Buku"</span> di menu Rekap Gaji terlebih dahulu.</p>
                 </div>
               ) : (
@@ -7522,7 +7631,7 @@ function ArsipView({ archives, setArchives, settings }) {
                       <div className="w-12 h-12 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-xl flex items-center justify-center">
                         <Archive size={24} />
                       </div>
-                      <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen">
+                      <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen 1 Bulan Ini">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -7541,10 +7650,10 @@ function ArsipView({ archives, setArchives, settings }) {
                     </div>
 
                     <div className="flex gap-2">
-                      <button onClick={() => setSelectedArchive(arc)} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-sm font-bold transition-colors">
+                      <button onClick={() => setSelectedArchive(arc)} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
                         Buka Arsip
                       </button>
-                      <button onClick={() => handleExportCSV(arc)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors" title="Export CSV">
+                      <button onClick={() => handleExportCSV(arc)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors shadow-sm" title="Export CSV Bulanan">
                         <Download size={18} />
                       </button>
                     </div>
@@ -9355,8 +9464,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                onClick={() => setActiveTab(item.id)}
                className="snap-center relative flex flex-col items-center justify-end shrink-0 min-w-[72px] sm:min-w-[80px] h-full outline-none group"
              >
-               {/* 🪄 Floating Circle & Cutout Ring Illusion 🪄 */}
-               <div className={`absolute flex items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.265,1.55)] z-20 ${
+               {/* 🪄 Floating Circle & Cutout Ring Illusion (DIPERBARUI: Animasi Lebih Mulus) 🪄 */}
+               <div className={`absolute flex items-center justify-center transition-all duration-300 ease-out z-20 ${
                  isActive 
                    ? `w-[56px] h-[56px] rounded-full bottom-8 bg-gradient-to-br ${getGradient(item.id)} text-white ring-[8px] ring-slate-50 dark:ring-slate-900 shadow-[0_10px_20px_rgba(0,0,0,0.3)]` 
                    : 'w-10 h-10 rounded-2xl bottom-[18px] bg-transparent text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/50 ring-0 ring-transparent shadow-none'
@@ -9364,7 +9473,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                  <item.icon 
                    size={isActive ? 24 : 22} 
                    strokeWidth={isActive ? 2.5 : 2} 
-                   className={`transition-transform duration-500 ${isActive ? 'drop-shadow-md scale-100' : 'scale-90 group-hover:scale-100'}`} 
+                   className={`transition-transform duration-300 ease-out ${isActive ? 'drop-shadow-md scale-100' : 'scale-90 group-hover:scale-100'}`} 
                  />
                  
                  {/* Red Dot Notifikasi */}
@@ -9374,7 +9483,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                </div>
 
                {/* Teks Label (Muncul dari bawah) */}
-               <span className={`text-[10px] tracking-tight transition-all duration-300 absolute bottom-1 w-full text-center ${
+               <span className={`text-[10px] tracking-tight transition-all duration-300 ease-out absolute bottom-1 w-full text-center ${
                  isActive 
                    ? `font-extrabold ${getTextColor(item.id)} opacity-100 translate-y-0` 
                    : 'font-semibold text-slate-400 dark:text-slate-500 opacity-0 translate-y-4'
@@ -9383,7 +9492,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                </span>
                
                {/* Indikator Titik Aktif (Opsional, mempertegas status) */}
-               <div className={`absolute -bottom-1.5 w-1 h-1 rounded-full transition-all duration-300 delay-100 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
+               <div className={`absolute -bottom-1.5 w-1 h-1 rounded-full transition-all duration-300 ease-out delay-75 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
              </button>
            );
         })}
