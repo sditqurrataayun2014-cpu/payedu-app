@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwDPU0ygauJ8MxzPqxa6vjXhs03YxcTL-8FMvbJGcuncXuBX9mHQA1nbrGsuAtlxY3p/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxDjbm0ZMEOS7CsqUoqnRkPceTFIimEMFiHQKwxKYwig9RZvv0buI3P5PCzQj_BUZn7/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
