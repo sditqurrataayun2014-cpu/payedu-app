@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbxDjbm0ZMEOS7CsqUoqnRkPceTFIimEMFiHQKwxKYwig9RZvv0buI3P5PCzQj_BUZn7/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -8341,6 +8341,10 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   // 🪄 FITUR BARU: State Animasi Selebrasi Konfeti
   const [showCelebration, setShowCelebration] = useState(false);
 
+  // 🪄 TAMBALAN CERDAS MUTLAK: State Loading Konfirmasi & Kirim Pesan
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+
   // Helper untuk simulasi jika data harian belum pernah disave manual oleh admin
   const getDailyHours = (total, teacherId) => {
     const days = Array(31).fill('');
@@ -8376,9 +8380,11 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
      else if (!isNaN(v) && Number(v) > 0) autoHadir++;
   });
 
-  const handleSendFeedback = (e) => {
+  // 🪄 PERBAIKAN UX: Push Mutlak Saran ke Server
+  const handleSendFeedback = async (e) => {
     e.preventDefault();
     if (!feedbackMsg.trim()) return;
+    setIsSendingFeedback(true);
     
     const newFeedback = {
       id: generateUniqueId('fb-'),
@@ -8389,27 +8395,52 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
       status: 'Menunggu'
     };
     
-    // Simpan ke state global agar admin bisa membacanya
-    setFeedbacks([newFeedback, ...(feedbacks || [])]);
+    const updatedFeedbacks = [newFeedback, ...(feedbacks || [])];
+    setFeedbacks(updatedFeedbacks);
     
-    alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
-    setFeedbackMsg('');
-    setFeedbackSubject('Saran & Masukan Umum');
+    try {
+       // Tembak langsung ke awan tanpa menunggu debounce App.jsx
+       safeStorageSet('payedu_feedbacks', JSON.stringify(updatedFeedbacks));
+       await postToGoogleSheets('SAVE_FEEDBACKS', updatedFeedbacks);
+       
+       alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
+       setFeedbackMsg('');
+       setFeedbackSubject('Saran & Masukan Umum');
+    } catch(err) {
+       alert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
+    } finally {
+       setIsSendingFeedback(false);
+    }
   };
 
-  // 🪄 PERBAIKAN UX: Gamifikasi Konfeti saat Konfirmasi Gaji
-  const handleKonfirmasi = () => {
-    setTeachers(prev => prev.map(t => 
+  // 🪄 PERBAIKAN UX MUTLAK: Gamifikasi Konfeti saat Konfirmasi Gaji & Bypass Auto-Save
+  const handleKonfirmasi = async () => {
+    setIsConfirming(true);
+    const updatedTeachers = teachers.map(t => 
       t.id === user.id ? { ...t, payroll: { ...t.payroll, isConfirmed: true } } : t
-    ));
+    );
     
-    // Memicu selebrasi
-    setShowCelebration(true);
+    // Update state UI seketika
+    setTeachers(updatedTeachers);
     
-    // Menghilangkan selebrasi setelah 5 detik
-    setTimeout(() => {
-       setShowCelebration(false);
-    }, 5000);
+    try {
+       // PAKSA TEMBAK KE SERVER (BYPASS DEBOUNCE 2 DETIK)
+       safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+       await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+
+       // Memicu selebrasi
+       setShowCelebration(true);
+       
+       // Menghilangkan selebrasi setelah 5 detik
+       setTimeout(() => {
+          setShowCelebration(false);
+       }, 5000);
+    } catch(e) {
+       console.error("Gagal simpan konfirmasi:", e);
+       alert("Koneksi tidak stabil. Konfirmasi Anda mungkin belum masuk ke server.");
+    } finally {
+       setIsConfirming(false);
+    }
   };
 
   const handleKomplain = () => {
@@ -9183,8 +9214,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                   <div className="mt-6 w-full max-w-md p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-xl relative z-10 animate-in zoom-in slide-in-from-bottom-2 shadow-lg">
                      <p className="text-sm text-amber-800 dark:text-amber-300 font-bold mb-3">🔔 Gaji Anda telah ditransfer! Mohon konfirmasi kesesuaian nominal.</p>
                      <div className="flex flex-col sm:flex-row gap-3">
-                       <button onClick={handleKonfirmasi} className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md shadow-emerald-500/30 transition-all hover:-translate-y-0.5">
-                         Ya, Nominal Sesuai
+                       <button onClick={handleKonfirmasi} disabled={isConfirming} className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md shadow-emerald-500/30 transition-all hover:-translate-y-0.5 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                         {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : null}
+                         {isConfirming ? 'Memproses...' : 'Ya, Nominal Sesuai'}
                        </button>
                        <button onClick={handleKomplain} className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-1.5" title="Akan dialihkan ke WhatsApp Bendahara">
                          <MessageSquare size={16} /> WA Bendahara
@@ -9405,9 +9437,11 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
             <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/50">
               <button 
                 type="submit"
-                className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5"
+                disabled={isSendingFeedback}
+                className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <Send size={18} /> Kirim Masukan Sekarang
+                {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={18} />}
+                {isSendingFeedback ? 'Mengirim...' : 'Kirim Masukan Sekarang'}
               </button>
             </div>
           </form>
