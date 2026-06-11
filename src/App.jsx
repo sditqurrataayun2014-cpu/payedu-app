@@ -38,7 +38,7 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwDPU0ygauJ8MxzPqxa6vjXhs03YxcTL-8FMvbJGcuncXuBX9mHQA1nbrGsuAtlxY3p/exec';
+const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyiOyJ_WudLhs1u4bQwMblCvM3Z9K4le57y7R7BBaQg1twmhBalaTqlxOQ-25GT3IbS/exec';
 
 // TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
 const postToGoogleSheets = async (action, payload) => {
@@ -350,13 +350,13 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState('synced');
   const [hasConflict, setHasConflict] = useState(false);
 
-  // 🪄 PERBAIKAN MUTLAK: Mengembalikan dan mendeklarasikan SEMUA Kunci Pelatuk (Ref) Terpusat
+  // 🪄 PERBAIKAN MUTLAK: Menggembok status awal sejak detik pertama agar kebal dari Wipe Out / Hard Refresh
   const isPushingDataRef = useRef(false);
-  const lastSavedSettingsRef = useRef('');
-  const lastSavedTeachersRef = useRef('');
-  const lastSavedArchivesRef = useRef('');
-  const lastSavedFeedbacksRef = useRef('');
-  const lastSavedLogsRef = useRef('');
+  const lastSavedSettingsRef = useRef(JSON.stringify({ ...generalSettings, lastModified: 0 }));
+  const lastSavedTeachersRef = useRef(JSON.stringify(teachers));
+  const lastSavedArchivesRef = useRef(JSON.stringify(archives));
+  const lastSavedFeedbacksRef = useRef(JSON.stringify(feedbacks));
+  const lastSavedLogsRef = useRef(JSON.stringify(loginHistory));
 
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
