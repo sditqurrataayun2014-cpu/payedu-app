@@ -5518,21 +5518,46 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
-        {/* Sidebar Tab Menu */}
-        <div className="w-full md:w-56 lg:w-64 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-row md:flex-col overflow-x-auto md:overflow-y-auto shrink-0 hide-scrollbar">
-          <div className="p-4 font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 hidden md:flex items-center gap-2 sticky top-0 bg-white dark:bg-slate-800 z-10">
+        {/* 🪄 PERBAIKAN RESPONSIVE: Sidebar Tab Menu diubah jadi Dropdown elegan di Mobile */}
+        <div className="w-full md:w-56 lg:w-64 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col shrink-0">
+          
+          {/* Header Sidebar Desktop */}
+          <div className="p-4 font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-700 hidden md:flex items-center gap-2 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
             <FileText size={18} className="text-emerald-500" /> Pilih Komponen
           </div>
-          {tabMenus.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTabGaji(tab.id)}
-              className={`flex-none md:w-full flex items-center gap-3 p-3.5 md:p-4 text-left font-semibold transition-all border-b-2 md:border-b-0 md:border-l-4 ${activeTabGaji === tab.id ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-500 md:border-l-emerald-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-            >
-              <tab.icon size={18} className={activeTabGaji === tab.id ? 'text-emerald-500' : 'opacity-60'} />
-              <span className="whitespace-nowrap md:whitespace-normal text-sm">{tab.label}</span>
-            </button>
-          ))}
+
+          {/* Dropdown Khusus Mobile */}
+          <div className="md:hidden p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">
+             <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Kategori Komponen Gaji</label>
+             <div className="relative">
+                <select
+                   value={activeTabGaji}
+                   onChange={(e) => setActiveTabGaji(e.target.value)}
+                   className="w-full p-3.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm appearance-none cursor-pointer text-sm"
+                >
+                   {tabMenus.map(tab => (
+                      <option key={tab.id} value={tab.id}>{tab.label}</option>
+                   ))}
+                </select>
+                <div className="absolute right-3 top-3.5 bg-emerald-100 dark:bg-emerald-900/50 p-1.5 rounded-lg pointer-events-none">
+                  <ChevronDown size={16} className="text-emerald-600 dark:text-emerald-400" />
+               </div>
+             </div>
+          </div>
+          
+          {/* Menu Vertikal Desktop */}
+          <div className="hidden md:flex flex-col overflow-y-auto hide-scrollbar">
+            {tabMenus.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTabGaji(tab.id)}
+                className={`w-full flex items-center gap-3 p-4 text-left font-semibold transition-all border-l-4 ${activeTabGaji === tab.id ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+              >
+                <tab.icon size={18} className={activeTabGaji === tab.id ? 'text-emerald-500' : 'opacity-60'} />
+                <span className="text-sm">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Main Content Area */}
