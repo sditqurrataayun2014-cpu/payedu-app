@@ -2218,6 +2218,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
 function DataGuruView({ teachers, setTeachers }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: Filter Dropdown
+  const [filterWorkStatus, setFilterWorkStatus] = useState('Aktif'); // 🪄 FITUR BARU: Filter Keaktifan (Aktif/Tidak Aktif/Resign)
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const fileInputRef = useRef(null);
   
@@ -2227,7 +2228,12 @@ function DataGuruView({ teachers, setTeachers }) {
   const filtered = teachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
     const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
-    return matchSearch && matchStatus;
+    
+    // 🪄 FITUR BARU: Logika Pencarian & Filter Keaktifan Pegawai
+    const currentWorkStatus = t.workStatus || 'Aktif';
+    const matchWorkStatus = filterWorkStatus === 'Semua' ? true : currentWorkStatus === filterWorkStatus;
+    
+    return matchSearch && matchStatus && matchWorkStatus;
   });
 
   const openModal = (type, data) => setModal({ isOpen: true, type, data });
@@ -2252,6 +2258,7 @@ function DataGuruView({ teachers, setTeachers }) {
       phone: formElement.phone ? formElement.phone.value : '', // TAMBAHAN: Menyimpan Nomor WA
       education: formElement.education.value,
       status: formElement.status.value,
+      workStatus: formElement.workStatus ? formElement.workStatus.value : 'Aktif', // 🪄 FITUR BARU: Status Keaktifan
       tmt: formElement.tmt.value,
       position: formElement.position.value,
       bankName: formElement.bankName ? formElement.bankName.value : '',
@@ -2306,8 +2313,8 @@ function DataGuruView({ teachers, setTeachers }) {
   };
 
   const handleExportCSV = () => {
-    // TAMBAHAN: Memasukkan No WA ke dalam export CSV
-    const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'No WA', 'Pendidikan', 'Status', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
+    // TAMBAHAN: Memasukkan No WA dan Keaktifan ke dalam export CSV
+    const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'No WA', 'Pendidikan', 'Status Golongan', 'Keaktifan', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
     
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
@@ -2334,6 +2341,7 @@ function DataGuruView({ teachers, setTeachers }) {
         (t.phone || '-'), // Data WA
         t.education, 
         t.status, 
+        (t.workStatus || 'Aktif'), // 🪄 FITUR BARU: Export Keaktifan
         t.position, 
         t.tmt, 
         (t.family?.wife || 0), 
@@ -2501,7 +2509,8 @@ function DataGuruView({ teachers, setTeachers }) {
 
       {modal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+          {/* 🪄 TAMBALAN CERDAS: max-h-[90dvh] agar form tidak tertutup keyboard HP dan bisa di-scroll mutlak */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
                 {modal.type === 'view' && <Eye className="text-blue-500"/>}
@@ -2535,6 +2544,8 @@ function DataGuruView({ teachers, setTeachers }) {
                           {/* TAMBAHAN: Detail No WA */}
                           <tr><td className="py-1.5 text-slate-500">No. WhatsApp</td><td className="font-medium dark:text-slate-200">: {modal.data.phone || '-'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Pendidikan</td><td className="font-medium dark:text-slate-200">: {modal.data.education}</td></tr>
+                          {/* 🪄 FITUR BARU: Tampilan Status Keaktifan di Detail Profil */}
+                          <tr><td className="py-1.5 text-slate-500">Status Keaktifan</td><td className="font-medium dark:text-slate-200">: <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold shadow-sm ${modal.data.workStatus === 'Resign' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : modal.data.workStatus === 'Tidak Aktif' ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'}`}>{modal.data.workStatus || 'Aktif'}</span></td></tr>
                           <tr><td className="py-1.5 text-slate-500">Rekening Bank</td><td className="font-medium dark:text-slate-200">: {modal.data.bankName ? `${modal.data.bankName} - ${modal.data.bankAccount}` : '-'}</td></tr>
                         </tbody>
                       </table>
@@ -2599,6 +2610,15 @@ function DataGuruView({ teachers, setTeachers }) {
                       <select name="status" defaultValue={modal.data?.status || 'Tetap'} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="Tetap">Tetap</option>
                         <option value="Tidak Tetap">Tidak Tetap</option>
+                      </select>
+                    </div>
+                    {/* 🪄 FITUR BARU: Dropdown Status Keaktifan */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Keaktifan Pegawai</label>
+                      <select name="workStatus" defaultValue={modal.data?.workStatus || 'Aktif'} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="Aktif">Aktif</option>
+                        <option value="Tidak Aktif">Tidak Aktif (Cuti/Nonaktif)</option>
+                        <option value="Resign">Resign (Berhenti)</option>
                       </select>
                     </div>
                     <div>
@@ -2701,15 +2721,27 @@ function DataGuruView({ teachers, setTeachers }) {
           
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full xl:w-auto items-stretch sm:items-center">
             
-            {/* TAMBAHAN: Filter Dropdown Status */}
+            {/* TAMBAHAN: Filter Dropdown Status Golongan */}
             <select 
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300"
+              className="w-full sm:w-auto px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
             >
-              <option value="Semua">Semua Status</option>
+              <option value="Semua">Semua Golongan</option>
               <option value="Tetap">Guru Tetap</option>
               <option value="Tidak Tetap">Guru Tidak Tetap</option>
+            </select>
+
+            {/* 🪄 FITUR BARU: Filter Dropdown Status Keaktifan */}
+            <select 
+              value={filterWorkStatus}
+              onChange={(e) => setFilterWorkStatus(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
+            >
+              <option value="Semua">Semua Kondisi</option>
+              <option value="Aktif">Aktif Saja</option>
+              <option value="Tidak Aktif">Tidak Aktif (Cuti)</option>
+              <option value="Resign">Telah Resign</option>
             </select>
 
             <div className="relative w-full sm:w-56 md:w-64 flex-grow sm:flex-grow-0">
@@ -2755,6 +2787,12 @@ function DataGuruView({ teachers, setTeachers }) {
                   <td className="p-4">
                     <div className="font-bold text-slate-800 dark:text-slate-200">{t.name}</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">{t.nipy}</div>
+                    {/* 🪄 FITUR BARU: Lencana Visual untuk Keaktifan Pegawai */}
+                    {(t.workStatus === 'Resign' || t.workStatus === 'Tidak Aktif') && (
+                      <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${t.workStatus === 'Resign' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'}`}>
+                        {t.workStatus}
+                      </span>
+                    )}
                   </td>
                   <td className="p-4">
                     <div className="text-slate-700 dark:text-slate-300 font-medium">
