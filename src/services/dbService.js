@@ -182,12 +182,37 @@ export const fetchCloudData = async () => {
 
     if (logErr) console.warn('Gagal mengambil login_logs dari Supabase:', logErr);
 
-    // Dapatkan data dari Supabase jika ada
-    const serverSettings = settingsRow?.data;
-    const serverTeachers = teachersRows && teachersRows.length > 0 ? teachersRows.map(r => ({ ...r.data, id: r.id })) : null;
-    const serverArchives = archivesRows && archivesRows.length > 0 ? archivesRows.map(r => r.data) : null;
-    const serverFeedbacks = feedbackRows && feedbackRows.length > 0 ? feedbackRows.map(r => r.data) : null;
-    const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => r.data) : null;
+    // Dapatkan data dari Supabase jika ada (dengan parsing JSON aman jika dalam format string)
+    const serverSettings = settingsRow?.data ? (typeof settingsRow.data === 'string' ? JSON.parse(settingsRow.data) : settingsRow.data) : null;
+    
+    const serverTeachers = teachersRows && teachersRows.length > 0 ? teachersRows.map(r => {
+      const parsedData = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+      return {
+        id: r.id || parsedData.id,
+        name: r.name || parsedData.name || '',
+        nipy: parsedData.nipy || '',
+        pob: parsedData.pob || '',
+        dob: parsedData.dob || '',
+        gender: parsedData.gender || 'L',
+        education: parsedData.education || 'S1',
+        status: parsedData.status || 'Tetap',
+        tmt: parsedData.tmt || '',
+        position: parsedData.position || 'Guru',
+        bankName: parsedData.bankName || '',
+        accountNumber: parsedData.accountNumber || '',
+        accountHolder: parsedData.accountHolder || '',
+        family: parsedData.family || { wife: 0, children: 0 },
+        payroll: parsedData.payroll || {
+          jabatans: [], kompetensi: [], disiplin: {}, insentifTambahan: [], potonganLainnya: [], jamMengajar: {}, kegiatanInsidental: []
+        },
+        ...parsedData, // Preservasi seluruh field kustom lainnya
+        id: r.id || parsedData.id
+      };
+    }) : null;
+
+    const serverArchives = archivesRows && archivesRows.length > 0 ? archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
+    const serverFeedbacks = feedbackRows && feedbackRows.length > 0 ? feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
+    const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
 
     // Failsafe: Jika Supabase masih kosong tetapi LocalStorage punya data, gunakan data lokal & Auto-Push ke Supabase!
     const finalSettings = serverSettings || localSettings || {};

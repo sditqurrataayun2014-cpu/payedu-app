@@ -1418,23 +1418,44 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     }
   };
 
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const mainContentRef = useRef(null);
+
+  const handleMainScroll = () => {
+    if (mainContentRef.current) {
+      setShowScrollTop(mainContentRef.current.scrollTop > 180);
+    }
+  };
+
+  const scrollToTopGlobal = () => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
+    <div className="flex min-h-screen md:h-screen md:overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans relative">
       {isSidebarOpen && window.innerWidth < 768 && (
-        <div className="fixed inset-0 bg-slate-900/50 z-20 md:hidden no-print" onClick={() => setIsSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-20 md:hidden no-print animate-in fade-in" onClick={() => setIsSidebarOpen(false)} />
       )}
 
       <aside className={`fixed md:static inset-y-0 left-0 z-30 w-64 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-all duration-300 ease-in-out flex flex-col no-print ${isSidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-64'}`}>
-        <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-          {settings?.logoUrl ? (
-            <img src={settings.logoUrl} alt="Logo" className="w-8 h-8 object-contain mr-3 shrink-0 drop-shadow-sm" />
-          ) : (
-            <Calculator className="mr-3 shrink-0" size={24} />
-          )}
-          <span className="font-bold text-lg tracking-wide truncate">{settings?.appName ? settings.appName.split(' ')[0] : 'PayEdu Apps'}</span>
+        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+          <div className="flex items-center truncate">
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="Logo" className="w-8 h-8 object-contain mr-3 shrink-0 drop-shadow-sm" />
+            ) : (
+              <Calculator className="mr-3 shrink-0" size={24} />
+            )}
+            <span className="font-bold text-lg tracking-wide truncate">{settings?.appName ? settings.appName.split(' ')[0] : 'PayEdu Apps'}</span>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-white/80 hover:text-white p-1">
+            <X size={20} />
+          </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-2">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-2 touch-pan-y">
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -1476,8 +1497,8 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+        <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print z-10">
           <div className="flex items-center gap-3">
             <button 
               className="p-2 -ml-2 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
@@ -1602,15 +1623,87 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
            </div>
         )}
 
-        <div className={`flex-1 overflow-auto p-4 sm:p-6 lg:p-8 touch-pan-y scroll-smooth ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}>
+        <div 
+          ref={mainContentRef}
+          onScroll={handleMainScroll}
+          className={`flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 touch-pan-y scroll-smooth pb-24 md:pb-12 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
+        >
           {renderContent()}
         </div>
+
+        {/* Tombol Melayang (Floating Action Button) Scroll ke Atas Khusus Mobile */}
+        {showScrollTop && (
+          <button
+            onClick={scrollToTopGlobal}
+            className="fixed bottom-6 right-6 z-[90] p-3 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-500/40 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center border border-white/20 animate-in zoom-in cursor-pointer"
+            title="Kembali ke Atas Halaman"
+          >
+            <ChevronUp size={22} strokeWidth={2.5} />
+          </button>
+        )}
       </main>
     </div>
   );
 }
 
 // --- SUB-VIEWS ---
+
+// Komponen Wrapper Tabel Responsif dengan Tombol Navigasi Kembali/Ke Atas untuk HP
+function TableWrapper({ children, className = "" }) {
+  const containerRef = useRef(null);
+  const [isScrolledRight, setIsScrolledRight] = useState(false);
+
+  const handleScroll = () => {
+    if (containerRef.current) {
+      setIsScrolledRight(containerRef.current.scrollLeft > 35);
+    }
+  };
+
+  const scrollToStart = () => {
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (containerRef.current) {
+      containerRef.current.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="relative group/table my-3">
+      {/* Tombol Melayang Kembali ke Kiri & Ke Atas jika Tabel Di-scroll ke Kanan di HP */}
+      {isScrolledRight && (
+        <div className="sticky left-2 top-2 z-30 flex items-center gap-2 mb-2 animate-in fade-in duration-200">
+          <button
+            type="button"
+            onClick={scrollToStart}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-lg shadow-blue-500/30 transition-transform active:scale-95 border border-white/20 cursor-pointer"
+          >
+            <ChevronLeft size={16} /> Kembali ke Kiri
+          </button>
+          <button
+            type="button"
+            onClick={scrollToTop}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800/90 hover:bg-slate-900 text-white rounded-full text-xs font-bold shadow-lg backdrop-blur-md transition-transform active:scale-95 border border-white/10 cursor-pointer"
+          >
+            <ChevronUp size={16} /> Ke Atas
+          </button>
+        </div>
+      )}
+      
+      <div 
+        ref={containerRef}
+        onScroll={handleScroll}
+        className={`overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${className}`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function DashboardView({ teachers, user, settings, setSettings, archives, setActiveTab, onAbsensiAlertClick }) {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
