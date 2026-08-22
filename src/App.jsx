@@ -8695,11 +8695,11 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   };
 
   // Komponen Reusable untuk Lonceng Notifikasi agar rapi
-  const NotificationBell = myData.payroll?.isNotified && !myData.payroll?.isConfirmed ? (
+  const NotificationBell = (settings?.payrollStatus === 'Approved' || myData.payroll?.isNotified) && !myData.payroll?.isConfirmed ? (
     <button 
       onClick={() => setActiveTab('portal_gaji')} 
       className="absolute top-4 right-4 md:top-6 md:right-6 w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 rounded-full shadow-[0_8px_16px_-6px_rgba(245,158,11,0.8)] flex items-center justify-center animate-bounce border-2 border-white/50 z-30 hover:scale-110 transition-transform cursor-pointer"
-      title="Notifikasi Gaji Baru!"
+      title="Notifikasi Gaji Baru! Mohon Konfirmasi Kesesuaian."
     >
       <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.6)]"></div>
       <BellRing size={24} className="text-white drop-shadow-lg relative z-10" />
@@ -9361,23 +9361,34 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                </button>
 
                {/* Blok Notifikasi & Aksi Konfirmasi */}
-               {myData.payroll?.isNotified && !myData.payroll?.isConfirmed && (
-                  <div className="mt-6 w-full max-w-md p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-xl relative z-10 animate-in zoom-in slide-in-from-bottom-2 shadow-lg">
-                     <p className="text-sm text-amber-800 dark:text-amber-300 font-bold mb-3">🔔 Gaji Anda telah ditransfer! Mohon konfirmasi kesesuaian nominal.</p>
+               {!myData.payroll?.isConfirmed ? (
+                  <div className="mt-6 w-full max-w-md p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/30 border-2 border-amber-300 dark:border-amber-700/70 rounded-2xl relative z-10 animate-in zoom-in slide-in-from-bottom-2 shadow-xl text-center">
+                     <div className="flex items-center justify-center gap-2 mb-2">
+                        <BellRing className="text-amber-600 dark:text-amber-400 animate-bounce" size={20} />
+                        <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Konfirmasi Penerimaan Gaji</span>
+                     </div>
+                     <p className="text-sm text-slate-700 dark:text-slate-200 font-bold mb-4">🔔 Silakan periksa rincian slip di atas dan konfirmasikan kesesuaian nominal penerimaan Anda.</p>
                      <div className="flex flex-col sm:flex-row gap-3">
-                       <button onClick={handleKonfirmasi} disabled={isConfirming} className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md shadow-emerald-500/30 transition-all hover:-translate-y-0.5 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
-                         {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : null}
+                       <button 
+                         onClick={handleKonfirmasi} 
+                         disabled={isConfirming} 
+                         className="flex-1 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 px-4 rounded-xl text-sm font-extrabold shadow-lg shadow-emerald-500/30 transition-all hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                       >
+                         {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckCircle size={18} />}
                          {isConfirming ? 'Memproses...' : 'Ya, Nominal Sesuai'}
                        </button>
-                       <button onClick={handleKomplain} className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-1.5" title="Akan dialihkan ke WhatsApp Bendahara">
-                         <MessageSquare size={16} /> WA Bendahara
+                       <button 
+                         onClick={handleKomplain} 
+                         className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-3 px-4 rounded-xl text-sm font-bold shadow-sm transition-all border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-2 cursor-pointer hover:scale-[1.02]" 
+                         title="Akan dialihkan ke WhatsApp Bendahara"
+                       >
+                         <MessageSquare size={18} /> WA Bendahara
                        </button>
                      </div>
                   </div>
-               )}
-               {myData.payroll?.isConfirmed && (
-                  <div className="mt-6 w-full max-w-md p-3 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-sm font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 text-center flex justify-center items-center gap-2 relative z-10">
-                     <CheckCircle size={18} /> Penerimaan Gaji Telah Dikonfirmasi
+               ) : (
+                  <div className="mt-6 w-full max-w-md p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-sm font-bold rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center flex justify-center items-center gap-2 relative z-10 shadow-sm">
+                     <CheckCircle size={20} className="text-emerald-500" /> Penerimaan Gaji Bulan Ini Telah Dikonfirmasi
                   </div>
                )}
             </div>
