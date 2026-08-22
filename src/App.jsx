@@ -9968,22 +9968,17 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           if(data.feedbacks) safeStorageSet('payedu_feedbacks', JSON.stringify(data.feedbacks));
           if(data.loginHistory) safeStorageSet('payedu_loginHistory', JSON.stringify(data.loginHistory));
 
-          // 3. 🪄 TAMBALAN CERDAS 2: PAKSA SINKRONISASI PARALEL KE GOOGLE SHEETS CLOUD
-          // Menembak seluruh Endpoint Cloud secara serentak agar Cloud 100% identik dengan file Backup
+          // 3. 🪄 PAKSA SINKRONISASI PARIPURNA KE SUPABASE CLOUD
           if (navigator.onLine) {
-             await Promise.allSettled([
-               postToGoogleSheets('SAVE_SETTINGS', data.settings),
-               postToGoogleSheets('SAVE_TEACHERS', data.teachers),
-               data.accounts ? postToGoogleSheets('SAVE_USERS', data.accounts) : Promise.resolve(),
-               data.archives ? postToGoogleSheets('SAVE_ARCHIVES', data.archives) : Promise.resolve(),
-               data.fundingSources ? postToGoogleSheets('SAVE_FUNDING', data.fundingSources) : Promise.resolve(),
-               data.feedbacks ? postToGoogleSheets('SAVE_FEEDBACKS', data.feedbacks) : Promise.resolve(),
-               data.loginHistory ? postToGoogleSheets('SAVE_LOGS', data.loginHistory) : Promise.resolve()
-             ]);
+             await pushToSupabase('RESTORE_ALL', data);
           }
 
+          // Kunci ref agar auto-save tidak memicu konflik
+          lastSavedSettingsRef.current = JSON.stringify({ ...data.settings, lastModified: 0 });
+          lastSavedTeachersRef.current = JSON.stringify(data.teachers);
+
           setIsSaving(false);
-          alert("✅ RESTORE & SYNC PARIPURNA BERHASIL!\n\nSeluruh data (Pengaturan, Pegawai, Akses, Arsip, dll) telah sukses dipulihkan ke perangkat dan disinkronkan sepenuhnya dengan Google Sheets Cloud!");
+          alert("✅ RESTORE & SYNC PARIPURNA BERHASIL!\n\nSeluruh data (Pengaturan, Pegawai, Akses, Arsip, dll) telah sukses dipulihkan ke perangkat dan disinkronkan sepenuhnya ke Supabase Cloud!");
         } else {
           alert("File backup tidak valid atau rusak (kehilangan data konfigurasi kunci).");
         }
