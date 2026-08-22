@@ -14,6 +14,8 @@ import {
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
   Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare // TAMBAHAN: Ikon Jadwal Mengajar
 } from 'lucide-react';
+import { fetchCloudData as fetchFromSupabase, pushCloudData as pushToSupabase } from './services/dbService';
+import { isSupabaseConfigured } from './lib/supabase';
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
 let TENURE_RATES = {
@@ -37,24 +39,9 @@ const initialTeachers = [];
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-// --- KONFIGURASI DATABASE GOOGLE SHEETS ---
-const GOOGLE_SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbwDPU0ygauJ8MxzPqxa6vjXhs03YxcTL-8FMvbJGcuncXuBX9mHQA1nbrGsuAtlxY3p/exec';
-
-// TAMBALAN CERDAS: Helper khusus untuk mem-bypass pemblokiran CORS & Redirect Google Script
+// --- KONFIGURASI DATABASE SUPABASE (CLOUD & OFFLINE FALLBACK) ---
 const postToGoogleSheets = async (action, payload) => {
-  try {
-    if (!navigator.onLine) return { status: 'success', message: 'Offline Local Save' };
-    const res = await fetch(GOOGLE_SHEETS_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      redirect: 'follow', 
-      body: JSON.stringify({ action, payload })
-    });
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    return await res.json();
-  } catch (error) {
-    return { status: 'success', message: 'Simulated Success Fallback' };
-  }
+  return await pushToSupabase(action, payload);
 };
 
 // 🪄 TAMBALAN CERDAS: Menambahkan Perisai Data utama pada kalkulasi
@@ -429,19 +416,14 @@ export default function App() {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
       
-      // 🪄 PERBAIKAN 1: Tambahkan anti-cache agar Browser selalu menarik data PALING BARU
-      const res = await fetch(`${GOOGLE_SHEETS_API_URL}?t=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetchFromSupabase();
       
-      if (!res.ok) throw new Error("Network response was not ok");
-      const text = await res.text();
-      const data = JSON.parse(text);
-      
-      if (data.status === 'success') {
-        const serverSettings = data.data?.settings && Object.keys(data.data.settings).length > 0 ? data.data.settings : defaultGeneralSettings;
-        const serverTeachers = Array.isArray(data.data?.teachers) ? data.data.teachers : [];
-        const serverArchives = Array.isArray(data.data?.archives) ? data.data.archives : [];
-        const serverFeedbacks = Array.isArray(data.data?.feedbacks) ? data.data.feedbacks : [];
-        const serverLogs = Array.isArray(data.data?.loginHistory) ? data.data.loginHistory : [];
+      if (res.status === 'success' && res.data) {
+        const serverSettings = res.data.settings && Object.keys(res.data.settings).length > 0 ? res.data.settings : defaultGeneralSettings;
+        const serverTeachers = Array.isArray(res.data.teachers) ? res.data.teachers : [];
+        const serverArchives = Array.isArray(res.data.archives) ? res.data.archives : [];
+        const serverFeedbacks = Array.isArray(res.data.feedbacks) ? res.data.feedbacks : [];
+        const serverLogs = Array.isArray(res.data.loginHistory) ? res.data.loginHistory : [];
         
         if (isBackgroundSync) {
           if (serverSettings.lastModified > (generalSettings.lastModified + 5000) && !isPushingDataRef.current) {
@@ -449,12 +431,9 @@ export default function App() {
              return; 
           }
         } else {
-          // 🪄 PERBAIKAN MUTLAK: KUNCI PELATUK AUTO-SAVE SAAT BARU REFRESH!
-          // Memberi tahu memori lokal bahwa data ini murni dari server, sehingga Auto-Save tidak akan terpancing.
           lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
           lastSavedTeachersRef.current = JSON.stringify(serverTeachers);
 
-          // 🪄 SERVER ADALAH RAJA (Tolak semua perlawanan memori lokal)
           setGeneralSettings(serverSettings);
           setTeachers(serverTeachers); 
           setArchives(serverArchives);
@@ -471,7 +450,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.warn("[Info Cloud] Gagal menjangkau server. Menggunakan data sisa di LocalStorage.", err);
+      console.warn("[Info Cloud] Gagal menjangkau Supabase/Cloud. Menggunakan data sisa di LocalStorage.", err);
       setHasConflict(false); 
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
