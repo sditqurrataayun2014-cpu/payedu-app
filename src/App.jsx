@@ -1480,7 +1480,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   };
 
   return (
-    <div className="flex min-h-screen md:h-screen md:overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans relative">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans relative">
       {isSidebarOpen && window.innerWidth < 768 && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-20 md:hidden no-print animate-in fade-in" onClick={() => setIsSidebarOpen(false)} />
       )}
@@ -1500,7 +1500,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-2 touch-pan-y">
+        <nav className="flex-1 overflow-y-auto custom-scroll-touch py-4 px-3 space-y-2">
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -1542,7 +1542,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 h-full md:overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
         <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print z-10">
           <div className="flex items-center gap-3">
             <button 
@@ -7386,7 +7386,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
            </div>
         )}
 
-        <div className={`overflow-x-auto flex-1 relative print-area pb-4 touch-pan-x scroll-smooth ${isMassPrinting ? 'print:hidden' : ''}`}>
+        <div className={`overflow-x-auto flex-1 relative print-area pb-4 custom-scroll-touch scroll-smooth ${isMassPrinting ? 'print:hidden' : ''}`}>
           <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
