@@ -1543,21 +1543,21 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 min-h-screen md:min-h-0 md:h-full md:overflow-hidden relative">
-        <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print z-10">
-          <div className="flex items-center gap-3">
+        <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print z-40 relative">
+          <div className="flex items-center gap-3 min-w-0 pr-2">
             <button 
-              className="p-2 -ml-2 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+              className="p-2 -ml-2 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 shrink-0" 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               title="Toggle Menu"
             >
               <Menu size={24} />
             </button>
-            <h2 className="text-lg md:text-xl font-semibold text-slate-800 dark:text-white capitalize">
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-slate-800 dark:text-white capitalize truncate">
               {navItems.find(i => i.id === activeTab)?.label || 'Dashboard'}
             </h2>
           </div>
           
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             
             {/* TAMBAHAN NO 4: Indikator Sinkronisasi Cloud (Status Online/Offline) */}
             {(user.role === 'admin' || user.role === 'Kepala Sekolah') && (
@@ -1582,32 +1582,32 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
               </span>
             </div>
 
-            <button onClick={toggleTheme} className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+            <button onClick={toggleTheme} className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shrink-0">
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            <div className="relative">
+            <div className="relative shrink-0 z-50">
               <button 
                 onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="flex items-center gap-3 focus:outline-none hover:opacity-80 transition-opacity"
+                className="flex items-center gap-2.5 focus:outline-none hover:opacity-80 transition-opacity p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50"
               >
                 <div className="hidden md:block text-right">
                   {/* DIPERBARUI: Menambahkan Sapaan Waktu Cerdas */}
                   <div className="font-semibold text-sm text-slate-800 dark:text-white leading-none">{getGreeting()}, {user.name.split(' ')[0]}</div>
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 capitalize mt-1.5">{user.role}</div>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/30">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/30 shrink-0">
                   {user.name.charAt(0)}
                 </div>
               </button>
 
               {isProfileDropdownOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsProfileDropdownOpen(false)}></div>
+                  <div className="fixed inset-0 z-50 bg-slate-900/10 backdrop-blur-[1px]" onClick={() => setIsProfileDropdownOpen(false)}></div>
                   
-                  <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-2 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-2">
-                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 mb-2">
-                      <div className="font-bold text-sm text-slate-800 dark:text-white">{user.name}</div>
+                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-2 z-[60] animate-in fade-in zoom-in-95 slide-in-from-top-2">
+                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 mb-1 bg-slate-50/50 dark:bg-slate-900/50">
+                      <div className="font-bold text-sm text-slate-800 dark:text-white truncate">{user.name}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 capitalize mt-0.5">{user.role}</div>
                     </div>
                     
@@ -1617,13 +1617,13 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                            setActiveTab('pengaturan');
                            setIsProfileDropdownOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 flex items-center gap-2 transition-colors font-medium"
                       >
                         <Settings size={16} className="text-slate-400" />
                         Pengaturan Akun
                       </button>
                     ) : (
-                      <div className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 mx-2 rounded-lg border border-slate-100 dark:border-slate-700/50 mb-2">
+                      <div className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 mx-2 rounded-lg border border-slate-100 dark:border-slate-700/50 my-1">
                         <div className="flex justify-between items-center mb-1.5">
                           <span>Status Pegawai:</span>
                           <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle size={12}/> Aktif</span>
@@ -1637,7 +1637,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
                     <button 
                       onClick={onLogout} 
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors mt-1 border-t border-slate-100 dark:border-slate-700/50"
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors mt-1 border-t border-slate-100 dark:border-slate-700/50 font-bold"
                     >
                       <LogOut size={16} />
                       Keluar Aplikasi
