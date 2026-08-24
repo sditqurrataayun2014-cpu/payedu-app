@@ -6734,7 +6734,16 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       const slip = calculatePayroll(t, settings);
       
       // 🪄 TAMBALAN CERDAS: Kalkulasi data CSV bulan lalu per individu dengan Perisai Data
-      const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
+      const teacherTmtMonth = t.tmt ? formatToInputDate(t.tmt).substring(0, 7) : '';
+      const prevArchiveMonth = (prevArchive?.periode || prevArchive?.period || '').substring(0, 7);
+
+      const prevData = (prevArchiveMonth && teacherTmtMonth && prevArchiveMonth < teacherTmtMonth)
+        ? null
+        : prevArchive?.dataGuru?.find(guru => 
+            String(guru.id) === String(t.id) && 
+            (!guru.name || !t.name || guru.name.trim().toLowerCase() === t.name.trim().toLowerCase())
+          );
+
       const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
       const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -7413,7 +7422,16 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                 const slip = calculatePayroll(t, settings);
 
                 // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu untuk ditampilkan di tabel UI dengan Perisai Data
-                const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
+                const teacherTmtMonth = t.tmt ? formatToInputDate(t.tmt).substring(0, 7) : '';
+                const prevArchiveMonth = (prevArchive?.periode || prevArchive?.period || '').substring(0, 7);
+
+                const prevData = (prevArchiveMonth && teacherTmtMonth && prevArchiveMonth < teacherTmtMonth)
+                  ? null
+                  : prevArchive?.dataGuru?.find(guru => 
+                      String(guru.id) === String(t.id) && 
+                      (!guru.name || !t.name || guru.name.trim().toLowerCase() === t.name.trim().toLowerCase())
+                    );
+
                 const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                 const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -7432,7 +7450,15 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                 return (
                   <tr key={t.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors group">
                     <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 sticky left-0 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
-                      <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[160px]">{t.name}</div>
+                      {/* FITUR BARU: Nama Pegawai Dapat Diklik Langsung Untuk Edit Komponen Gaji */}
+                      <button 
+                        onClick={() => onEditGaji(t.id)} 
+                        className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline transition-colors text-left flex items-center gap-1.5 group/btn cursor-pointer"
+                        title="Klik untuk membuka & mengubah rincian komponen gaji pegawai ini"
+                      >
+                        <span className="truncate max-w-[150px]">{t.name}</span>
+                        <Edit size={13} className="text-indigo-400 opacity-60 group-hover/btn:opacity-100 group-hover/btn:scale-110 transition-all shrink-0" />
+                      </button>
                       <div className="text-[10px] text-slate-500 mt-0.5">{t.status} • {t.position}</div>
                       {/* FITUR BARU: Lencana "Telah Konfirmasi" untuk Admin */}
                       {t.payroll?.isConfirmed && (
