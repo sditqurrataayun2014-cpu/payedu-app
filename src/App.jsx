@@ -6097,8 +6097,6 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                                   className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-amber-600 dark:text-amber-400 outline-none" 
                                 />
                               </div>
-                            </div>', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-amber-600 dark:text-amber-400 outline-none" />
-                              </div>
                             </div>
                             <button onClick={() => handleRemoveArrayItem(t.id, 'kompetensi', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16}/></button>
                           </div>
