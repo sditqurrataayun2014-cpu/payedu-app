@@ -1722,29 +1722,31 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           {renderContent()}
         </div>
 
-        {/* FITUR BARU: Tombol Melayang (Floating Action Widget) Scroll Ke Paling Atas (⬆️) & Paling Bawah (⬇️) */}
-        <div className="fixed bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
-          <button
-            onClick={() => {
-              if (mainContentRef.current) mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xl shadow-blue-600/30 flex items-center justify-center transition-all border border-blue-400/40 cursor-pointer hover:scale-105"
-            title="Scroll ke Paling Atas Halaman"
-          >
-            <ChevronUp size={22} strokeWidth={3} />
-          </button>
-          <button
-            onClick={() => {
-              if (mainContentRef.current) mainContentRef.current.scrollTo({ top: mainContentRef.current.scrollHeight, behavior: 'smooth' });
-              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }}
-            className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 active:scale-95 text-white shadow-xl shadow-slate-900/30 flex items-center justify-center transition-all border border-slate-600/40 cursor-pointer hover:scale-105"
-            title="Scroll ke Paling Bawah Halaman"
-          >
-            <ChevronDown size={22} strokeWidth={3} />
-          </button>
-        </div>
+        {/* FITUR BARU: Tombol Melayang (Floating Action Widget) Scroll Ke Paling Atas (⬆️) & Paling Bawah (⬇️) Khusus Admin & Kepsek */}
+        {(user.role === 'admin' || user.role === 'Kepala Sekolah') && (
+          <div className="fixed bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
+            <button
+              onClick={() => {
+                if (mainContentRef.current) mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xl shadow-blue-600/30 flex items-center justify-center transition-all border border-blue-400/40 cursor-pointer hover:scale-105"
+              title="Scroll ke Paling Atas Halaman"
+            >
+              <ChevronUp size={22} strokeWidth={3} />
+            </button>
+            <button
+              onClick={() => {
+                if (mainContentRef.current) mainContentRef.current.scrollTo({ top: mainContentRef.current.scrollHeight, behavior: 'smooth' });
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+              }}
+              className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 active:scale-95 text-white shadow-xl shadow-slate-900/30 flex items-center justify-center transition-all border border-slate-600/40 cursor-pointer hover:scale-105"
+              title="Scroll ke Paling Bawah Halaman"
+            >
+              <ChevronDown size={22} strokeWidth={3} />
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -6054,12 +6056,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                             </label>
                             <div className="relative">
                                <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
-                               <input type="number" 
+                               <FormattedRupiahInput 
                                  value={(p.tunjanganMasaKerjaManual !== undefined && p.tunjanganMasaKerjaManual !== '') ? p.tunjanganMasaKerjaManual : (t.status === 'Tetap' ? ((settings?.masterRates?.TENURE_RATES || TENURE_RATES)[new Date(t.tmt || new Date()).getFullYear()] || 0) : '')}
-                                 onChange={e => {
-                                    const newVal = e.target.value === '' ? '' : Number(e.target.value);
-                                    if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja', p.tunjanganMasaKerjaManual || 0, newVal);
-                                    setTeachers(prev => prev.map(tc => tc.id === t.id ? { ...tc, payroll: { ...tc.payroll, tunjanganMasaKerjaManual: newVal } } : tc));
+                                 onChange={val => {
+                                    if (saveAuditLog) saveAuditLog(t, 'Tunjangan Masa Kerja', p.tunjanganMasaKerjaManual || 0, val);
+                                    setTeachers(prev => prev.map(tc => tc.id === t.id ? { ...tc, payroll: { ...tc.payroll, tunjanganMasaKerjaManual: val } } : tc));
                                  }}
                                  className={`w-full pl-10 pr-3 py-2.5 border rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${t.status !== 'Tetap' && (p.tunjanganMasaKerjaManual === undefined || p.tunjanganMasaKerjaManual === '') ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white'}`}
                                  placeholder={t.status === 'Tetap' ? '' : '0 (Default Tidak Tetap)'}
@@ -9269,16 +9270,16 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
       {/* 🪄 MODAL BARU: Edit Biodata Mandiri Guru */}
       {isEditBiodataOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2">
                 <Edit className="text-blue-500" /> Perbarui Biodata Mandiri Saya
               </h3>
-              <button onClick={() => setIsEditBiodataOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              <button onClick={() => setIsEditBiodataOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[75vh]">
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
                <form id="editBiodataForm" onSubmit={handleSaveBiodata} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Lengkap & Gelar</label>
@@ -9291,7 +9292,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tempat Lahir</label>
                       <input 
@@ -9313,7 +9314,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">No. WhatsApp / HP</label>
                       <input 
@@ -9352,7 +9353,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
                     <h4 className="font-bold text-sm dark:text-white mb-3 text-emerald-600 flex items-center gap-1.5"><CreditCard size={16}/> Informasi Rekening Bank Penggajian</h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Bank</label>
                         <input 
@@ -9378,9 +9379,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                </form>
             </div>
             
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              <button onClick={() => setIsEditBiodataOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-sm">Batal</button>
-              <button type="submit" form="editBiodataForm" disabled={isSavingBiodata} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70">
+            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
+              <button type="button" onClick={() => setIsEditBiodataOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center cursor-pointer">Batal</button>
+              <button type="submit" form="editBiodataForm" disabled={isSavingBiodata} className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70 cursor-pointer">
                 {isSavingBiodata ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
                 {isSavingBiodata ? 'Menyimpan...' : 'Simpan Perubahan'}
               </button>
@@ -9391,13 +9392,13 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
       {/* Modal Komplain WA */}
       {isKomplainModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><MessageSquare className="text-emerald-500"/> Komplain Selisih Gaji</h3>
-              <button onClick={() => setIsKomplainModalOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2"><MessageSquare className="text-emerald-500"/> Komplain Selisih Gaji</h3>
+              <button onClick={() => setIsKomplainModalOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Silakan tuliskan detail perbedaan nominal yang Anda temukan. Sistem akan mengarahkan Anda ke WhatsApp Bendahara secara otomatis.</p>
               <textarea 
                 rows="4" 
@@ -9407,8 +9408,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                 className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white resize-none"
               ></textarea>
             </div>
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3">
-              <button onClick={() => setIsKomplainModalOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors">Batal</button>
+            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
+              <button onClick={() => setIsKomplainModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center">Batal</button>
               <a 
                 href={komplainText.trim() ? waUrl : '#'} 
                 target="_blank" 
@@ -9422,7 +9423,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                      setKomplainText('');
                   }
                 }}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 ${komplainText.trim() ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 ${komplainText.trim() ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}`}
               >
                 <Send size={16} /> Lanjut ke WhatsApp
               </a>
@@ -9433,8 +9434,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
       {/* Modal Slip Gaji */}
       {isSlipModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
             <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji Saya</h3>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
