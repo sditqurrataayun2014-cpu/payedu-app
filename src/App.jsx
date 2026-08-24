@@ -131,6 +131,51 @@ const calculatePayroll = (teacher, settings) => {
   };
 };
 
+// Helper Super Cerdas Konversi Tanggal ke Format ISO (YYYY-MM-DD) untuk <input type="date">
+export const formatToInputDate = (dateStr) => {
+  if (!dateStr) return '';
+  let str = String(dateStr).trim();
+  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str.split('T')[0];
+  
+  const matchSlash = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (matchSlash) {
+    return `${matchSlash[3]}-${matchSlash[2].padStart(2, '0')}-${matchSlash[1].padStart(2, '0')}`;
+  }
+
+  const bulanMap = { 
+    'jan': '01', 'januari': '01',
+    'feb': '02', 'februari': '02',
+    'mar': '03', 'maret': '03',
+    'apr': '04', 'april': '04',
+    'mei': '05', 'may': '05',
+    'jun': '06', 'juni': '06',
+    'jul': '07', 'juli': '07',
+    'agu': '08', 'agustus': '08', 'aug': '08',
+    'sep': '09', 'september': '09',
+    'okt': '10', 'oktober': '10', 'oct': '10',
+    'nov': '11', 'november': '11',
+    'des': '12', 'desember': '12', 'dec': '12' 
+  };
+  const parts = str.toLowerCase().split(/[\s\-]+/);
+  if (parts.length >= 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = bulanMap[parts[1]] || '01';
+    let y = parts[2];
+    if (y.length === 2) y = parseInt(y, 10) > 30 ? `19${y}` : `20${y}`;
+    if (parseInt(d, 10) > 0 && parseInt(y, 10) > 1900) {
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return '';
+};
+
 const formatRp = (angka) => {
   const num = Number(angka) || 0;
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
@@ -1626,7 +1671,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         <div 
           ref={mainContentRef}
           onScroll={handleMainScroll}
-          className={`flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 touch-pan-y scroll-smooth pb-24 md:pb-12 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
+          className={`flex-1 overflow-y-auto overscroll-contain p-3 sm:p-6 lg:p-8 touch-pan-y scroll-smooth pb-24 md:pb-12 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
         >
           {renderContent()}
         </div>
@@ -1655,7 +1700,10 @@ function TableWrapper({ children, className = "" }) {
 
   const handleScroll = () => {
     if (containerRef.current) {
-      setIsScrolledRight(containerRef.current.scrollLeft > 35);
+      const scrolledRight = containerRef.current.scrollLeft > 35;
+      if (scrolledRight !== isScrolledRight) {
+        setIsScrolledRight(scrolledRight);
+      }
     }
   };
 
@@ -1778,25 +1826,49 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
   // PERBAIKAN: Menghapus data dummy dan murni menggunakan data riil (Arsip + Proyeksi Bulan Ini)
   const chartData = useMemo(() => {
      const currentMonthStr = getFormattedPeriod(settings?.payrollPeriod);
-     const currentMonthData = {
-         bulan: currentMonthStr.substring(0, 8), // Potong teks bulan agar tidak kepanjangan di grafik
-         total: stats.totalGaji
-     };
-
+     
      if (!archives || !Array.isArray(archives) || archives.length === 0) {
-        // Jika belum ada arsip (Tutup Buku), tampilkan HANYA 1 titik data riil bulan ini
-        return [currentMonthData]; 
+        return [{
+           bulan: currentMonthStr,
+           total: stats.totalGaji,
+           isCurrent: true
+        }]; 
      }
 
-     // Jika sudah ada arsip, ambil riwayatnya (maksimal 11 bulan terakhir) dari yang terlama ke terbaru dengan perisai data
-     const historyData = [...archives].reverse().slice(-11).map(arc => ({
-         bulan: (arc?.periode || '').substring(0, 8),
-         total: arc?.totalGaji || 0
-     }));
+     // Urutkan arsip secara kronologis dari periode terlama ke terbaru (misal: 2026-01 -> 2026-07)
+     const sortedArchives = [...archives].sort((a, b) => {
+        const pA = a.periode || a.period || '';
+        const pB = b.periode || b.period || '';
+        return pA.localeCompare(pB);
+     });
 
-     // Gabungkan data arsip historis dengan proyeksi riil bulan ini
-     return [...historyData, currentMonthData];
-  }, [archives, stats.totalGaji, settings?.payrollPeriod]);
+     const historyData = sortedArchives.map(arc => {
+        let totalGaji = arc?.totalGaji;
+        // Hitung total gajinya secara riil dari dataGuru jika totalGaji di arsip kosong/0
+        if (!totalGaji && Array.isArray(arc?.dataGuru) && arc.dataGuru.length > 0) {
+           totalGaji = arc.dataGuru.reduce((sum, t) => sum + (calculatePayroll(t, settings).totalBersih || 0), 0);
+        }
+        return {
+           bulan: getFormattedPeriod(arc?.periode || arc?.period),
+           total: Number(totalGaji || 0),
+           isCurrent: false
+        };
+     });
+
+     // Cek apakah periode berjalan sudah ada di arsip
+     const currentPeriodCode = settings?.payrollPeriod || '';
+     const hasCurrentInArchive = sortedArchives.some(a => (a.periode || a.period || '').includes(currentPeriodCode));
+
+     if (!hasCurrentInArchive) {
+        historyData.push({
+           bulan: currentMonthStr,
+           total: stats.totalGaji,
+           isCurrent: true
+        });
+     }
+
+     return historyData.slice(-12); // Tampilkan maksimal 12 bulan terakhir
+  }, [archives, stats.totalGaji, settings]);
 
   const currentMonthYear = getFormattedPeriod(settings?.payrollPeriod);
 
@@ -2654,7 +2726,7 @@ function DataGuruView({ teachers, setTeachers }) {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Tanggal Lahir</label>
-                      <input type="date" name="dob" defaultValue={modal.data?.dob || ''} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                      <input type="date" name="dob" defaultValue={formatToInputDate(modal.data?.dob)} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Jenis Kelamin</label>
@@ -2695,7 +2767,7 @@ function DataGuruView({ teachers, setTeachers }) {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">TMT (Mulai Tugas)</label>
-                      <input type="date" name="tmt" defaultValue={modal.data?.tmt || ''} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                      <input type="date" name="tmt" defaultValue={formatToInputDate(modal.data?.tmt)} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Kompetensi & Jabatan Inti</label>
@@ -6762,18 +6834,31 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   const getIndividualHistory = (teacherId) => {
     if (!archives || !Array.isArray(archives)) return [];
     
-    // Reverse arsip agar grafik berurut dari Terlama -> Terbaru (Kiri ke Kanan)
+    const targetTeacher = teachers.find(t => t.id === teacherId);
+    const teacherTmtMonth = targetTeacher?.tmt ? formatToInputDate(targetTeacher.tmt).substring(0, 7) : '';
+
     const history = [];
     const reversedArchives = [...archives].reverse();
     
     for (let i = 0; i < reversedArchives.length; i++) {
         const arc = reversedArchives[i];
-        const historicalData = (arc?.dataGuru || []).find(t => t.id === teacherId);
+        const arcPeriod = (arc?.periode || arc?.period || '').substring(0, 7);
+
+        // Filter out archives before teacher's TMT
+        if (teacherTmtMonth && arcPeriod && arcPeriod < teacherTmtMonth) {
+            continue;
+        }
+
+        const historicalData = (arc?.dataGuru || []).find(t => 
+          String(t.id) === String(teacherId) && 
+          (!t.name || !targetTeacher?.name || t.name.trim().toLowerCase() === targetTeacher.name.trim().toLowerCase())
+        );
+
         if (historicalData) {
             const calc = calculatePayroll(historicalData, settings);
             history.push({
                 periode: (arc?.periode || '').substring(0, 8), // Singkat untuk sumbu X grafik
-                periodeFull: arc?.periode || '',
+                periodeFull: arc?.periode || arc?.period || '',
                 totalBersih: calc.totalBersih,
                 totalKotor: calc.totalKotor,
                 totalPotongan: calc.totalPotongan
@@ -8608,24 +8693,36 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   const riwayatAsli = useMemo(() => {
     if (!archives || !Array.isArray(archives)) return [];
     
+    const myTmtMonth = myData.tmt ? formatToInputDate(myData.tmt).substring(0, 7) : '';
+
     // Map data dari archives global
     const extractedHistory = archives.map(arc => {
-      // Cari data guru ini pada saat arsip tersebut dibuat
-      const historicalData = (arc?.dataGuru || []).find(t => t.id === myData.id);
-      if (!historicalData) return null; // Guru mungkin belum masuk pada bulan tersebut
+      const arcPeriod = (arc?.periode || arc?.period || '').substring(0, 7);
+
+      // Jika TMT guru setelah periode arsip ini, guru belum bekerja di bulan tersebut
+      if (myTmtMonth && arcPeriod && arcPeriod < myTmtMonth) {
+        return null;
+      }
+
+      // Cari data guru ini pada saat arsip tersebut dibuat (cocokkan ID & Nama)
+      const historicalData = (arc?.dataGuru || []).find(t => 
+        String(t.id) === String(myData.id) && 
+        (!t.name || !myData.name || t.name.trim().toLowerCase() === myData.name.trim().toLowerCase())
+      );
+      if (!historicalData) return null;
 
       return {
         idArsip: arc.id,
-        periode: arc.periode,
-        tanggal: arc.dateArchived,
+        periode: arc.periode || arc.period,
+        tanggal: arc.dateArchived || arc.updated_at,
         nominal: calculatePayroll(historicalData, settings).totalBersih,
         status: 'Telah Disahkan',
-        dataHistoris: historicalData // Menyimpan wujud data masa lalu untuk dirender di PDF
+        dataHistoris: historicalData
       };
-    }).filter(Boolean); // Buang yang null
+    }).filter(Boolean);
 
     return extractedHistory;
-  }, [archives, myData.id]);
+  }, [archives, myData.id, myData.name, myData.tmt]);
 
   // Ekstraksi Data Pinjaman Guru
   const loanItems = (myData.payroll?.potonganLainnya || []).filter(p => 
@@ -11002,14 +11099,14 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                       {(loginHistory || []).map((log, idx) => (
                         <tr key={log.id || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                          <td className="p-4 text-slate-600 dark:text-slate-400 font-medium">{log.time}</td>
+                          <td className="p-4 text-slate-600 dark:text-slate-400 font-medium">{log.time || log.timestamp || log.created_at || '-'}</td>
                           <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
-                            {log.name} <span className="font-normal text-slate-500 text-xs ml-1">({log.role})</span>
+                            {log.name || 'Pengguna'} <span className="font-normal text-slate-500 text-xs ml-1">({log.role || 'User'})</span>
                           </td>
                           <td className="p-4 text-slate-500 text-xs">{log.device || '-'}</td>
                           <td className="p-4">
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${log.status.includes('Gagal') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
-                              {log.status}
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${String(log.status || '').includes('Gagal') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                              {log.status || 'Sukses'}
                             </span>
                           </td>
                         </tr>

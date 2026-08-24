@@ -210,6 +210,17 @@ export const fetchCloudData = async () => {
       };
     }) : null;
 
+    if (serverTeachers && Array.isArray(serverTeachers)) {
+      serverTeachers.sort((a, b) => {
+        const idA = parseInt(a.id, 10);
+        const idB = parseInt(b.id, 10);
+        if (!isNaN(idA) && !isNaN(idB)) {
+          return idA - idB;
+        }
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+      });
+    }
+
     const serverArchives = archivesRows && archivesRows.length > 0 ? archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
     const serverFeedbacks = feedbackRows && feedbackRows.length > 0 ? feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
     const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
