@@ -1542,7 +1542,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-w-0 h-full md:overflow-hidden relative">
         <header className="h-16 shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 no-print z-10">
           <div className="flex items-center gap-3">
             <button 
@@ -1671,7 +1671,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         <div 
           ref={mainContentRef}
           onScroll={handleMainScroll}
-          className={`flex-1 overflow-y-auto overscroll-contain p-3 sm:p-6 lg:p-8 touch-pan-y scroll-smooth pb-24 md:pb-12 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
+          className={`flex-1 overflow-y-auto custom-scroll-touch p-3 sm:p-6 lg:p-8 scroll-smooth pb-24 md:pb-12 ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
         >
           {renderContent()}
         </div>
@@ -1745,7 +1745,7 @@ function TableWrapper({ children, className = "" }) {
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className={`overflow-x-auto touch-pan-x touch-pan-y scrollbar-thin rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${className}`}
+        className={`overflow-x-auto custom-scroll-touch scrollbar-thin rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${className}`}
       >
         {children}
       </div>
@@ -6733,16 +6733,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     filtered.forEach(t => {
       const slip = calculatePayroll(t, settings);
       
-      // 🪄 TAMBALAN CERDAS: Kalkulasi data CSV bulan lalu per individu dengan Perisai Data
-      const teacherTmtMonth = t.tmt ? formatToInputDate(t.tmt).substring(0, 7) : '';
-      const prevArchiveMonth = (prevArchive?.periode || prevArchive?.period || '').substring(0, 7);
-
-      const prevData = (prevArchiveMonth && teacherTmtMonth && prevArchiveMonth < teacherTmtMonth)
-        ? null
-        : prevArchive?.dataGuru?.find(guru => 
-            String(guru.id) === String(t.id) && 
-            (!guru.name || !t.name || guru.name.trim().toLowerCase() === t.name.trim().toLowerCase())
-          );
+      // 🪄 TAMBALAN CERDAS: Kalkulasi data CSV bulan lalu per individu berdasarkan kecocokan Nama / ID+Nama
+      const prevData = prevArchive?.dataGuru?.find(guru => {
+        if (!guru || !guru.name || !t || !t.name) return false;
+        const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+        const tName = t.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+        
+        const sameName = gName === tName;
+        const sameIdAndName = String(guru.id) === String(t.id) && (gName.includes(tName) || tName.includes(gName));
+        
+        return sameName || sameIdAndName;
+      });
 
       const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
       const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
@@ -7421,16 +7422,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               {filtered.map(t => {
                 const slip = calculatePayroll(t, settings);
 
-                // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu untuk ditampilkan di tabel UI dengan Perisai Data
-                const teacherTmtMonth = t.tmt ? formatToInputDate(t.tmt).substring(0, 7) : '';
-                const prevArchiveMonth = (prevArchive?.periode || prevArchive?.period || '').substring(0, 7);
-
-                const prevData = (prevArchiveMonth && teacherTmtMonth && prevArchiveMonth < teacherTmtMonth)
-                  ? null
-                  : prevArchive?.dataGuru?.find(guru => 
-                      String(guru.id) === String(t.id) && 
-                      (!guru.name || !t.name || guru.name.trim().toLowerCase() === t.name.trim().toLowerCase())
-                    );
+                // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu berdasarkan kecocokan Nama / ID+Nama
+                const prevData = prevArchive?.dataGuru?.find(guru => {
+                  if (!guru || !guru.name || !t || !t.name) return false;
+                  const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                  const tName = t.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                  
+                  const sameName = gName === tName;
+                  const sameIdAndName = String(guru.id) === String(t.id) && (gName.includes(tName) || tName.includes(gName));
+                  
+                  return sameName || sameIdAndName;
+                });
 
                 const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                 const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
