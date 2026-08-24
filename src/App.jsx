@@ -2912,7 +2912,43 @@ function DataGuruView({ teachers, setTeachers }) {
           </div>
         </div>
         
-        <div className="overflow-x-auto flex-1 touch-pan-x scroll-smooth">
+        {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
+        <div className="md:hidden space-y-3 p-4">
+          {filtered.map(t => (
+            <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-bold text-base text-slate-800 dark:text-white">{t.name}</h4>
+                  <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                  {t.status}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                <div><span className="text-slate-400">Pendidikan:</span> <span className="font-medium block dark:text-slate-200">{t.education}</span></div>
+                <div><span className="text-slate-400">Keaktifan:</span> <span className="font-medium block text-blue-600 dark:text-blue-400">{t.workStatus || 'Aktif'}</span></div>
+                <div><span className="text-slate-400">No WA:</span> <span className="font-medium block dark:text-slate-200">{t.phone || '-'}</span></div>
+                <div><span className="text-slate-400">TMT:</span> <span className="font-medium block dark:text-slate-200">{formatDateId(t.tmt)}</span></div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                <button onClick={() => openModal('view', t)} className="px-3 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Eye size={14}/> Detail
+                </button>
+                <button onClick={() => openModal('edit', t)} className="px-3 py-1.5 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Edit size={14}/> Edit
+                </button>
+                <button onClick={() => openModal('delete', t)} className="px-3 py-1.5 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Trash2 size={14}/> Hapus
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        <div className="overflow-x-auto flex-1 scrollbar-thin">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
               <tr>
@@ -7386,20 +7422,97 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
            </div>
         )}
 
+        {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
+        <div className="md:hidden space-y-3 mb-4 no-print">
+          {filtered.map(t => {
+             const slip = calculatePayroll(t, settings);
+             const prevData = prevArchive?.dataGuru?.find(guru => {
+               if (!guru || !guru.name || !t || !t.name) return false;
+               const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+               const tName = t.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+               return gName === tName || (String(guru.id) === String(t.id) && gName.includes(tName));
+             });
+             const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
+             const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
+
+             return (
+               <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                 <div className="flex justify-between items-start">
+                   <div>
+                     <button 
+                       onClick={() => onEditGaji(t.id)} 
+                       className="font-bold text-base text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 text-left hover:underline"
+                     >
+                       {t.name} <Edit size={14} className="shrink-0" />
+                     </button>
+                     <div className="text-xs text-slate-500 mt-0.5">{t.status} • {t.position}</div>
+                   </div>
+                   <div className="text-right">
+                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">THP Bersih</div>
+                     <div className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</div>
+                     {prevTHP !== null ? (
+                        diffIndividu !== 0 ? (
+                          <div className={`text-[10px] font-bold ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                            {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] font-bold text-slate-400">Sama</div>
+                        )
+                     ) : (
+                        <div className="text-[10px] font-bold text-slate-400">Data Baru</div>
+                     )}
+                   </div>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div><span className="text-slate-400">Total Kotor:</span> <span className="font-bold block dark:text-slate-200">{formatRp(slip.totalKotor)}</span></div>
+                    <div><span className="text-slate-400">Total Potongan:</span> <span className="font-bold text-red-500 block">-{formatRp(slip.totalPotongan)}</span></div>
+                    <div><span className="text-slate-400">T. Masa Kerja:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tMasaKerja)}</span></div>
+                    <div><span className="text-slate-400">T. Jabatan:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tJabatan)}</span></div>
+                    <div><span className="text-slate-400">Bonus Hadir:</span> <span className="font-medium text-emerald-600 block">+{formatRp(slip.bonusHadir)}</span></div>
+                    <div><span className="text-slate-400">Jam Lebih:</span> <span className="font-medium text-emerald-600 block">+{formatRp(slip.tMengajar)}</span></div>
+                 </div>
+
+                 <div className="flex items-center justify-between pt-1">
+                   <div className="flex gap-2">
+                     <button 
+                       onClick={() => setSelectedSlip(t)} 
+                       className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                     >
+                       <FileText size={14}/> Slip Gaji
+                     </button>
+                     <button 
+                       onClick={() => onEditGaji(t.id)} 
+                       className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                     >
+                       <Edit size={14}/> Edit Gaji
+                     </button>
+                   </div>
+                   {t.payroll?.isConfirmed && (
+                     <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">
+                       ✓ Terkonfirmasi
+                     </span>
+                   )}
+                 </div>
+               </div>
+             );
+          })}
+        </div>
+
         <div className={`overflow-x-auto flex-1 relative print-area pb-4 scrollbar-thin ${isMassPrinting ? 'print:hidden' : ''}`}>
           <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
               <tr>
-                <th className="p-2 border-b border-r border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-800 sticky left-0 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)]"></th>
+                <th className="p-2 border-b border-r border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-800 md:sticky md:left-0 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)]"></th>
                 <th colSpan="5" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-blue-700 dark:text-blue-400 tracking-wider text-[11px] uppercase bg-blue-50 dark:bg-blue-900/40">Komponen Tunjangan Tetap</th>
                 <th colSpan="3" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-emerald-700 dark:text-emerald-400 tracking-wider text-[11px] uppercase bg-emerald-50 dark:bg-emerald-900/40">Insentif & Bonus</th>
                 <th colSpan="2" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-slate-700 dark:text-slate-300 tracking-wider text-[11px] uppercase bg-slate-200/70 dark:bg-slate-700/70">Kalkulasi</th>
-                <th colSpan="2" className="p-2 border-b border-slate-300 dark:border-slate-600 text-center font-extrabold text-indigo-700 dark:text-indigo-400 tracking-wider text-[11px] uppercase bg-indigo-50 dark:bg-indigo-900/40 sticky right-0 z-40 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print min-w-[280px]">Finalisasi & Aksi</th>
+                <th colSpan="2" className="p-2 border-b border-slate-300 dark:border-slate-600 text-center font-extrabold text-indigo-700 dark:text-indigo-400 tracking-wider text-[11px] uppercase bg-indigo-50 dark:bg-indigo-900/40 md:sticky md:right-0 z-40 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print min-w-[280px]">Finalisasi & Aksi</th>
               </tr>
               {/* BARIS 2: NAMA KOLOM */}
               <tr className="bg-slate-100 dark:bg-slate-900/90">
-                <th className="p-3 font-bold border-b border-r border-slate-200 dark:border-slate-700 sticky left-0 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] bg-slate-100 dark:bg-slate-900/90">Nama & Status</th>
+                <th className="p-3 font-bold border-b border-r border-slate-200 dark:border-slate-700 md:sticky md:left-0 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] bg-slate-100 dark:bg-slate-900/90">Nama & Status</th>
                 
                 <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right">T. Masa Kerja</th>
                 <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right">T. Jabatan</th>
@@ -7414,8 +7527,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                 <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right bg-slate-200/50 dark:bg-slate-800/50">Total Kotor</th>
                 <th className="p-3 font-bold border-b border-r border-slate-300 dark:border-slate-600 text-right text-red-600 dark:text-red-400">Potongan</th>
                 
-                <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right bg-emerald-100 dark:bg-emerald-900/90 text-emerald-800 dark:text-emerald-300 sticky right-[150px] z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px]">THP Bersih</th>
-                <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-center sticky right-0 bg-slate-100 dark:bg-slate-900/90 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print w-[150px] min-w-[150px]">Aksi Gaji</th>
+                <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right bg-emerald-100 dark:bg-emerald-900/90 text-emerald-800 dark:text-emerald-300 md:sticky md:right-[150px] z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px]">THP Bersih</th>
+                <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-center md:sticky md:right-0 bg-slate-100 dark:bg-slate-900/90 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print w-[150px] min-w-[150px]">Aksi Gaji</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80">
@@ -7451,7 +7564,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
 
                 return (
                   <tr key={t.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors group">
-                    <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 sticky left-0 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
+                    <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:left-0 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
                       {/* FITUR BARU: Nama Pegawai Dapat Diklik Langsung Untuk Edit Komponen Gaji */}
                       <button 
                         onClick={() => onEditGaji(t.id)} 
@@ -7484,7 +7597,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                     <td className="p-3 text-right font-medium text-red-600 dark:text-red-400 border-r border-slate-100 dark:border-slate-700">-{formatRp(slip.totalPotongan)}</td>
                     
                     {/* 🪄 TAMBALAN CERDAS 2: Sticky Right untuk Kolom THP Bersih */}
-                    <td className="p-3 text-right bg-emerald-50 dark:bg-emerald-900/90 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800 border-l border-r border-slate-200 dark:border-slate-700 sticky right-[150px] z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] min-w-[130px]">
+                    <td className="p-3 text-right bg-emerald-50 dark:bg-emerald-900/90 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800 border-l border-r border-slate-200 dark:border-slate-700 md:sticky md:right-[150px] z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] min-w-[130px]">
                       <div className="font-black text-emerald-700 dark:text-emerald-400 text-[13px] tracking-tight">{formatRp(slip.totalBersih)}</div>
                       {/* 🪄 Indikator Perbandingan Individual */}
                       {prevTHP !== null ? (
@@ -7505,7 +7618,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                       ) : null}
                     </td>
                     {/* 🪄 TAMBALAN CERDAS 2: Sticky Kolom Aksi yang Lebarnya Diatur Pasti (Fixed) */}
-                    <td className="p-3 text-center bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 sticky right-0 z-20 shadow-[-1px_0_0_rgba(0,0,0,0.05)] border-l border-slate-200 dark:border-slate-700 no-print w-[150px] min-w-[150px]">
+                    <td className="p-3 text-center bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:right-0 z-20 shadow-[-1px_0_0_rgba(0,0,0,0.05)] border-l border-slate-200 dark:border-slate-700 no-print w-[150px] min-w-[150px]">
                       <div className="flex flex-col items-center justify-center gap-1.5">
                         <div className="flex items-center gap-1.5">
                           <button 
