@@ -181,6 +181,52 @@ const formatRp = (angka) => {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
 };
 
+// Helper untuk memformat angka nominal menjadi format ribuan titik secara otomatis saat diketik (cth: "1.000.000")
+const formatInputRupiah = (val) => {
+  if (val === null || val === undefined || val === '') return '';
+  if (val === 0 || val === '0') return '0';
+  const cleanStr = String(val).replace(/\D/g, '');
+  if (!cleanStr) return '';
+  return new Intl.NumberFormat('id-ID').format(cleanStr);
+};
+
+const parseInputRupiah = (valStr) => {
+  if (valStr === null || valStr === undefined || valStr === '') return 0;
+  const cleanStr = String(valStr).replace(/\D/g, '');
+  return cleanStr ? Number(cleanStr) : 0;
+};
+
+// Komponen Input Nominal Rupiah Otomatis Bertitik saat Diketik Admin
+function FormattedRupiahInput({ value, onChange, className = "", placeholder = "0", ...props }) {
+  const [displayValue, setDisplayValue] = useState(() => formatInputRupiah(value));
+
+  useEffect(() => {
+    setDisplayValue(formatInputRupiah(value));
+  }, [value]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    const cleanNumber = raw.replace(/\D/g, '');
+    const formatted = cleanNumber ? new Intl.NumberFormat('id-ID').format(cleanNumber) : '';
+    setDisplayValue(formatted);
+    if (onChange) {
+      onChange(cleanNumber ? Number(cleanNumber) : '');
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      onChange={handleChange}
+      placeholder={placeholder}
+      className={className}
+      {...props}
+    />
+  );
+};
+
 const formatDateId = (dateString) => {
   if (!dateString) return '-';
   const d = new Date(dateString);
@@ -3367,10 +3413,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Total Pinjaman (Plafon)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
-                        <input 
-                          type="number" min="1"
+                        <FormattedRupiahInput 
                           value={addForm.totalPinjaman} 
-                          onChange={e => setAddForm({...addForm, totalPinjaman: e.target.value})}
+                          onChange={val => setAddForm({...addForm, totalPinjaman: val})}
                           className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-amber-600 dark:text-amber-400 focus:ring-2 focus:ring-amber-500 outline-none"
                           required
                         />
@@ -3380,10 +3425,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Cicilan Per Bulan</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
-                        <input 
-                          type="number" min="1"
+                        <FormattedRupiahInput 
                           value={addForm.nominal} 
-                          onChange={e => setAddForm({...addForm, nominal: e.target.value})}
+                          onChange={val => setAddForm({...addForm, nominal: val})}
                           className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none"
                           required
                         />
@@ -3438,10 +3482,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Plafon (Total Pinjaman)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
-                        <input 
-                          type="number" min="0"
+                        <FormattedRupiahInput 
                           value={editForm.totalPinjaman} 
-                          onChange={e => setEditForm({...editForm, totalPinjaman: e.target.value})}
+                          onChange={val => setEditForm({...editForm, totalPinjaman: val})}
                           className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none dark:text-white"
                           required
                         />
@@ -3451,10 +3494,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Cicilan Per Bulan</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
-                        <input 
-                          type="number" min="0"
+                        <FormattedRupiahInput 
                           value={editForm.nominal} 
-                          onChange={e => setEditForm({...editForm, nominal: e.target.value})}
+                          onChange={val => setEditForm({...editForm, nominal: val})}
                           className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold text-rose-600 dark:text-rose-400 focus:ring-2 focus:ring-rose-500 outline-none"
                           required
                         />
@@ -3464,10 +3506,9 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Sisa Hutang Saat Ini</label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-slate-400 font-medium">Rp</span>
-                        <input 
-                          type="number" min="0"
+                        <FormattedRupiahInput 
                           value={editForm.sisaHutang} 
-                          onChange={e => setEditForm({...editForm, sisaHutang: e.target.value})}
+                          onChange={val => setEditForm({...editForm, sisaHutang: val})}
                           className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-black text-teal-600 dark:text-teal-400 focus:ring-2 focus:ring-teal-500 outline-none"
                           required
                         />
@@ -4404,11 +4445,58 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
           </div>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4 touch-pan-x touch-pan-y scroll-smooth" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+        {/* FITUR BARU: Tampilan Kartu Mobile Rekap Absensi (< md) */}
+        <div className="md:hidden space-y-3 p-3 no-print">
+          {filtered.map(t => {
+             const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
+             const real = t.payroll?.jamMengajar?.realisasi || 0;
+             const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
+             const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
+             const tInsidentalJam = (t.payroll?.kegiatanInsidental || []).reduce((sum, item) => sum + (Number(item.jam) || 0), 0);
+             const selisih = (real + jsjm) - wajib + jamPlus + tInsidentalJam; 
+             const telat = t.payroll?.disiplin?.telat || 0;
+             const tepatWaktu = Math.max(0, real - telat);
+
+             const isUnderperforming = selisih < 0;
+             const isLateOften = telat >= 3;
+
+             return (
+               <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                 <div className="flex justify-between items-start">
+                   <div>
+                     <h4 className="font-bold text-base text-slate-800 dark:text-white flex items-center gap-1.5">
+                       {isLateOften && <Clock size={14} className="text-red-500 shrink-0" title="Sering Telat" />}
+                       {isUnderperforming && !isLateOften && <AlertCircle size={14} className="text-amber-500 shrink-0" title="Kurang Jam" />}
+                       {t.name}
+                     </h4>
+                     <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || t.status}</div>
+                   </div>
+                   <button 
+                     onClick={() => handleOpenEdit(t)} 
+                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
+                   >
+                     <Edit size={14}/> Edit Jam
+                   </button>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div><span className="text-slate-400">Total Realisasi:</span> <span className="font-black text-blue-600 dark:text-blue-400 block text-sm">{real} JPL</span></div>
+                    <div><span className="text-slate-400">Tepat Waktu:</span> <span className="font-black text-emerald-600 dark:text-emerald-400 block text-sm">{tepatWaktu} JPL</span></div>
+                    <div><span className="text-slate-400">Jam Wajib Target:</span> <span className="font-bold block dark:text-slate-200">{wajib} JPL</span></div>
+                    <div><span className="text-slate-400">Jam Plus & Insidental:</span> <span className="font-bold text-emerald-600 block">+{jamPlus + tInsidentalJam} JPL</span></div>
+                    <div><span className="text-slate-400">Jumlah Telat:</span> <span className={`font-bold block ${isLateOften ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{telat} Kali</span></div>
+                    <div><span className="text-slate-400">Selisih Target:</span> <span className={`font-bold block ${selisih < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{selisih > 0 ? `+${selisih}` : selisih} JPL</span></div>
+                 </div>
+               </div>
+             );
+          })}
+        </div>
+
+        <div className="overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4 scrollbar-thin">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border-2 border-slate-400 dark:border-slate-500">
             <thead className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="p-4 font-bold border border-slate-400 dark:border-slate-500 sticky left-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)]">
+                <th className="p-4 font-bold border border-slate-400 dark:border-slate-500 md:sticky md:left-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)]">
                   Nama Guru
                 </th>
                 {/* Render Header Tanggal 1-31 */}
@@ -4425,7 +4513,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800">Selisih</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-red-600 dark:text-red-400">Telat</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400">Tepat Waktu</th>
-                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center sticky right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
+                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center md:sticky md:right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 dark:divide-slate-600">
@@ -4462,7 +4550,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
 
                 return (
                   <tr key={t.id} className={`${rowBgClass} transition-colors group`}>
-                    <td className={`p-3 sticky left-0 z-10 border border-slate-400 dark:border-slate-500 shadow-[1px_0_0_rgba(0,0,0,0.05)] ${stickyBgClass}`}>
+                    <td className={`p-3 md:sticky md:left-0 z-10 border border-slate-400 dark:border-slate-500 shadow-[1px_0_0_rgba(0,0,0,0.05)] ${stickyBgClass}`}>
                       <div className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap flex items-center gap-1.5">
                         {isLateOften && <Clock size={12} className="text-red-500 flex-shrink-0" title="Sering Telat" />}
                         {isUnderperforming && !isLateOften && <AlertCircle size={12} className="text-amber-500 flex-shrink-0" title="Kurang Jam" />}
@@ -4536,13 +4624,13 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                     <td className="p-3 text-center font-black text-emerald-700 dark:text-emerald-400 border border-slate-400 dark:border-slate-500 bg-emerald-50/50 dark:bg-emerald-900/20 text-lg">
                       {tepatWaktu}
                     </td>
-                    <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 sticky right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print ${stickyBgClass}`}>
+                    <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 md:sticky md:right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] no-print ${stickyBgClass}`}>
                        <button 
-                         onClick={() => handleOpenEdit(t)} 
-                         className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto" 
-                         title="Edit Manual Jam & Telat"
+                          onClick={() => handleOpenEdit(t)} 
+                          className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto" 
+                          title="Edit Manual Jam & Telat"
                        >
-                         <Edit size={16} />
+                          <Edit size={16} />
                        </button>
                     </td>
                   </tr>
@@ -5925,7 +6013,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                               </div>
                               <div>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nominal (Rp)</span>
-                                <input type="number" value={jab.nominal} onChange={e => handleArrayUpdate(t.id, 'jabatans', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-blue-600 dark:text-blue-400 outline-none focus:ring-1 focus:ring-emerald-500" />
+                                <FormattedRupiahInput 
+                                  value={jab.nominal} 
+                                  onChange={val => handleArrayUpdate(t.id, 'jabatans', idx, 'nominal', val)} 
+                                  className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-blue-600 dark:text-blue-400 outline-none focus:ring-1 focus:ring-emerald-500" 
+                                />
                               </div>
                             </div>
                             <button onClick={() => handleRemoveArrayItem(t.id, 'jabatans', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16}/></button>
@@ -5965,9 +6057,9 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Nominal Override</label>
                             <div className="relative">
                               <span className="absolute left-3 top-2.5 text-slate-500 font-medium">Rp</span>
-                              <input type="number" 
+                              <FormattedRupiahInput 
                                 value={(p.pendidikan?.nominalOverride !== undefined && p.pendidikan?.nominalOverride !== '' && p.pendidikan?.nominalOverride !== 0) ? p.pendidikan.nominalOverride : ((settings?.masterRates?.EDU_RATES || EDU_RATES)[t.education] || 0)}
-                                onChange={e => handleUpdatePayrollObj(t.id, 'pendidikan', 'nominalOverride', e.target.value === '' ? '' : Number(e.target.value))}
+                                onChange={val => handleUpdatePayrollObj(t.id, 'pendidikan', 'nominalOverride', val)}
                                 className="w-full pl-10 pr-4 py-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
                               />
                             </div>
@@ -5999,7 +6091,13 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                               </div>
                               <div>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Nominal (Rp)</span>
-                                <input type="number" value={komp.nominal} onChange={e => handleArrayUpdate(t.id, 'kompetensi', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-amber-600 dark:text-amber-400 outline-none" />
+                                <FormattedRupiahInput 
+                                  value={komp.nominal} 
+                                  onChange={val => handleArrayUpdate(t.id, 'kompetensi', idx, 'nominal', val)} 
+                                  className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-amber-600 dark:text-amber-400 outline-none" 
+                                />
+                              </div>
+                            </div>', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 text-xs font-bold text-amber-600 dark:text-amber-400 outline-none" />
                               </div>
                             </div>
                             <button onClick={() => handleRemoveArrayItem(t.id, 'kompetensi', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16}/></button>
