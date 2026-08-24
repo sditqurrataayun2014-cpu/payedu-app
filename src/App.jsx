@@ -1722,16 +1722,29 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           {renderContent()}
         </div>
 
-        {/* Tombol Melayang (Floating Action Button) Scroll ke Atas Khusus Mobile */}
-        {showScrollTop && (
+        {/* FITUR BARU: Tombol Melayang (Floating Action Widget) Scroll Ke Paling Atas (⬆️) & Paling Bawah (⬇️) */}
+        <div className="fixed bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
           <button
-            onClick={scrollToTopGlobal}
-            className="fixed bottom-6 right-6 z-[90] p-3 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-500/40 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center border border-white/20 animate-in zoom-in cursor-pointer"
-            title="Kembali ke Atas Halaman"
+            onClick={() => {
+              if (mainContentRef.current) mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xl shadow-blue-600/30 flex items-center justify-center transition-all border border-blue-400/40 cursor-pointer hover:scale-105"
+            title="Scroll ke Paling Atas Halaman"
           >
-            <ChevronUp size={22} strokeWidth={2.5} />
+            <ChevronUp size={22} strokeWidth={3} />
           </button>
-        )}
+          <button
+            onClick={() => {
+              if (mainContentRef.current) mainContentRef.current.scrollTo({ top: mainContentRef.current.scrollHeight, behavior: 'smooth' });
+              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }}
+            className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 active:scale-95 text-white shadow-xl shadow-slate-900/30 flex items-center justify-center transition-all border border-slate-600/40 cursor-pointer hover:scale-105"
+            title="Scroll ke Paling Bawah Halaman"
+          >
+            <ChevronDown size={22} strokeWidth={3} />
+          </button>
+        </div>
       </main>
     </div>
   );
@@ -3675,7 +3688,42 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
           </div>
          </div>
 
-         <div className="overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
+        {/* FITUR BARU: Tampilan Kartu Mobile Rekap Pinjaman (< md) */}
+        <div className="md:hidden space-y-3 p-3 no-print">
+           {filteredLoans.map((loan, idx) => (
+              <div key={`${loan.teacherId}-${idx}`} className={`bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3 ${loan.isLunas ? 'opacity-75 bg-slate-50/50' : ''}`}>
+                 <div className="flex justify-between items-start">
+                    <div>
+                       <h4 className="font-bold text-base text-slate-800 dark:text-white">{loan.name}</h4>
+                       <div className="text-xs text-slate-500 mt-0.5">{loan.nipy} • {loan.ket}</div>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${loan.isLunas ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                       {loan.isLunas ? 'LUNAS' : 'Belum Lunas'}
+                    </span>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div><span className="text-slate-400">Total Plafon:</span> <span className="font-bold block dark:text-slate-200">{formatRp(loan.totalPinjaman)}</span></div>
+                    <div><span className="text-slate-400">Cicilan/Bulan:</span> <span className="font-bold block text-rose-600 dark:text-rose-400">{formatRp(loan.nominal)}</span></div>
+                    <div className="col-span-2"><span className="text-slate-400">Sisa Hutang:</span> <span className="font-black text-sm block text-teal-600 dark:text-teal-400">{formatRp(loan.sisaHutang)}</span></div>
+                 </div>
+
+                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                    <button onClick={() => setSelectedLoanHistory(loan)} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <History size={14}/> Riwayat
+                    </button>
+                    <button onClick={() => { setEditForm({ teacherId: loan.teacherId, loanIdx: loan.loanIdx, ket: loan.ket, nominal: loan.nominal, totalPinjaman: loan.totalPinjaman, sisaHutang: loan.sisaHutang, originalKet: loan.ket }); setIsEditModalOpen(true); }} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <Edit size={14}/> Edit
+                    </button>
+                    <button onClick={() => handleDeleteLoan(loan)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <Trash2 size={14}/> Hapus
+                    </button>
+                 </div>
+              </div>
+           ))}
+        </div>
+
+        <div className="overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
               <tr>
@@ -5286,7 +5334,43 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
                      </div>
                   </div>
                   
-                  <div className="overflow-x-auto overflow-y-auto flex-1 p-2 pb-4 touch-pan-x touch-pan-y scroll-smooth">
+                  {/* FITUR BARU: Tampilan Kartu Mobile Pemetaan Roster (< md) */}
+                  <div className="md:hidden space-y-3 p-3 no-print">
+                     {filtered.map(t => {
+                        const r = t.payroll?.roster || {};
+                        const totalMingguan = ['senin','selasa','rabu','kamis','jumat','sabtu','minggu'].reduce((sum, d) => sum + (Number(r[d]) || 0), 0);
+                        return (
+                           <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                              <div className="flex justify-between items-start">
+                                 <div>
+                                    <h4 className="font-bold text-base text-slate-800 dark:text-white">{t.name}</h4>
+                                    <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || 'Guru'}</div>
+                                 </div>
+                                 <span className="px-3 py-1 bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400 rounded-full text-xs font-black">
+                                    {totalMingguan} JPL/Pekan
+                                 </span>
+                              </div>
+
+                              <div className="grid grid-cols-4 gap-1.5 text-xs bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                                 {['senin','selasa','rabu','kamis','jumat','sabtu','minggu'].map(day => (
+                                    <div key={day} className="flex flex-col items-center p-1 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                                       <span className="text-[9px] uppercase font-bold text-slate-400">{day.substring(0,3)}</span>
+                                       <input 
+                                          type="number" min="0" 
+                                          value={r[day] !== undefined ? r[day] : ''} 
+                                          onChange={e => handleInlineRosterChange(t.id, day, e.target.value)}
+                                          className="w-full text-center bg-transparent text-xs font-bold text-slate-800 dark:text-white outline-none"
+                                          placeholder="0"
+                                       />
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+                        );
+                     })}
+                  </div>
+
+                  <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 p-2 pb-4 touch-pan-x touch-pan-y scroll-smooth">
                      <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border border-slate-200 dark:border-slate-700">
                         <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 sticky top-0 z-10 shadow-sm border-b border-slate-300 dark:border-slate-600">
                            <tr>
@@ -6111,11 +6195,19 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 items-end">
                            <div>
                               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Pasangan</label>
-                              <input type="number" value={p.keluarga?.tarifSuamiIstri !== undefined ? p.keluarga.tarifSuamiIstri : 200000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifSuamiIstri', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
+                              <FormattedRupiahInput 
+                                value={p.keluarga?.tarifSuamiIstri !== undefined ? p.keluarga.tarifSuamiIstri : 200000} 
+                                onChange={val => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifSuamiIstri', val)} 
+                                className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold dark:text-white outline-none" 
+                              />
                            </div>
                            <div>
                               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tarif Per Anak</label>
-                              <input type="number" value={p.keluarga?.tarifAnak !== undefined ? p.keluarga.tarifAnak : 100000} onChange={e => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifAnak', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm outline-none" />
+                              <FormattedRupiahInput 
+                                value={p.keluarga?.tarifAnak !== undefined ? p.keluarga.tarifAnak : 100000} 
+                                onChange={val => handleUpdatePayrollObj(t.id, 'keluarga', 'tarifAnak', val)} 
+                                className="w-full p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold dark:text-white outline-none" 
+                              />
                            </div>
                            <div className="lg:col-span-2 flex items-center gap-4 bg-slate-100 dark:bg-slate-700/50 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600">
                               <div className="text-[10px] text-slate-500 font-bold uppercase w-24">Profil Sistem:</div>
@@ -6137,19 +6229,27 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in zoom-in-95">
                          <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-800">
                             <label className="block text-[10px] font-bold text-blue-500 uppercase mb-1">Total Jam Mengajar</label>
-                            <input type="number" value={p.jamMengajar?.realisasi || 0} onChange={e => handleUpdatePayrollObj(t.id, 'jamMengajar', 'realisasi', Number(e.target.value))} className="w-full p-2 border rounded-md bg-white text-sm font-bold" />
+                            <input type="number" value={p.jamMengajar?.realisasi || 0} onChange={e => handleUpdatePayrollObj(t.id, 'jamMengajar', 'realisasi', Number(e.target.value))} className="w-full p-2 border rounded-md bg-white dark:bg-slate-800 dark:text-white text-sm font-bold" />
                          </div>
                          <div className="p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-800">
                             <label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Jumlah Telat</label>
-                            <input type="number" value={p.disiplin?.telat || 0} onChange={e => handleUpdatePayrollObj(t.id, 'disiplin', 'telat', Number(e.target.value))} className="w-full p-2 border rounded-md bg-white text-sm font-bold" />
+                            <input type="number" value={p.disiplin?.telat || 0} onChange={e => handleUpdatePayrollObj(t.id, 'disiplin', 'telat', Number(e.target.value))} className="w-full p-2 border rounded-md bg-white dark:bg-slate-800 dark:text-white text-sm font-bold" />
                          </div>
                          <div className="p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-lg border border-emerald-100 dark:border-emerald-800">
                             <label className="block text-[10px] font-bold text-emerald-500 uppercase mb-1">Tarif Bonus Hadir /Hr</label>
-                            <input type="number" value={p.disiplin?.tarifHadir !== undefined ? p.disiplin.tarifHadir : 1000} onChange={e => handleUpdatePayrollObj(t.id, 'disiplin', 'tarifHadir', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2 border rounded-md bg-white text-sm font-bold" />
+                            <FormattedRupiahInput 
+                              value={p.disiplin?.tarifHadir !== undefined ? p.disiplin.tarifHadir : 1000} 
+                              onChange={val => handleUpdatePayrollObj(t.id, 'disiplin', 'tarifHadir', val)} 
+                              className="w-full p-2 border rounded-md bg-white dark:bg-slate-800 text-sm font-bold text-emerald-600 outline-none" 
+                            />
                          </div>
                          <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-800">
                             <label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Denda Telat /Hr</label>
-                            <input type="number" value={p.disiplin?.tarifTelat !== undefined ? p.disiplin.tarifTelat : 1000} onChange={e => handleUpdatePayrollObj(t.id, 'disiplin', 'tarifTelat', e.target.value === '' ? '' : Number(e.target.value))} className="w-full p-2 border rounded-md bg-white text-sm font-bold" />
+                            <FormattedRupiahInput 
+                              value={p.disiplin?.tarifTelat !== undefined ? p.disiplin.tarifTelat : 1000} 
+                              onChange={val => handleUpdatePayrollObj(t.id, 'disiplin', 'tarifTelat', val)} 
+                              className="w-full p-2 border rounded-md bg-white dark:bg-slate-800 text-sm font-bold text-amber-600 outline-none" 
+                            />
                          </div>
                       </div>
                     )}
@@ -6166,7 +6266,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                               </div>
                               <div>
                                 <span className="text-[10px] font-bold text-emerald-600 uppercase block mb-1">Nominal (Rp)</span>
-                                <input type="number" value={ins.nominal} onChange={e => handleArrayUpdate(t.id, 'insentifTambahan', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border border-emerald-200 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold text-emerald-600 outline-none" />
+                                <FormattedRupiahInput 
+                                  value={ins.nominal} 
+                                  onChange={val => handleArrayUpdate(t.id, 'insentifTambahan', idx, 'nominal', val)} 
+                                  className="w-full p-2 border border-emerald-200 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold text-emerald-600 outline-none" 
+                                />
                               </div>
                             </div>
                             <button onClick={() => handleRemoveArrayItem(t.id, 'insentifTambahan', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16}/></button>
@@ -6188,7 +6292,11 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
                               </div>
                               <div>
                                 <span className="text-[10px] font-bold text-red-600 uppercase block mb-1">Nominal (Rp) per Bulan</span>
-                                <input type="number" value={pot.nominal} onChange={e => handleArrayUpdate(t.id, 'potonganLainnya', idx, 'nominal', Number(e.target.value))} className="w-full p-2 border border-red-200 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold text-red-600 outline-none" />
+                                <FormattedRupiahInput 
+                                  value={pot.nominal} 
+                                  onChange={val => handleArrayUpdate(t.id, 'potonganLainnya', idx, 'nominal', val)} 
+                                  className="w-full p-2 border border-red-200 rounded-lg bg-white dark:bg-slate-800 text-sm font-bold text-red-600 outline-none" 
+                                />
                               </div>
                             </div>
                             <button onClick={() => handleRemoveArrayItem(t.id, 'potonganLainnya', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16}/></button>
@@ -8818,6 +8926,62 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
+  // 🪄 FITUR BARU: State & Handler Mandiri Edit Biodata Guru
+  const [isEditBiodataOpen, setIsEditBiodataOpen] = useState(false);
+  const [isSavingBiodata, setIsSavingBiodata] = useState(false);
+  const [biodataForm, setBiodataForm] = useState({
+     name: '', pob: '', dob: '', phone: '', address: '', education: 'S1', bankName: '', bankAccount: ''
+  });
+
+  const handleOpenEditBiodata = () => {
+     setBiodataForm({
+        name: myData.name || '',
+        pob: myData.pob || '',
+        dob: formatToInputDate(myData.dob) || '',
+        phone: myData.phone || '',
+        address: myData.address || '',
+        education: myData.education || 'S1',
+        bankName: myData.bankName || '',
+        bankAccount: myData.bankAccount || '',
+     });
+     setIsEditBiodataOpen(true);
+  };
+
+  const handleSaveBiodata = async (e) => {
+     e.preventDefault();
+     setIsSavingBiodata(true);
+
+     const updatedTeachers = teachers.map(t => {
+        if (t.id === myData.id) {
+           return {
+              ...t,
+              name: biodataForm.name,
+              pob: biodataForm.pob,
+              dob: biodataForm.dob,
+              phone: biodataForm.phone,
+              address: biodataForm.address,
+              education: biodataForm.education,
+              bankName: biodataForm.bankName,
+              bankAccount: biodataForm.bankAccount
+           };
+        }
+        return t;
+     });
+
+     setTeachers(updatedTeachers);
+
+     try {
+        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
+        setIsEditBiodataOpen(false);
+     } catch (err) {
+        alert('Gagal menyimpan ke server. Pastikan koneksi internet aktif.');
+     } finally {
+        setIsSavingBiodata(false);
+     }
+  };
+
   // Helper untuk simulasi jika data harian belum pernah disave manual oleh admin
   const getDailyHours = (total, teacherId) => {
     const days = Array(31).fill('');
@@ -9103,6 +9267,128 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
         </div>
       )}
 
+      {/* 🪄 MODAL BARU: Edit Biodata Mandiri Guru */}
+      {isEditBiodataOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                <Edit className="text-blue-500" /> Perbarui Biodata Mandiri Saya
+              </h3>
+              <button onClick={() => setIsEditBiodataOpen(false)} className="p-2 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[75vh]">
+               <form id="editBiodataForm" onSubmit={handleSaveBiodata} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Lengkap & Gelar</label>
+                    <input 
+                      type="text"
+                      value={biodataForm.name} 
+                      onChange={e => setBiodataForm({...biodataForm, name: e.target.value})}
+                      className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tempat Lahir</label>
+                      <input 
+                        type="text"
+                        value={biodataForm.pob} 
+                        onChange={e => setBiodataForm({...biodataForm, pob: e.target.value})}
+                        className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                        placeholder="Cth: Pekanbaru"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tanggal Lahir</label>
+                      <input 
+                        type="date"
+                        value={biodataForm.dob} 
+                        onChange={e => setBiodataForm({...biodataForm, dob: e.target.value})}
+                        className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">No. WhatsApp / HP</label>
+                      <input 
+                        type="text"
+                        value={biodataForm.phone} 
+                        onChange={e => setBiodataForm({...biodataForm, phone: e.target.value})}
+                        className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                        placeholder="0812xxxxxxxx"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Pendidikan Terakhir</label>
+                      <select 
+                        value={biodataForm.education} 
+                        onChange={e => setBiodataForm({...biodataForm, education: e.target.value})}
+                        className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white font-bold"
+                      >
+                        <option value="S2">S2</option>
+                        <option value="S1">S1</option>
+                        <option value="Diploma">Diploma</option>
+                        <option value="SMA/Pondok">SMA/Pondok</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Alamat Tempat Tinggal</label>
+                    <textarea 
+                      rows="2"
+                      value={biodataForm.address} 
+                      onChange={e => setBiodataForm({...biodataForm, address: e.target.value})}
+                      className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none"
+                      placeholder="Alamat lengkap rumah..."
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <h4 className="font-bold text-sm dark:text-white mb-3 text-emerald-600 flex items-center gap-1.5"><CreditCard size={16}/> Informasi Rekening Bank Penggajian</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Bank</label>
+                        <input 
+                          type="text"
+                          value={biodataForm.bankName} 
+                          onChange={e => setBiodataForm({...biodataForm, bankName: e.target.value})}
+                          className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
+                          placeholder="Cth: Bank Riau Kepri / BSI / BCA"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nomor Rekening</label>
+                        <input 
+                          type="text"
+                          value={biodataForm.bankAccount} 
+                          onChange={e => setBiodataForm({...biodataForm, bankAccount: e.target.value})}
+                          className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
+                          placeholder="1234567890"
+                        />
+                      </div>
+                    </div>
+                  </div>
+               </form>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+              <button onClick={() => setIsEditBiodataOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-sm">Batal</button>
+              <button type="submit" form="editBiodataForm" disabled={isSavingBiodata} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70">
+                {isSavingBiodata ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
+                {isSavingBiodata ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Komplain WA */}
       {isKomplainModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -9315,15 +9601,23 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                    
                    {/* KIRI: Informasi Profil Lengkap */}
                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-                      <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between">
+                      <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-2">
                          <div className="flex items-center gap-3">
                            <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl">
                              <UserCircle size={20} />
                            </div>
                            <h3 className="font-bold text-slate-800 dark:text-white">Data Personal & Kepegawaian</h3>
                          </div>
-                         <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">
-                           <CheckCircle size={14}/> Terverifikasi
+                         <div className="flex items-center gap-2">
+                           <button 
+                             onClick={handleOpenEditBiodata} 
+                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                           >
+                             <Edit size={14}/> <span className="hidden sm:inline">Edit Biodata Saya</span><span className="sm:hidden">Edit</span>
+                           </button>
+                           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">
+                             <CheckCircle size={14}/> Terverifikasi
+                           </div>
                          </div>
                       </div>
                       <div className="p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 flex-1">
