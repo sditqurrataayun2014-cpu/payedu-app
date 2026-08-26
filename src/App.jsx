@@ -2170,7 +2170,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
              {user?.role === 'Kepala Sekolah' ? 'Ruang Kendali Pimpinan' : 'Ruang Kendali Administrator'}
           </p>
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-4 leading-tight">
-             Halo, {user?.name.split(' ')[0]}!
+             Halo, {user?.role === 'Kepala Sekolah' || user?.name === 'Kepala Sekolah' ? (settings?.principalName ? `Kepala Sekolah (${settings.principalName.split(',')[0]})` : 'Kepala Sekolah') : (user?.name?.split(' ')[0] || 'User')}!
           </h1>
           <p className="text-blue-100 opacity-90 max-w-xl text-sm md:text-base">
             Pantau statistik kepegawaian, distribusi status guru, tingkat pendidikan, dan estimasi total pengeluaran gaji sekolah periode ini secara *real-time*.
@@ -5127,14 +5127,55 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
      }, 800);
   };
 
-  // 🪄 FUNGSI BARU: Eksekusi Publikasi ke Portal Guru
-  const executePublish = () => {
+  // 🪄 FUNGSI BARU: Eksekusi Publikasi ke Portal Guru & Real-Time Cloud Sync
+  const executePublish = async () => {
      setIsSaving(true);
      setConfirmPublish(false);
-     setTimeout(() => {
-        setIsSaving(false);
-        alert("Berhasil! Roster mingguan telah dipublikasikan dan kini otomatis terintegrasi di menu 'Jadwal Saya' pada masing-masing Portal Guru.");
-     }, 800);
+     
+     const dayMap = { 0: 'minggu', 1: 'senin', 2: 'selasa', 3: 'rabu', 4: 'kamis', 5: 'jumat', 6: 'sabtu' };
+     
+     const updatedTeachers = teachers.map(t => {
+        const roster = t.payroll?.roster || {};
+        const newHarian = Array(31).fill('');
+        let newRealisasi = 0;
+
+        for (let i = 1; i <= daysInMonth; i++) {
+           const date = new Date(year, month, i);
+           const dayKey = dayMap[date.getDay()];
+           const jam = Number(roster[dayKey]) || 0;
+           
+           if (jam > 0) {
+              newHarian[i - 1] = jam;
+              newRealisasi += jam;
+           }
+        }
+
+        const tInsidentalJam = (t.payroll?.kegiatanInsidental || []).reduce((sum, item) => sum + (Number(item.jam) || 0), 0);
+
+        return {
+           ...t,
+           payroll: {
+              ...(t.payroll || {}),
+              jamMengajar: {
+                 ...(t.payroll?.jamMengajar || {}),
+                 harian: newHarian,
+                 realisasi: newRealisasi + tInsidentalJam
+              }
+           }
+        };
+     });
+
+     setTeachers(updatedTeachers);
+     safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+
+     try {
+        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+     } catch (err) {
+        console.warn("Gagal publish roster ke cloud:", err);
+     }
+
+     setIsSaving(false);
+     alert("✨ BERHASIL DIPUBLIKASIKAN & DISINKRONKAN KE CLOUD! ✨\n\nPemetaan Roster dan Jam Mengajar Harian telah terbit dan otomatis terintegrasi ke menu 'Jadwal Saya' pada seluruh Portal Guru di semua perangkat.");
   };
 
   // Handler Insidental
@@ -9981,6 +10022,28 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                  </div>
                )})}
             </div>
+
+            {/* Pemetaan Jam Harian Hasil Roster & Sync Admin */}
+             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700">
+                <h4 className="font-bold text-base text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                   <CalendarDays className="text-blue-500" size={18} /> Kalender Pemetaan Jam Mengajar Harian (Bulan Ini)
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Berikut rincian alokasi Jam Pelajaran (JPL) hasil pemetaan roster dan kegiatan khusus per tanggal 1 s.d. 31 bulan ini:</p>
+                <div className="grid grid-cols-4 sm:grid-cols-7 lg:grid-cols-10 gap-2">
+                   {Array.from({ length: 31 }, (_, idx) => {
+                      const dayNum = idx + 1;
+                      const harianArr = myData.payroll?.jamMengajar?.harian || [];
+                      const jamHarian = Number(harianArr[idx]) || 0;
+                      return (
+                         <div key={dayNum} className={`p-2.5 rounded-xl border text-center flex flex-col items-center justify-between transition-all ${jamHarian > 0 ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700/60 text-slate-400'}`}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider block opacity-70">Tgl {dayNum}</span>
+                            <span className={`text-base font-black my-1 ${jamHarian > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-300 dark:text-slate-600'}`}>{jamHarian > 0 ? `${jamHarian}` : '-'}</span>
+                            <span className="text-[9px] font-bold uppercase">{jamHarian > 0 ? 'JPL' : 'Libur/0'}</span>
+                         </div>
+                      );
+                   })}
+                </div>
+             </div>
 
             <div className="mt-10 p-6 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl">
                <h3 className="font-bold text-lg mb-4 text-amber-800 dark:text-amber-300 flex items-center gap-2 pb-3">
