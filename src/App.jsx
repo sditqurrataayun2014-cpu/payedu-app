@@ -593,9 +593,35 @@ export default function App() {
     }
   }, [isDataLoaded, teachers, hasConflict]);
 
+  // 🪄 FUNGSI MUTLAK: Mengubah Status Mode Maintenance & Push Langsung ke Cloud Supabase
+  const handleToggleMaintenanceMode = async (newVal) => {
+    const newTimestamp = Date.now();
+    const updatedSettings = { ...generalSettings, maintenanceMode: newVal, lastModified: newTimestamp };
+    
+    lastSavedSettingsRef.current = JSON.stringify({ ...updatedSettings, lastModified: 0 });
+    isPushingDataRef.current = true;
+
+    setGeneralSettings(updatedSettings);
+    safeStorageSet('payedu_settings', JSON.stringify(updatedSettings));
+
+    try {
+       await pushToSupabase('SAVE_SETTINGS', updatedSettings);
+       setSyncStatus('synced');
+       if (newVal) {
+          alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+       } else {
+          alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nStatus telah tersimpan ke Cloud. Portal Guru kini dibuka kembali di seluruh perangkat.");
+       }
+    } catch (err) {
+       console.error("Gagal update maintenance mode di cloud:", err);
+       setSyncStatus('error');
+    } finally {
+       setTimeout(() => { isPushingDataRef.current = false; }, 2000);
+    }
+  };
+
   // 🪄 PERBAIKAN MUTLAK 1: Auto-Save Pengaturan (Hanya untuk Admin/Kepsek)
   useEffect(() => {
-    // GEMBOK KEAMANAN: Cegah Tamu (Belum Login) dan Guru merusak data server!
     if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
 
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
@@ -1385,7 +1411,7 @@ function MaintenanceScreen({ onLogout, appName, schoolName, appVersion }) {
 }
 
 // --- MAIN LAYOUT & NAVIGATION ---
-function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, syncStatus, hasConflict, resolveConflict }) {
+function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
@@ -1586,7 +1612,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'portal_info':
       case 'portal_saran':
         return <PortalGuruView user={user} teachers={teachers} setTeachers={setTeachers} settings={settings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} activeSection={activeTab} setActiveTab={setActiveTab} archives={archives} />;
-      case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} />;
+      case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} onToggleMaintenance={onToggleMaintenance} />;
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
     }
   };
@@ -1813,11 +1839,16 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                 </span>
              </div>
              <button 
+               type="button"
                onClick={() => {
-                 const updated = { ...settings, maintenanceMode: false };
-                 setSettings(updated);
-                 safeStorageSet('payedu_settings', JSON.stringify(updated));
-                 alert('Mode Maintenance telah dimatikan. Portal Guru dibuka kembali.');
+                 if (onToggleMaintenance) {
+                   onToggleMaintenance(false);
+                 } else {
+                   const updated = { ...settings, maintenanceMode: false, lastModified: Date.now() };
+                   setSettings(updated);
+                   safeStorageSet('payedu_settings', JSON.stringify(updated));
+                   postToGoogleSheets('SAVE_SETTINGS', updated);
+                 }
                }}
                className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-sm cursor-pointer"
              >
@@ -10463,7 +10494,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 }
 
 // --- PENGATURAN VIEW ---
-function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources }) {
+function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance }) {
   const fileInputRef = useRef(null);
 
   // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
@@ -11762,19 +11793,23 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                           checked={settings?.maintenanceMode || false} 
                           onChange={async (e) => {
                              const isChecked = e.target.checked;
-                             const updated = { ...settings, maintenanceMode: isChecked, lastModified: Date.now() };
-                             setSettings(updated);
-                             safeStorageSet('payedu_settings', JSON.stringify(updated));
-                             
-                             try {
-                               await postToGoogleSheets('SAVE_SETTINGS', updated);
-                               if (isChecked) {
-                                  alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
-                               } else {
-                                  alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali di seluruh perangkat.");
+                             if (onToggleMaintenance) {
+                               await onToggleMaintenance(isChecked);
+                             } else {
+                               const updated = { ...settings, maintenanceMode: isChecked, lastModified: Date.now() };
+                               setSettings(updated);
+                               safeStorageSet('payedu_settings', JSON.stringify(updated));
+                               
+                               try {
+                                 await postToGoogleSheets('SAVE_SETTINGS', updated);
+                                 if (isChecked) {
+                                    alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+                                 } else {
+                                    alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali di seluruh perangkat.");
+                                 }
+                               } catch(err) {
+                                 console.error("Gagal sync maintenance mode ke cloud:", err);
                                }
-                             } catch(err) {
-                               console.error("Gagal sync maintenance mode ke cloud:", err);
                              }
                            }} 
                           className="sr-only peer" 
