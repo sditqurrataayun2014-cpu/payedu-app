@@ -517,6 +517,16 @@ export default function App() {
         const serverLogs = Array.isArray(res.data.loginHistory) ? res.data.loginHistory : [];
         
         if (isBackgroundSync) {
+          if (serverSettings.maintenanceMode !== undefined) {
+             setGeneralSettings(prev => {
+                if (prev.maintenanceMode !== serverSettings.maintenanceMode) {
+                   const updated = { ...prev, maintenanceMode: serverSettings.maintenanceMode };
+                   safeStorageSet('payedu_settings', JSON.stringify(updated));
+                   return updated;
+                }
+                return prev;
+             });
+          }
           if (serverSettings.lastModified > (generalSettings.lastModified + 5000) && !isPushingDataRef.current) {
              setHasConflict(true); 
              return; 
@@ -1046,56 +1056,72 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
     }, 800); // Delay 800ms
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     setIsRegistering(true);
     
     const formElement = e.target;
     const newData = {
-      name: formElement.name.value,
-      nipy: formElement.nipy.value,
-      pob: formElement.pob.value,
+      name: (formElement.name.value || '').trim(),
+      nipy: (formElement.nipy.value || '').trim() || '-',
+      pob: (formElement.pob.value || '').trim(),
       dob: formElement.dob.value,
       gender: formElement.gender.value,
-      phone: formElement.phone.value, // TAMBAHAN: Menyimpan Nomor WA
+      phone: (formElement.phone.value || '').trim(),
       education: formElement.education.value,
       status: formElement.status.value,
       tmt: formElement.tmt.value,
-      position: formElement.position.value,
+      position: (formElement.position.value || '').trim(),
       bankName: '',
       bankAccount: '',
       family: { wife: 0, children: 0 }
     };
 
-    setTimeout(() => {
-      const newId = generateTeacherId(teachers);
-      setTeachers([...teachers, { 
-         ...newData, 
-         id: newId, 
-         payroll: {
-            tahunMasaKerja: new Date().getFullYear(),
-            tunjanganMasaKerjaManual: '',
-            jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
-            pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
-            kompetensi: [],
-            disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
-            insentifTambahan: [],
-            potonganLainnya: [],
-            jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
-            isNotified: false,
-            isConfirmed: false
-         } 
-      }]);
-      
-      setIsRegistering(false);
-      setShowRegisterModal(false);
-      
-      const cleanName = newData.name ? newData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-      const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
-      const defaultPass = `${twoLetters}123`;
-      
-      alert(`PENDAFTARAN BERHASIL!\n\nMohon simpan dan ingat informasi login Anda:\n- Username / ID: ${newId}\n- Password: ${defaultPass}\n\nSilakan masuk (login) menggunakan akun ini. Anda dapat melengkapi profil rekening/keluarga dengan menghubungi Administrator nanti.`);
-    }, 1000);
+    const newId = generateTeacherId(teachers);
+    const cleanName = newData.name ? newData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+    const twoLetters = cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU';
+    const defaultPass = `${twoLetters}123`;
+
+    const newTeacherObj = { 
+       ...newData, 
+       id: newId, 
+       plainPassword: defaultPass,
+       payroll: {
+          tahunMasaKerja: new Date().getFullYear(),
+          tunjanganMasaKerjaManual: '',
+          jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
+          pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
+          kompetensi: [],
+          disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
+          insentifTambahan: [],
+          potonganLainnya: [],
+          jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
+          isNotified: false,
+          isConfirmed: false
+       } 
+    };
+
+    const updatedTeachers = [...teachers, newTeacherObj];
+
+    // 1. Simpan ke state & local storage
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+
+    // 2. Tembak langsung ke Supabase Cloud (Real-time)
+    try {
+       await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+    } catch(err) {
+       console.warn("Gagal simpan registrasi ke cloud:", err);
+    }
+
+    setIsRegistering(false);
+    setShowRegisterModal(false);
+
+    // 3. Auto-fill Form Login dengan Username & Password baru
+    setUsername(newId);
+    setPassword(defaultPass);
+
+    alert(`✨ PENDAFTARAN PEGAWAI BARU BERHASIL! ✨\n\n- ID / Username Login: ${newId}\n- Password Default: ${defaultPass}\n\nData telah didaftarkan ke Cloud secara otomatis. Form login telah diisikan dengan akun baru Anda, silakan klik tombol "MASUK".`);
   };
 
   return (
