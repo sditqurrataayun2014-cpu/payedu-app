@@ -1369,6 +1369,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const [selectedGajiTab, setSelectedGajiTab] = useState(null); // 🪄 TAMBAHAN: Menyimpan tab spesifik form gaji
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [absensiFilter, setAbsensiFilter] = useState('all');
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   // 🪄 FITUR BARU & DIPERBARUI: Mesin Audit Log Cloud & Anti-Spam Ketikan (Debounce)
   const latestTeachersRef = useRef(teachers);
@@ -1528,31 +1529,26 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     { id: 'portal_saran', label: 'Kritik & Saran', icon: MessageSquare, color: 'text-white', glow: 'shadow-rose-500/50', bg: 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700 border border-rose-300/50 dark:border-rose-600/50' },
   ];
 
-  const kepsekNav = [
-    { id: 'dashboard', label: 'Dashboard & Approval', icon: LayoutDashboard, color: 'text-white', glow: 'shadow-purple-500/50', bg: 'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-700 border border-purple-300/50 dark:border-purple-600/50' },
-    { id: 'dataguru', label: 'Data Guru & Staff', icon: Users, color: 'text-white', glow: 'shadow-blue-500/50', bg: 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 border border-blue-300/50 dark:border-blue-600/50' },
-    { id: 'jadwal', label: 'Jadwal Mengajar', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' }, // DIPINDAH: Menu Jadwal
-    { id: 'rekapabsensi', label: 'Rekap Absen', icon: FileText, color: 'text-white', glow: 'shadow-orange-500/50', bg: 'bg-gradient-to-br from-orange-400 via-orange-500 to-orange-700 border border-orange-300/50 dark:border-orange-600/50' },
-    { id: 'gaji', label: 'Komponen Gaji', icon: Calculator, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
-    { id: 'pinjaman', label: 'Rekap Pinjaman', icon: CreditCard, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
-    { id: 'rekap', label: 'Rekap Gaji', icon: FileText, color: 'text-white', glow: 'shadow-rose-500/50', bg: 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700 border border-rose-300/50 dark:border-rose-600/50' },
-    { id: 'laporan', label: 'Laporan Detail', icon: BarChart3, color: 'text-white', glow: 'shadow-indigo-500/50', bg: 'bg-gradient-to-br from-indigo-400 via-indigo-500 to-indigo-700 border border-indigo-300/50 dark:border-indigo-600/50' },
-    { id: 'arsip', label: 'Manajemen Arsip', icon: Archive, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
-  ];
-    const navItems = user.role === 'admin' ? adminNav : user.role === 'Kepala Sekolah' ? kepsekNav : guruNav;
+  const isManagementRole = String(user.role || '').toLowerCase() === 'admin' || user.role === 'Kepala Sekolah';
+  const navItems = isManagementRole ? adminNav : guruNav;
 
   const navigateToGaji = (teacherId, subTab = 'masaKerja') => {
     setSelectedGajiId(teacherId);
-    setSelectedGajiTab(subTab); // 🪄 Menangkap instruksi untuk membuka tab spesifik
+    setSelectedGajiTab(subTab);
     setActiveTab('gaji');
   };
 
   const renderContent = () => {
+    // 🪄 FIX NO 1: Mode Maintenance memblokir total akses Guru saat aktif
+    if (settings?.maintenanceMode && !isManagementRole) {
+       return <MaintenanceScreen onLogout={onLogout} appName={settings?.appName} schoolName={settings?.schoolName} appVersion={settings?.appVersion} />;
+    }
+
     switch (activeTab) {
       case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
-      case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />; // TAMBAHAN: Routing View Jadwal
+      case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
       case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} />;
@@ -1566,9 +1562,6 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'portal_riwayat':
       case 'portal_info':
       case 'portal_saran':
-        if (settings?.maintenanceMode) {
-           return <MaintenanceScreen onLogout={onLogout} appName={settings.appName} schoolName={settings.schoolName} appVersion={settings.appVersion} />;
-        }
         return <PortalGuruView user={user} teachers={teachers} setTeachers={setTeachers} settings={settings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} activeSection={activeTab} setActiveTab={setActiveTab} archives={archives} />;
       case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} />;
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
@@ -1680,19 +1673,36 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             
-            {/* TAMBAHAN NO 4: Indikator Sinkronisasi Cloud (Status Online/Offline) */}
-            {(user.role === 'admin' || user.role === 'Kepala Sekolah') && (
-              <div 
-                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-300 cursor-help ${syncStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800/50' : 'bg-slate-100 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'}`} 
-                title={syncStatus === 'synced' ? "Data tersinkronisasi ke Cloud (Aman)" : syncStatus === 'syncing' ? "Menyimpan perubahan ke Cloud..." : "Koneksi terputus! Data saat ini hanya tersimpan secara lokal di perangkat Anda."}
+            {/* FITUR BARU: Tombol Sinkronisasi Interaktif ke Cloud */}
+            {isManagementRole && (
+              <button 
+                type="button"
+                onClick={async () => {
+                  setIsManualSyncing(true);
+                  try {
+                    await Promise.allSettled([
+                      postToGoogleSheets('SAVE_TEACHERS', teachers),
+                      postToGoogleSheets('SAVE_SETTINGS', settings),
+                      postToGoogleSheets('SAVE_ARCHIVES', archives),
+                      postToGoogleSheets('SAVE_FEEDBACKS', feedbacks),
+                      postToGoogleSheets('SAVE_LOGS', loginHistory)
+                    ]);
+                    setIsManualSyncing(false);
+                    alert("✨ SINKRONISASI BERHASIL! ✨\n\nSeluruh data Pegawai, Pengaturan, Arsip, dan Log Aktivitas telah berhasil disinkronkan ke Cloud.");
+                  } catch (err) {
+                    setIsManualSyncing(false);
+                    alert("Selesai disinkronkan ke Penyimpanan Lokal.");
+                  }
+                }}
+                disabled={isManualSyncing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-300 dark:border-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-300 shadow-sm cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                title="Klik untuk menyinkronkan seluruh data aplikasi ke Cloud secara langsung"
               >
-                {syncStatus === 'synced' && <Cloud size={14} className="text-emerald-500" />}
-                {syncStatus === 'syncing' && <RefreshCw size={14} className="text-blue-500 animate-spin" />}
-                {syncStatus === 'error' && <CloudOff size={14} className="text-red-500 animate-pulse" />}
-                <span className={`text-[10px] font-bold tracking-wide uppercase ${syncStatus === 'synced' ? 'text-slate-600 dark:text-slate-300' : syncStatus === 'syncing' ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {syncStatus === 'synced' ? 'Tersimpan' : syncStatus === 'syncing' ? 'Sinkronasi...' : 'Offline Lokal'}
+                <RefreshCw size={14} className={`text-blue-600 dark:text-blue-400 ${isManualSyncing || syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                <span className="text-[11px] font-extrabold tracking-wide uppercase">
+                  {isManualSyncing || syncStatus === 'syncing' ? 'Sinkronisasi...' : 'Sinkronisasi'}
                 </span>
-              </div>
+              </button>
             )}
 
             {/* TAMBAHAN: Jam & Tanggal Real-time di Header */}
@@ -1821,12 +1831,16 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         </div>
 
         {/* FITUR BARU: Tombol Melayang (Floating Action Widget) Scroll Ke Paling Atas (⬆️) & Paling Bawah (⬇️) Khusus Admin & Kepsek */}
-        {(user.role === 'admin' || user.role === 'Kepala Sekolah') && (
+        {isManagementRole && (
           <div className="fixed bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
             <button
+              type="button"
               onClick={() => {
-                if (mainContentRef.current) mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                if (mainContentRef.current) {
+                  mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               className="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xl shadow-blue-600/30 flex items-center justify-center transition-all border border-blue-400/40 cursor-pointer hover:scale-105"
               title="Scroll ke Paling Atas Halaman"
@@ -1834,9 +1848,13 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
               <ChevronUp size={22} strokeWidth={3} />
             </button>
             <button
+              type="button"
               onClick={() => {
-                if (mainContentRef.current) mainContentRef.current.scrollTo({ top: mainContentRef.current.scrollHeight, behavior: 'smooth' });
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                if (mainContentRef.current) {
+                  mainContentRef.current.scrollTo({ top: mainContentRef.current.scrollHeight || 99999, behavior: 'smooth' });
+                }
+                window.scrollTo({ top: document.body.scrollHeight || 99999, behavior: 'smooth' });
+                document.documentElement.scrollTo({ top: document.documentElement.scrollHeight || 99999, behavior: 'smooth' });
               }}
               className="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 active:scale-95 text-white shadow-xl shadow-slate-900/30 flex items-center justify-center transition-all border border-slate-600/40 cursor-pointer hover:scale-105"
               title="Scroll ke Paling Bawah Halaman"
@@ -1982,19 +2000,18 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
      return { lateTeachers, totalUnpaidLoans };
   }, [teachers]);
 
-  // PERBAIKAN: Menghapus data dummy dan murni menggunakan data riil (Arsip + Proyeksi Bulan Ini)
+  // 🪄 FIX NO 5: Menggunakan Gaji Kotor (Gross Pay) murni untuk Visualisasi Tren Pengeluaran Gaji
   const chartData = useMemo(() => {
      const currentMonthStr = getFormattedPeriod(settings?.payrollPeriod);
      
      if (!archives || !Array.isArray(archives) || archives.length === 0) {
         return [{
            bulan: currentMonthStr,
-           total: stats.totalGaji,
+           total: stats.totalKotor,
            isCurrent: true
         }]; 
      }
 
-     // Urutkan arsip secara kronologis dari periode terlama ke terbaru (misal: 2026-01 -> 2026-07)
      const sortedArchives = [...archives].sort((a, b) => {
         const pA = a.periode || a.period || '';
         const pB = b.periode || b.period || '';
@@ -2002,32 +2019,30 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
      });
 
      const historyData = sortedArchives.map(arc => {
-        let totalGaji = arc?.totalGaji;
-        // Hitung total gajinya secara riil dari dataGuru jika totalGaji di arsip kosong/0
-        if (!totalGaji && Array.isArray(arc?.dataGuru) && arc.dataGuru.length > 0) {
-           totalGaji = arc.dataGuru.reduce((sum, t) => sum + (calculatePayroll(t, settings).totalBersih || 0), 0);
+        let totalGajiKotor = arc?.totalKotor;
+        if (!totalGajiKotor && Array.isArray(arc?.dataGuru) && arc.dataGuru.length > 0) {
+           totalGajiKotor = arc.dataGuru.reduce((sum, t) => sum + (calculatePayroll(t, settings).totalKotor || 0), 0);
         }
         return {
            bulan: getFormattedPeriod(arc?.periode || arc?.period),
-           total: Number(totalGaji || 0),
+           total: Number(totalGajiKotor || 0),
            isCurrent: false
         };
      });
 
-     // Cek apakah periode berjalan sudah ada di arsip
      const currentPeriodCode = settings?.payrollPeriod || '';
      const hasCurrentInArchive = sortedArchives.some(a => (a.periode || a.period || '').includes(currentPeriodCode));
 
      if (!hasCurrentInArchive) {
         historyData.push({
            bulan: currentMonthStr,
-           total: stats.totalGaji,
+           total: stats.totalKotor,
            isCurrent: true
         });
      }
 
-     return historyData.slice(-12); // Tampilkan maksimal 12 bulan terakhir
-  }, [archives, stats.totalGaji, settings]);
+     return historyData.slice(-12);
+  }, [archives, stats.totalKotor, settings]);
 
   const currentMonthYear = getFormattedPeriod(settings?.payrollPeriod);
 
@@ -11784,10 +11799,24 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             {/* TAB: RIWAYAT LOGIN */}
             {activeTabSetting === 'riwayat' && (
               <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
-                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex items-center justify-between gap-3">
                    <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                      <Clock className="text-slate-500" size={18} /> Riwayat Akses Sistem Terakhir
                    </h3>
+                   <button 
+                     type="button"
+                     onClick={() => {
+                       if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log tidak dapat dikembalikan setelah dibersihkan.")) {
+                          setLoginHistory([]);
+                          localStorage.removeItem('payedu_login_history');
+                          postToGoogleSheets('SAVE_LOGS', []);
+                          alert("✨ Riwayat Akses Sistem berhasil dibersihkan total!");
+                       }
+                     }}
+                     className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                   >
+                      <Trash2 size={14} /> Bersihkan Riwayat
+                   </button>
                 </div>
                 {/* FITUR BARU: Tampilan Kartu Mobile Riwayat Login (< md) */}
                 <div className="md:hidden space-y-3 p-3 no-print overflow-y-auto">
