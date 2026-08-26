@@ -99,15 +99,20 @@ export const pushCloudData = async (action, payload) => {
       if (error) console.error('Supabase feedbacks upsert error:', error);
     }
 
-    // 5. Simpan Login Logs
-    if (Array.isArray(targetLogs) && targetLogs.length > 0) {
-      const logRecords = targetLogs.map(l => ({
-        id: String(l.id || Date.now() + Math.random()),
-        data: l,
-        created_at: l.timestamp || now
-      }));
-      const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
-      if (error) console.error('Supabase login_logs upsert error:', error);
+    // 5. Simpan / Hapus Login Logs Permanen
+    if (Array.isArray(targetLogs)) {
+      if (targetLogs.length === 0) {
+        const { error } = await supabase.from('login_logs').delete().neq('id', '000000_dummy_never_matches');
+        if (error) console.error('Supabase login_logs delete error:', error);
+      } else {
+        const logRecords = targetLogs.map(l => ({
+          id: String(l.id || Date.now() + Math.random()),
+          data: l,
+          created_at: l.timestamp || now
+        }));
+        const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
+        if (error) console.error('Supabase login_logs upsert error:', error);
+      }
     }
 
     return { status: 'success', message: 'Berhasil disinkronkan ke Supabase Cloud!' };

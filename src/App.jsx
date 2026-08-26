@@ -563,18 +563,18 @@ export default function App() {
     fetchCloudData();
   }, []);
 
-  // Radar Latar Belakang (Polling) mengecek versi data
+  // Radar Latar Belakang (Polling) mengecek versi data dari Supabase Cloud (Setiap 8 detik)
   useEffect(() => {
-    if (!isDataLoaded || !user || hasConflict) return; 
+    if (!isDataLoaded || hasConflict) return; 
 
     const pollInterval = setInterval(() => {
        if (!isPushingDataRef.current) {
           fetchCloudData(true); 
        }
-    }, 45000); 
+    }, 8000); 
 
     return () => clearInterval(pollInterval);
-  }, [isDataLoaded, user, generalSettings.lastModified, hasConflict]);
+  }, [isDataLoaded, generalSettings.lastModified, hasConflict]);
 
   // 🪄 TAMBALAN CERDAS: AUTO-MIGRASI ID GURU (Format Acak -> GxxQA) 🪄
   useEffect(() => {
@@ -683,14 +683,11 @@ export default function App() {
     postToGoogleSheets('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
   }, [feedbacks, isDataLoaded, hasConflict, user]);
 
-  // 🪄 PERBAIKAN MUTLAK 4: Auto-Save Riwayat Login (Diizinkan untuk semua, namun dilindungi dari penghapusan)
+  // Auto-Save Riwayat Login
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
     const currentStr = JSON.stringify(loginHistory);
     if (lastSavedLogsRef.current === currentStr) return;
-    
-    // FAILSAFE: Mencegah HP yang cachenya kosong menghapus seluruh riwayat login di server
-    if (loginHistory.length === 0 && lastSavedLogsRef.current.length > 5) return;
 
     lastSavedLogsRef.current = currentStr;
     safeStorageSet('payedu_loginHistory', currentStr);
@@ -11763,17 +11760,23 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                         <input 
                           type="checkbox" 
                           checked={settings?.maintenanceMode || false} 
-                          onChange={e => {
-                            const isChecked = e.target.checked;
-                            const updated = { ...settings, maintenanceMode: isChecked };
-                            setSettings(updated);
-                            safeStorageSet('payedu_settings', JSON.stringify(updated));
-                            if (isChecked) {
-                               alert("🛠️ MODE MAINTENANCE DIAKTIFKAN!\n\nAkses Guru telah ditutup sementara dan digantikan oleh layar Perbaikan. Anda (Admin/Kepsek) tetap dapat mengakses seluruh fitur aplikasi.");
-                            } else {
-                               alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali seperti biasa.");
-                            }
-                          }} 
+                          onChange={async (e) => {
+                             const isChecked = e.target.checked;
+                             const updated = { ...settings, maintenanceMode: isChecked, lastModified: Date.now() };
+                             setSettings(updated);
+                             safeStorageSet('payedu_settings', JSON.stringify(updated));
+                             
+                             try {
+                               await postToGoogleSheets('SAVE_SETTINGS', updated);
+                               if (isChecked) {
+                                  alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+                               } else {
+                                  alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali di seluruh perangkat.");
+                               }
+                             } catch(err) {
+                               console.error("Gagal sync maintenance mode ke cloud:", err);
+                             }
+                           }} 
                           className="sr-only peer" 
                         />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-amber-500"></div>
@@ -11831,12 +11834,18 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                    </h3>
                    <button 
                      type="button"
-                     onClick={() => {
-                       if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log tidak dapat dikembalikan setelah dibersihkan.")) {
+                     onClick={async () => {
+                       if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log akan dihapus secara PERMANEN dari memori browser dan Cloud Supabase.")) {
                           setLoginHistory([]);
+                          localStorage.removeItem('payedu_loginHistory');
                           localStorage.removeItem('payedu_login_history');
-                          postToGoogleSheets('SAVE_LOGS', []);
-                          alert("✨ Riwayat Akses Sistem berhasil dibersihkan total!");
+                          safeStorageSet('payedu_loginHistory', JSON.stringify([]));
+                          try {
+                             await postToGoogleSheets('SAVE_LOGS', []);
+                          } catch (err) {
+                             console.warn("Gagal clear cloud logs:", err);
+                          }
+                          alert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
                        }
                      }}
                      className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
