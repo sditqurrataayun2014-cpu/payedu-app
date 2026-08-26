@@ -11302,10 +11302,9 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                             <td className="p-2 border-r border-slate-100 dark:border-slate-700/50">
                                               <div className="relative flex items-center">
                                                  <span className="absolute left-3 text-slate-400 text-xs font-medium pointer-events-none">Rp</span>
-                                                 <input 
-                                                    type="number" 
+                                                 <FormattedRupiahInput 
                                                     value={row.nominal} 
-                                                    onChange={e => handleUpdateTenureRow(idx, 'nominal', e.target.value)} 
+                                                    onChange={val => handleUpdateTenureRow(idx, 'nominal', val)} 
                                                     className="w-full pl-8 pr-3 py-2 border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-emerald-500 rounded bg-transparent text-sm outline-none dark:text-white font-bold transition-colors" 
                                                  />
                                               </div>
@@ -11462,14 +11461,14 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      </h3>
                    </div>
                    <div className="flex gap-2 w-full xl:w-auto flex-wrap sm:flex-nowrap">
-                     <div className="relative w-full sm:flex-1">
-                       <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                       <input 
-                         type="text" placeholder="Cari akun..." 
-                         value={searchAcc} onChange={e => setSearchAcc(e.target.value)}
-                         className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-400 outline-none dark:text-white shadow-sm"
-                       />
-                     </div>
+                      <div className="relative w-full sm:flex-1">
+                        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                        <input 
+                          type="text" placeholder="Cari akun..." 
+                          value={searchAcc} onChange={e => setSearchAcc(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-400 outline-none dark:text-white shadow-sm"
+                        />
+                      </div>
                      <button onClick={handleExportLoginCSV} className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5 shrink-0" title="Export tabel ini ke Excel (CSV)">
                         <Download size={16} /> Export
                      </button>
@@ -11479,7 +11478,54 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                    </div>
                 </div>
 
-                <div className="flex-1 overflow-x-auto relative touch-pan-x scroll-smooth">
+                {/* FITUR BARU: Tampilan Kartu Mobile Akun (< md) */}
+                <div className="md:hidden space-y-3 p-3 no-print overflow-y-auto">
+                   {filteredAccounts.map(acc => (
+                      <div key={acc.id || generateUniqueId('m-row-')} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                         <div className="flex justify-between items-start">
+                            <div>
+                               <h4 className="font-bold text-base text-slate-800 dark:text-white">{acc.name || 'Tanpa Nama'}</h4>
+                               <div className="text-xs font-mono text-slate-500 mt-0.5">Username: <span className="font-bold text-slate-700 dark:text-slate-200">{acc.username || '-'}</span></div>
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                               {acc.role || 'Guru'}
+                            </span>
+                         </div>
+
+                         <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                            <span className="text-slate-400 font-medium">Password:</span>
+                            {acc.role === 'Guru' ? (
+                               <span className="text-blue-600 dark:text-blue-400 font-mono font-bold bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                                  {acc.plainPassword}
+                               </span>
+                            ) : (
+                               <span className="text-slate-400 font-mono">••••••••</span>
+                            )}
+                         </div>
+
+                         <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                            <button 
+                              onClick={() => {
+                                 const passText = acc.plainPassword || `${(acc.name.replace(/[^a-zA-Z]/g, '').substring(0,2).toUpperCase() || 'GU')}123`;
+                                 const text = `Halo ${acc.name},\nBerikut adalah akses login Portal Pegawai Anda:\n\nUsername: ${acc.username}\nPassword: ${passText}\n\nHarap simpan dengan baik.`;
+                                 window.open(`https://api.whatsapp.com/send?phone=${acc.phone || ''}&text=${encodeURIComponent(text)}`);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            >
+                              <Send size={14}/> Kirim WA
+                            </button>
+                            <button onClick={() => openModal('edit', acc)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                              <Edit size={14}/> Edit
+                            </button>
+                            <button onClick={() => openModal('delete', acc)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                              <Trash2 size={14}/> {acc.role === 'Guru' ? 'Reset' : 'Cabut'}
+                            </button>
+                         </div>
+                      </div>
+                   ))}
+                </div>
+
+                <div className="hidden md:block flex-1 overflow-x-auto relative touch-pan-x scroll-smooth">
                    <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                      <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
                        <tr>
