@@ -29,8 +29,10 @@ let EDU_RATES = { 'S2': 400000, 'S1': 300000, 'Diploma': 200000, 'SMA/Pondok': 1
 let JOB_CATEGORIES = ['Kepala Sekolah', 'Kepala Bidang', 'Kepala Sub Bidang', 'Wali Kelas', 'Guru', 'Staff', 'Operasional'];
 let JOB_ROLES = ['Kepala Sekolah', 'Wakil Kepala Sekolah', 'Waka. Sarpras', 'Tata Usaha', 'Waka. Humas', 'Waka. Kesiswaan Putra', 'Waka. Kesiswaan Putri', 'Waka. Kurikulum', 'Waka. Kesiswaan', 'Bendahara Bos', 'Koordinator Tahfidz Putra', 'Koordinator Tahfidz Putri', 'Koord. Bahasa', 'Wali Kelas', 'Guru Mapel', 'Satpam Sekolah Putra', 'Petugas Kebersihan', 'Pengabdian', 'Lainnya'];
 let KINERJA_LEVELS = ['Sangat Baik', 'Baik', 'Cukup', 'Kurang'];
+let KINERJA_RATES = { 'Sangat Baik': 100000, 'Baik': 50000, 'Cukup': 0, 'Kurang': 0 };
 let KOMPETENSI_FIELDS = ['Tahsin Qur\'an', 'Tahsin Tahfidz', 'Komputer Dan Administrasi', 'Bahasa Arab', 'Bahasa Inggris', 'Lainnya'];
 let KOMPETENSI_LEVELS = ['Sangat Ahli', 'Ahli', 'Cukup Ahli', 'Pra Ahli', 'Pemula'];
+let KOMPETENSI_LEVEL_RATES = { 'Sangat Ahli': 150000, 'Ahli': 100000, 'Cukup Ahli': 75000, 'Pra Ahli': 50000, 'Pemula': 25000 };
 let INSENTIF_LIST = ['Koordinator Tahfidz', 'Tugas Harian', 'Operator', 'Kajian & Tahta Guru', 'Pembantu Sarpras', 'Kebersihan Putra', 'Personalia', 'Notulen Rapat', 'Asisten Tu', 'Asisten Wali Kelas', 'Kebersihan & Security Putri', 'Asisten Operator', 'Penguji Tasmi', 'Penguji Kenaikan Iqro', 'Pengabdian', 'Buka/Kunci Pintu Sekolah Lk', 'Buka/Kunci Pintu Sekolah Pr', 'Guru GTT', 'Satpam Sekolah Putra', 'Lainnya'];
 let POTONGAN_LIST = ['Kasbon Sekolah', 'Cicilan Koperasi', 'Iuran PGRI', 'Dana Sosial', 'Pinjaman Rekan Guru', 'Pembayaran Barang', 'Lainnya'];
 
@@ -361,8 +363,10 @@ const defaultMasterRates = {
   JOB_CATEGORIES: JOB_CATEGORIES,
   JOB_ROLES: JOB_ROLES,
   KINERJA_LEVELS: KINERJA_LEVELS,
+  KINERJA_RATES: KINERJA_RATES,
   KOMPETENSI_FIELDS: KOMPETENSI_FIELDS,
   KOMPETENSI_LEVELS: KOMPETENSI_LEVELS,
+  KOMPETENSI_LEVEL_RATES: KOMPETENSI_LEVEL_RATES,
   INSENTIF_LIST: INSENTIF_LIST,
   POTONGAN_LIST: POTONGAN_LIST
 };
@@ -10662,9 +10666,17 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
      edu: Object.entries(settings?.masterRates?.EDU_RATES || EDU_RATES).map(([k,v]) => `${k}=${v}`).join('\n'),
      jobCat: (settings?.masterRates?.JOB_CATEGORIES || JOB_CATEGORIES).join('\n'),
      jobRoles: (settings?.masterRates?.JOB_ROLES || JOB_ROLES).join('\n'),
-     kinerja: (settings?.masterRates?.KINERJA_LEVELS || KINERJA_LEVELS).join('\n'),
+     kinerja: settings?.masterRates?.KINERJA_RATES 
+       ? Object.entries(settings.masterRates.KINERJA_RATES).map(([k,v]) => `${k}=${v}`).join('\n')
+       : (Array.isArray(settings?.masterRates?.KINERJA_LEVELS) 
+           ? settings.masterRates.KINERJA_LEVELS.map(k => `${k}=${KINERJA_RATES[k] || 0}`).join('\n')
+           : 'Sangat Baik=100000\nBaik=50000\nCukup=0\nKurang=0'),
      kompFields: (settings?.masterRates?.KOMPETENSI_FIELDS || KOMPETENSI_FIELDS).join('\n'),
-     kompLevels: (settings?.masterRates?.KOMPETENSI_LEVELS || KOMPETENSI_LEVELS).join('\n'),
+     kompLevels: settings?.masterRates?.KOMPETENSI_LEVEL_RATES
+       ? Object.entries(settings.masterRates.KOMPETENSI_LEVEL_RATES).map(([k,v]) => `${k}=${v}`).join('\n')
+       : (Array.isArray(settings?.masterRates?.KOMPETENSI_LEVELS)
+           ? settings.masterRates.KOMPETENSI_LEVELS.map(k => `${k}=${KOMPETENSI_LEVEL_RATES[k] || 0}`).join('\n')
+           : 'Sangat Ahli=150000\nAhli=100000\nCukup Ahli=75000\nPra Ahli=50000\nPemula=25000'),
      insentif: (settings?.masterRates?.INSENTIF_LIST || INSENTIF_LIST).join('\n'),
      potongan: (settings?.masterRates?.POTONGAN_LIST || POTONGAN_LIST).join('\n'),
   });
@@ -10751,7 +10763,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     
     const parseMap = (text) => {
        const map = {};
-       text.split('\n').forEach(line => {
+       (text || '').split('\n').forEach(line => {
           if(!line.trim()) return;
           const parts = line.split('=');
           if(parts.length >= 2) {
@@ -10761,7 +10773,13 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
        return map;
     };
     
-    const parseList = (text) => text.split('\n').map(l => l.trim()).filter(l => l !== '');
+    const parseList = (text) => (text || '').split('\n').map(l => l.trim()).filter(l => l !== '');
+
+    const kinerjaMap = parseMap(localRatesText.kinerja);
+    const kinerjaList = Object.keys(kinerjaMap).length > 0 ? Object.keys(kinerjaMap) : parseList(localRatesText.kinerja);
+
+    const kompLevelsMap = parseMap(localRatesText.kompLevels);
+    const kompLevelsList = Object.keys(kompLevelsMap).length > 0 ? Object.keys(kompLevelsMap) : parseList(localRatesText.kompLevels);
 
     const newMasterRates = {
        TENURE_RATES: localRatesText.tenure.reduce((acc, curr) => {
@@ -10773,9 +10791,11 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
        EDU_RATES: parseMap(localRatesText.edu),
        JOB_CATEGORIES: parseList(localRatesText.jobCat),
        JOB_ROLES: parseList(localRatesText.jobRoles),
-       KINERJA_LEVELS: parseList(localRatesText.kinerja),
+       KINERJA_LEVELS: kinerjaList,
+       KINERJA_RATES: kinerjaMap,
        KOMPETENSI_FIELDS: parseList(localRatesText.kompFields),
-       KOMPETENSI_LEVELS: parseList(localRatesText.kompLevels),
+       KOMPETENSI_LEVELS: kompLevelsList,
+       KOMPETENSI_LEVEL_RATES: kompLevelsMap,
        INSENTIF_LIST: parseList(localRatesText.insentif),
        POTONGAN_LIST: parseList(localRatesText.potongan),
     };
@@ -11620,12 +11640,13 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                               ></textarea>
                            </div>
                            <div>
-                              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Level Penilaian Kinerja</label>
+                              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Level Penilaian Kinerja (Level=Nominal)</label>
                               <textarea 
                                 rows="6" 
                                 value={localRatesText.kinerja} 
                                 onChange={e => setLocalRatesText({...localRatesText, kinerja: e.target.value})} 
-                                className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-[13px] focus:ring-2 focus:ring-blue-400 outline-none dark:text-slate-200 text-slate-700 shadow-inner resize-y leading-relaxed" 
+                                className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-[13px] focus:ring-2 focus:ring-blue-400 outline-none dark:text-emerald-300 text-emerald-700 font-mono shadow-inner resize-y leading-relaxed" 
+                                placeholder="Sangat Baik=100000&#10;Baik=50000&#10;Cukup=0&#10;Kurang=0"
                               ></textarea>
                            </div>
                         </div>
@@ -11648,12 +11669,13 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                               ></textarea>
                            </div>
                            <div>
-                              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Level Kompetensi</label>
+                              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Level Kompetensi (Level=Nominal)</label>
                               <textarea 
                                 rows="6" 
                                 value={localRatesText.kompLevels} 
                                 onChange={e => setLocalRatesText({...localRatesText, kompLevels: e.target.value})} 
-                                className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-[13px] focus:ring-2 focus:ring-amber-400 outline-none dark:text-slate-200 text-slate-700 shadow-inner resize-y leading-relaxed" 
+                                className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-[13px] focus:ring-2 focus:ring-amber-400 outline-none dark:text-emerald-300 text-emerald-700 font-mono shadow-inner resize-y leading-relaxed" 
+                                placeholder="Sangat Ahli=150000&#10;Ahli=100000&#10;Cukup Ahli=75000&#10;Pra Ahli=50000&#10;Pemula=25000"
                               ></textarea>
                            </div>
                            <div>
