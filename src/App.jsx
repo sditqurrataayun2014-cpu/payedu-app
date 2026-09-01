@@ -1657,7 +1657,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const adminNav = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-white', glow: 'shadow-purple-500/50', bg: 'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-700 border border-purple-300/50 dark:border-purple-600/50' },
     { id: 'dataguru', label: 'Data Guru & Staff', icon: Users, color: 'text-white', glow: 'shadow-blue-500/50', bg: 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 border border-blue-300/50 dark:border-blue-600/50' },
-    { id: 'presensiguru', label: 'Presensi Guru', icon: Clock3, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
+    { id: 'presensiguru', label: 'Presensi Guru', icon: UserCheck, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-emerald-600 border border-teal-300/50 dark:border-teal-600/50' },
     { id: 'jadwal', label: 'Jadwal Mengajar', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' }, // DIPINDAH: Menu Jadwal
     { id: 'rekapabsensi', label: 'Rekap Absen', icon: FileText, color: 'text-white', glow: 'shadow-orange-500/50', bg: 'bg-gradient-to-br from-orange-400 via-orange-500 to-orange-700 border border-orange-300/50 dark:border-orange-600/50' },
     { id: 'gaji', label: 'Komponen Gaji', icon: Calculator, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
@@ -1670,7 +1670,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
   const guruNav = [
     { id: 'portal_dashboard', label: 'Profil Pegawai', icon: UserCircle, color: 'text-white', glow: 'shadow-blue-500/50', bg: 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 border border-blue-300/50 dark:border-blue-600/50' },
-    { id: 'portal_presensi', label: 'Presensi Saya', icon: Clock3, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
+    { id: 'portal_presensi', label: 'Presensi Saya', icon: Fingerprint, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-emerald-600 border border-teal-300/50 dark:border-teal-600/50' },
     { id: 'portal_jadwal', label: 'Jadwal Saya', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' },
     { id: 'portal_kehadiran', label: 'Rekap Kehadiran', icon: Clock, color: 'text-white', glow: 'shadow-amber-500/50', bg: 'bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 border border-amber-300/50 dark:border-amber-600/50' },
     { id: 'portal_gaji', label: 'Slip Gaji Bulanan', icon: Wallet, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
@@ -1714,31 +1714,13 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             }} 
             setSchoolProfile={(updater) => { 
               setSettings(prev => { 
-                const updated = typeof updater === 'function' ? updater(prev) : updater; 
-                return { ...prev, ...updated, presensiGuruSettings: updated.presensiGuruSettings || updated }; 
-              }); 
-            }} 
-            addAuditLog={saveAuditLog} 
-          />
-        );
-      case 'portal_presensi':
-        return (
-          <PresensiGuruView 
-            teachers={teachers} 
-            presensiGuru={presensiGuru} 
-            setPresensiGuru={setPresensiGuru} 
-            currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
-            schoolProfile={{ 
-              nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
-              npsn: settings.schoolNpsn || '10404040', 
-              alamat: settings.schoolAddress || 'Kandis', 
-              kepsek: settings.kepsekName || 'Kepala Sekolah', 
-              presensiGuruSettings: settings.presensiGuruSettings 
-            }} 
-            setSchoolProfile={(updater) => { 
-              setSettings(prev => { 
-                const updated = typeof updater === 'function' ? updater(prev) : updater; 
-                return { ...prev, ...updated, presensiGuruSettings: updated.presensiGuruSettings || updated }; 
+                const rawUpdated = typeof updater === 'function' ? updater(prev?.presensiGuruSettings ? { presensiGuruSettings: prev.presensiGuruSettings } : prev) : updater; 
+                const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
+                const newSettings = { ...prev, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
+                safeStorageSet('payedu_settings', JSON.stringify(newSettings)); 
+                try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
+                pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
+                return newSettings; 
               }); 
             }} 
             addAuditLog={saveAuditLog} 
@@ -1752,6 +1734,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
       case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
       case 'portal_dashboard': 
+      case 'portal_presensi':
       case 'portal_jadwal':
       case 'portal_kehadiran':
       case 'portal_gaji':
@@ -1759,7 +1742,23 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'portal_riwayat':
       case 'portal_info':
       case 'portal_saran':
-        return <PortalGuruView user={user} teachers={teachers} setTeachers={setTeachers} settings={settings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} activeSection={activeTab} setActiveTab={setActiveTab} archives={archives} presensiGuru={presensiGuru} setPresensiGuru={setPresensiGuru} />;
+        return (
+          <PortalGuruView 
+            user={user} 
+            teachers={teachers} 
+            setTeachers={setTeachers} 
+            settings={settings} 
+            setSettings={setSettings}
+            feedbacks={feedbacks} 
+            setFeedbacks={setFeedbacks} 
+            activeSection={activeTab} 
+            setActiveTab={setActiveTab} 
+            archives={archives} 
+            presensiGuru={presensiGuru} 
+            setPresensiGuru={setPresensiGuru} 
+            saveAuditLog={saveAuditLog}
+          />
+        );
       case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} onToggleMaintenance={onToggleMaintenance} />;
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
     }
@@ -9411,7 +9410,7 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
 };
 
 // Portal Khusus Guru (Read-only view dengan Sidebar)
-function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru }) {
+function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru, saveAuditLog }) {
   const myData = teachers.find(t => t.id === user.id);
   
   if (!myData) {
@@ -9833,7 +9832,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
   // 🪄 KONFIGURASI MENU BOTTOM NAVIGATION (ANDROID STYLE)
   const bottomNavItems = [
-    { id: 'portal_presensi', label: 'Presensi', icon: Clock3 },
+    { id: 'portal_presensi', label: 'Presensi', icon: Fingerprint },
     { id: 'portal_kehadiran', label: 'Absen', icon: Clock },
     { id: 'portal_jadwal', label: 'Jadwal', icon: CalendarDays },
     { id: 'portal_gaji', label: 'Gaji', icon: Wallet },
@@ -10105,6 +10104,17 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
       {/* DIPERBARUI: Header "portal_dashboard" DIHAPUS sesuai permintaan, digabung ke dalam Card di bawah */}
 
       {/* TAMBAHAN: Header Banner Portal Jadwal Mengajar */}
+      {activeSection === 'portal_presensi' && (
+        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+          {NotificationBell}
+          <div className="relative z-10">
+            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><Fingerprint className="text-teal-100" size={32} /> Presensi Mandiri Pegawai</h1>
+            <p className="text-teal-50 text-sm md:text-base max-w-xl">Lakukan pencatatan absen masuk, absen pulang, pengajuan izin, serta pantau riwayat kedisiplinan kerja harian Anda.</p>
+          </div>
+          <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
+        </div>
+      )}
+
       {activeSection === 'portal_jadwal' && (
         <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
@@ -10538,6 +10548,39 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
                 </div>
 
              </div>
+          </div>
+        )}
+
+        {/* FITUR BARU: Portal Presensi Saya */}
+        {activeSection === 'portal_presensi' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <PresensiGuruView 
+              teachers={teachers} 
+              presensiGuru={presensiGuru} 
+              setPresensiGuru={setPresensiGuru} 
+              currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
+              schoolProfile={{ 
+                nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
+                npsn: settings.schoolNpsn || '10404040', 
+                alamat: settings.schoolAddress || 'Kandis', 
+                kepsek: settings.kepsekName || 'Kepala Sekolah', 
+                presensiGuruSettings: settings.presensiGuruSettings 
+              }} 
+              setSchoolProfile={(updater) => { 
+                if (typeof setSettings === 'function') {
+                  setSettings(prev => { 
+                    const rawUpdated = typeof updater === 'function' ? updater(prev?.presensiGuruSettings ? { presensiGuruSettings: prev.presensiGuruSettings } : prev) : updater; 
+                    const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
+                    const newSettings = { ...prev, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
+                    safeStorageSet('payedu_settings', JSON.stringify(newSettings)); 
+                    try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
+                    pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
+                    return newSettings; 
+                  });
+                } 
+              }} 
+              addAuditLog={saveAuditLog} 
+            />
           </div>
         )}
 

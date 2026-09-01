@@ -254,13 +254,25 @@ export default function PresensiGuruView({
   const isAdmin = currentUser?.portal === 'Admin' || String(currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.role === 'Kepala Sekolah';
   const readOnly = currentUser?.portal === 'Monitoring';
 
-  const settings = {
-    ...DEFAULT_SETTINGS,
-    ...(schoolProfile?.presensiGuruSettings || {}),
-    lokasi: { ...DEFAULT_SETTINGS.lokasi, ...(schoolProfile?.presensiGuruSettings?.lokasi || {}) },
-    lokasiList: getLokasiList(schoolProfile?.presensiGuruSettings || {}),
-    sesiList: getSesiList(schoolProfile?.presensiGuruSettings || {}),
-  };
+  const settings = useMemo(() => {
+    let localSaved = {};
+    try {
+      const raw = localStorage.getItem('payedu_presensi_guru_settings');
+      if (raw) localSaved = JSON.parse(raw);
+    } catch (e) {}
+
+    const merged = {
+      ...DEFAULT_SETTINGS,
+      ...localSaved,
+      ...(schoolProfile?.presensiGuruSettings || {}),
+    };
+    return {
+      ...merged,
+      lokasi: { ...DEFAULT_SETTINGS.lokasi, ...(merged.lokasi || {}) },
+      lokasiList: getLokasiList(merged),
+      sesiList: getSesiList(merged),
+    };
+  }, [schoolProfile?.presensiGuruSettings]);
   const sesiUtamaId = settings.sesiList[0]?.id;
   const activeTeachers = useMemo(() => (teachers || []).filter(t => t.status !== 'Non-Aktif').sort((a, b) => (a.name || '').localeCompare(b.name || '')), [teachers]);
 
@@ -1000,6 +1012,9 @@ function AdminRekapPanel({
   const totalBelumAbsen = filteredTeachersHarian.length - todayRecords.filter(r => r).length;
 
   const handleSaveSettings = () => {
+    try {
+      localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(settingsForm));
+    } catch (e) {}
     setSchoolProfile(prev => ({ ...prev, presensiGuruSettings: settingsForm }));
     showToast('Pengaturan presensi guru berhasil disimpan.', 'success');
     const jumlahHariDiatur = Object.keys(settingsForm.jadwalGuru || {}).length;
@@ -1721,7 +1736,7 @@ function JadwalGuruSettingField({ settingsForm, setSettingsForm, teachers, showC
     ? settingsForm.sesiList
     : [{ id: 'pagi', nama: 'Pagi (KBM)' }];
   const activeTeachers = useMemo(
-    () => (teachers || []).filter(t => t.status === 'Aktif').sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    () => (teachers || []).filter(t => t.status !== 'Non-Aktif').sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     [teachers]
   );
 
