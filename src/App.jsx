@@ -1759,7 +1759,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'portal_riwayat':
       case 'portal_info':
       case 'portal_saran':
-        return <PortalGuruView user={user} teachers={teachers} setTeachers={setTeachers} settings={settings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} activeSection={activeTab} setActiveTab={setActiveTab} archives={archives} />;
+        return <PortalGuruView user={user} teachers={teachers} setTeachers={setTeachers} settings={settings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} activeSection={activeTab} setActiveTab={setActiveTab} archives={archives} presensiGuru={presensiGuru} setPresensiGuru={setPresensiGuru} />;
       case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} onToggleMaintenance={onToggleMaintenance} />;
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
     }
@@ -9411,7 +9411,7 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
 };
 
 // Portal Khusus Guru (Read-only view dengan Sidebar)
-function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives }) {
+function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru }) {
   const myData = teachers.find(t => t.id === user.id);
   
   if (!myData) {
@@ -9446,6 +9446,107 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
   // 🪄 FITUR BARU: State Animasi Selebrasi Konfeti
   const [showCelebration, setShowCelebration] = useState(false);
+
+  // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini
+  const [liveNow, setLiveNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setLiveNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const liveDateStr = liveNow.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+  const liveTimeStr = liveNow.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':');
+  const todayIsoDate = liveNow.toISOString().split('T')[0];
+
+  const presensiSettings = settings?.presensiGuruSettings || {};
+  const sesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
+    ? presensiSettings.sesiList 
+    : [{ id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' }];
+  const sesiUtama = sesiList[0];
+
+  const todayAttendance = (presensiGuru || []).find(r => 
+    (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+    r.date === todayIsoDate && 
+    (r.sesiId === sesiUtama.id || !r.sesiId)
+  );
+
+  const sudahAbsenMasuk = !!todayAttendance?.jamMasuk;
+  const sudahAbsenPulang = !!todayAttendance?.jamPulang;
+  const isIzinToday = todayAttendance && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(todayAttendance.status) && !todayAttendance.jamMasuk;
+
+  const isGpsActive = (Array.isArray(presensiSettings?.lokasiList) && presensiSettings.lokasiList.length > 0) || (presensiSettings?.lokasi?.latitude != null);
+  const isQrActive = !!presensiSettings?.qrToken;
+  const needVerification = isGpsActive || isQrActive;
+
+  const handleQuickAbsenMasuk = () => {
+    if (needVerification) {
+      setActiveTab('portal_presensi');
+      return;
+    }
+    const capture = new Date();
+    const nowHHMMSS = capture.toTimeString().slice(0, 8);
+    const targetMin = (Number(sesiUtama.jamMasuk?.split(':')[0]) || 7) * 60 + (Number(sesiUtama.jamMasuk?.split(':')[1]) || 0) + (Number(sesiUtama.toleransiMenit) || 0);
+    const actualMin = capture.getHours() * 60 + capture.getMinutes();
+    const terlambatMenit = Math.max(0, actualMin - targetMin);
+    const status = terlambatMenit > 0 ? 'Terlambat' : 'Hadir';
+
+    const updated = [...(presensiGuru || [])];
+    const idx = updated.findIndex(r => 
+      (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+      r.date === todayIsoDate && 
+      (r.sesiId === sesiUtama.id || !r.sesiId)
+    );
+    const patch = {
+      id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      teacherId: myData.id,
+      teacherName: myData.name,
+      date: todayIsoDate,
+      sesiId: sesiUtama.id,
+      sesiNama: sesiUtama.nama,
+      jamMasuk: nowHHMMSS,
+      jamPulang: null,
+      status,
+      terlambatMenit,
+      keterangan: '',
+      updatedAt: new Date().toISOString(),
+      updatedBy: myData.name || 'Guru'
+    };
+    if (idx >= 0) {
+      updated[idx] = { ...updated[idx], ...patch };
+    } else {
+      updated.push(patch);
+    }
+    if (typeof setPresensiGuru === 'function') {
+      setPresensiGuru(updated);
+    }
+    safeStorageSet('payedu_presensi_guru', JSON.stringify(updated));
+    try { localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated)); } catch(e){}
+    alert(status === 'Terlambat' ? `Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
+  };
+
+  const handleQuickAbsenPulang = () => {
+    if (needVerification) {
+      setActiveTab('portal_presensi');
+      return;
+    }
+    const capture = new Date();
+    const nowHHMMSS = capture.toTimeString().slice(0, 8);
+    const updated = [...(presensiGuru || [])];
+    const idx = updated.findIndex(r => 
+      (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+      r.date === todayIsoDate && 
+      (r.sesiId === sesiUtama.id || !r.sesiId)
+    );
+    if (idx >= 0) {
+      updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString() };
+      if (typeof setPresensiGuru === 'function') {
+        setPresensiGuru(updated);
+      }
+      safeStorageSet('payedu_presensi_guru', JSON.stringify(updated));
+      try { localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated)); } catch(e){}
+      alert(`Absen Pulang (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
+    }
+  };
 
   // 🪄 TAMBALAN CERDAS MUTLAK: State Loading Konfirmasi & Kirim Pesan
   const [isConfirming, setIsConfirming] = useState(false);
@@ -10122,6 +10223,143 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
              </div>
 
              <div className="px-5 md:px-8 pb-8 pt-8 md:pb-10 relative">
+                 
+                 {/* 🪄 WIDGET PRESENSI CEPAT GURU (ABSEN MASUK & PULANG) */}
+                 <div className="mb-6 bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-cyan-500/10 dark:from-teal-950/40 dark:via-slate-800/80 dark:to-emerald-950/40 border border-teal-200/80 dark:border-teal-800/60 rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden backdrop-blur-sm">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-teal-400/10 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    {/* Baris Header Widget: Judul, Sesi, dan Jam Digital */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-teal-200/60 dark:border-teal-800/40 relative z-10">
+                       <div className="flex items-center gap-3">
+                          <div className="p-3 bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-2xl shadow-md shadow-teal-500/20 shrink-0">
+                             <Clock3 size={24} />
+                          </div>
+                          <div>
+                             <div className="flex items-center gap-2">
+                                <h3 className="font-extrabold text-slate-800 dark:text-white text-base md:text-lg">Presensi Guru Hari Ini</h3>
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700/50">
+                                   {sesiUtama.nama}
+                                </span>
+                             </div>
+                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                                {liveDateStr} • Batas: {sesiUtama.jamMasuk || '07:00'} WIB (+{sesiUtama.toleransiMenit || 15}m)
+                             </p>
+                          </div>
+                       </div>
+
+                       {/* Jam Digital Realtime & Status Pill */}
+                       <div className="flex items-center justify-between sm:justify-end gap-3">
+                          <div className="text-right">
+                             <div className="font-mono text-xl md:text-2xl font-black text-teal-700 dark:text-teal-300 tracking-wider">
+                                {liveTimeStr} <span className="text-xs font-sans font-bold text-slate-400">WIB</span>
+                             </div>
+                          </div>
+                          <div>
+                             {sudahAbsenPulang ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800">
+                                   <CheckCircle size={14} className="text-indigo-600" /> Selesai Pulang
+                                </span>
+                             ) : sudahAbsenMasuk ? (
+                                todayAttendance?.status === 'Terlambat' ? (
+                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-200 dark:border-amber-800">
+                                      <AlertCircle size={14} className="text-amber-600" /> Telat {todayAttendance.terlambatMenit} mnt
+                                   </span>
+                                ) : (
+                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800">
+                                      <CheckCircle size={14} className="text-emerald-600" /> Hadir Tepat Waktu
+                                   </span>
+                                )
+                             ) : isIzinToday ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800">
+                                   <Info size={14} className="text-blue-600" /> {todayAttendance?.status}
+                                </span>
+                             ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-600 animate-pulse">
+                                   <span className="w-2 h-2 rounded-full bg-amber-500"></span> Belum Absen
+                                </span>
+                             )}
+                          </div>
+                       </div>
+                    </div>
+
+                    {/* Baris Grid Jam Masuk/Pulang & Tombol Aksi */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 pt-4 relative z-10 items-center">
+                       
+                       {/* Kartu Jam Masuk & Jam Pulang */}
+                       <div className="md:col-span-5 grid grid-cols-2 gap-3">
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                             <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
+                                <span className="flex items-center gap-1"><LogIn size={13} className="text-emerald-500"/> Jam Masuk</span>
+                             </div>
+                             <div className="font-mono text-lg font-black text-slate-800 dark:text-white">
+                                {todayAttendance?.jamMasuk ? todayAttendance.jamMasuk.slice(0, 5) : '--:--'}
+                             </div>
+                             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                                {todayAttendance?.jamMasuk ? (todayAttendance.status === 'Terlambat' ? `Terlambat ${todayAttendance.terlambatMenit}m` : 'Tepat Waktu') : 'Belum masuk'}
+                             </p>
+                          </div>
+
+                          <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                             <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
+                                <span className="flex items-center gap-1"><LogOut size={13} className="text-blue-500"/> Jam Pulang</span>
+                             </div>
+                             <div className="font-mono text-lg font-black text-slate-800 dark:text-white">
+                                {todayAttendance?.jamPulang ? todayAttendance.jamPulang.slice(0, 5) : '--:--'}
+                             </div>
+                             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                                {todayAttendance?.jamPulang ? 'Sudah pulang' : (sudahAbsenMasuk ? 'Belum pulang' : 'Belum masuk')}
+                             </p>
+                          </div>
+                       </div>
+
+                       {/* Tombol Cepat Absen Masuk & Pulang */}
+                       <div className="md:col-span-7 flex flex-col sm:flex-row gap-2.5">
+                          <button
+                             type="button"
+                             onClick={handleQuickAbsenMasuk}
+                             disabled={sudahAbsenMasuk || isIzinToday}
+                             className={`flex-1 py-3 px-4 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                sudahAbsenMasuk || isIzinToday
+                                   ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
+                                   : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98]'
+                             }`}
+                          >
+                             <LogIn size={18} />
+                             <span>{sudahAbsenMasuk ? 'Sudah Absen Masuk' : 'Absen Masuk'}</span>
+                          </button>
+
+                          <button
+                             type="button"
+                             onClick={handleQuickAbsenPulang}
+                             disabled={!sudahAbsenMasuk || sudahAbsenPulang}
+                             className={`flex-1 py-3 px-4 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                !sudahAbsenMasuk || sudahAbsenPulang
+                                   ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
+                                   : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98]'
+                             }`}
+                          >
+                             <LogOut size={18} />
+                             <span>{sudahAbsenPulang ? 'Sudah Absen Pulang' : 'Absen Pulang'}</span>
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Footer Link ke Halaman Presensi Lengkap */}
+                    <div className="mt-3.5 pt-3 border-t border-teal-200/40 dark:border-teal-800/30 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-teal-700 dark:text-teal-400">
+                       <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium text-[11px]">
+                          <Sparkles size={13} className="text-amber-500" /> Presensi otomatis tersinkron ke laporan presensi sekolah.
+                       </span>
+                       <button 
+                          type="button"
+                          onClick={() => setActiveTab('portal_presensi')}
+                          className="flex items-center gap-1 hover:underline hover:text-teal-800 dark:hover:text-teal-300 transition-colors cursor-pointer"
+                       >
+                          <span>Buka Menu Presensi Lengkap & Ajukan Izin</span>
+                          <ChevronRight size={14} />
+                       </button>
+                    </div>
+                 </div>
+
                 {/* 🪄 BIODATA GURU (DIKEMBALIKAN & DIRAPIKAN) */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                    
