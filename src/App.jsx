@@ -12,10 +12,11 @@ import {
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
   Info, MessageSquare, ChevronDown, ChevronUp, Send, History, Bell, BellRing,
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
-  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck
+  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3
 } from 'lucide-react';
 import { fetchCloudData as fetchFromSupabase, pushCloudData as pushToSupabase } from './services/dbService';
 import { isSupabaseConfigured } from './lib/supabase';
+import PresensiGuruView from './PresensiGuruView';
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
 let TENURE_RATES = {
@@ -344,6 +345,67 @@ const generateTeacherId = (currentTeachers) => {
   return `G${String(maxNum + 1).padStart(2, '0')}QA`;
 };
 
+// TAMBALAN CERDAS: Helper Parser & Sorter Riwayat Akses Sistem (Memastikan Kronologis Mutlak)
+const parseLogTimestamp = (log) => {
+  if (!log) return 0;
+  if (log.timeRaw && typeof log.timeRaw === 'number') return log.timeRaw;
+  if (log.timestamp) {
+    const t = new Date(log.timestamp).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (log.created_at) {
+    const t = new Date(log.created_at).getTime();
+    if (!isNaN(t)) return t;
+  }
+  // Cek ID berformat base36 timestamp (log-m7x...)
+  if (typeof log.id === 'string' && log.id.startsWith('log-')) {
+    try {
+      const b36 = log.id.replace('log-', '').substring(0, 8);
+      const parsed = parseInt(b36, 36);
+      if (!isNaN(parsed) && parsed > 1000000000000) return parsed;
+    } catch (e) {}
+  }
+  // Parsing string penanggalan lokal bahasa Indonesia (contoh: "1 September 2026 06.40 WIB", "01/09/2026, 06.40", "1 Sep 2026 pukul 06.40 WIB")
+  if (log.time && typeof log.time === 'string') {
+    try {
+      const cleanTime = log.time.replace(/\s*WIB/i, '').replace(/pukul\s*/i, '').trim();
+      const idMonths = {
+        januari: 0, jan: 0,
+        februari: 1, feb: 1,
+        maret: 2, mar: 2,
+        april: 3, apr: 3,
+        mei: 4, may: 4,
+        juni: 5, jun: 5,
+        juli: 6, jul: 6,
+        agustus: 7, agu: 7, ags: 7,
+        september: 8, sep: 8,
+        oktober: 9, okt: 9, oct: 9,
+        november: 10, nov: 10,
+        desember: 11, des: 11, dec: 11
+      };
+      const match = cleanTime.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})(?:[,\s]+(\d{1,2})[.:](\d{1,2}))?/);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const monthKey = match[2].toLowerCase();
+        const year = parseInt(match[3], 10);
+        const hour = match[4] ? parseInt(match[4], 10) : 0;
+        const minute = match[5] ? parseInt(match[5], 10) : 0;
+        if (idMonths[monthKey] !== undefined) {
+          return new Date(year, idMonths[monthKey], day, hour, minute).getTime();
+        }
+      }
+      const directParsed = new Date(cleanTime).getTime();
+      if (!isNaN(directParsed)) return directParsed;
+    } catch (e) {}
+  }
+  return 0;
+};
+
+const sortLoginLogs = (logs) => {
+  if (!Array.isArray(logs)) return [];
+  return [...logs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
+};
+
 // TAMBAHAN NO 1: Failsafe Storage Cerdas untuk mendeteksi limit memori browser (5MB)
 const safeStorageSet = (key, value) => {
   try {
@@ -420,11 +482,23 @@ export default function App() {
   });
   const [loginHistory, setLoginHistory] = useState(() => {
     const saved = localStorage.getItem('payedu_loginHistory');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      return saved ? sortLoginLogs(JSON.parse(saved)) : [];
+    } catch (e) {
+      return [];
+    }
   });
   const [archives, setArchives] = useState(() => {
     const saved = localStorage.getItem('payedu_archives');
     return saved ? JSON.parse(saved) : [];
+  });
+  const [presensiGuru, setPresensiGuru] = useState(() => {
+    const saved = localStorage.getItem('payedu_presensi_guru');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [isLoadingDb, setIsLoadingDb] = useState(false);
@@ -439,6 +513,7 @@ export default function App() {
   const lastSavedArchivesRef = useRef(JSON.stringify(archives));
   const lastSavedFeedbacksRef = useRef(JSON.stringify(feedbacks));
   const lastSavedLogsRef = useRef(JSON.stringify(loginHistory));
+  const lastSavedPresensiRef = useRef(JSON.stringify(presensiGuru));
 
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -543,13 +618,18 @@ export default function App() {
           setTeachers(serverTeachers); 
           setArchives(serverArchives);
           setFeedbacks(serverFeedbacks);
-          setLoginHistory(serverLogs);
+          if (result.data.presensiGuru) {
+            setPresensiGuru(result.data.presensiGuru);
+            safeStorageSet('payedu_presensi_guru', JSON.stringify(result.data.presensiGuru));
+          }
+          const sortedServerLogs = sortLoginLogs(serverLogs);
+          setLoginHistory(sortedServerLogs);
           
           safeStorageSet('payedu_settings', JSON.stringify(serverSettings));
           safeStorageSet('payedu_teachers', JSON.stringify(serverTeachers));
           safeStorageSet('payedu_archives', JSON.stringify(serverArchives));
           safeStorageSet('payedu_feedbacks', JSON.stringify(serverFeedbacks));
-          safeStorageSet('payedu_loginHistory', JSON.stringify(serverLogs));
+          safeStorageSet('payedu_loginHistory', JSON.stringify(sortedServerLogs));
           
           setHasConflict(false); 
         }
@@ -724,6 +804,17 @@ export default function App() {
     postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
   }, [loginHistory, isDataLoaded, hasConflict]);
 
+  // Auto-Save Presensi Guru
+  useEffect(() => {
+    if (!isDataLoaded || hasConflict) return;
+    const currentStr = JSON.stringify(presensiGuru);
+    if (lastSavedPresensiRef.current === currentStr) return;
+
+    lastSavedPresensiRef.current = currentStr;
+    safeStorageSet('payedu_presensi_guru', currentStr);
+    postToGoogleSheets('SAVE_PRESENSI_GURU', presensiGuru).catch(e => console.warn(e));
+  }, [presensiGuru, isDataLoaded, hasConflict]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -770,15 +861,18 @@ export default function App() {
     else if (ua.includes("Android")) os = "Android";
     else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
 
+    const now = new Date();
     const newLog = {
       id: generateUniqueId('log-'),
       name, role, status,
+      timestamp: now.toISOString(),
+      timeRaw: now.getTime(),
       // DIPERBARUI: Memastikan zona waktu dikunci pada Waktu Indonesia Barat (WIB)
-      time: new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta' }) + ' WIB',
+      time: now.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta' }) + ' WIB',
       device: `${browser} / ${os}`
     };
-    // Simpan history maksimum 50 data terbaru agar browser tidak berat
-    setLoginHistory(prev => [newLog, ...prev].slice(0, 50));
+    // Simpan history maksimum 50 data terbaru agar browser tidak berat dan terurut kronologis
+    setLoginHistory(prev => sortLoginLogs([newLog, ...(prev || [])]).slice(0, 50));
   };
 
   useEffect(() => {
@@ -1561,6 +1655,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const adminNav = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-white', glow: 'shadow-purple-500/50', bg: 'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-700 border border-purple-300/50 dark:border-purple-600/50' },
     { id: 'dataguru', label: 'Data Guru & Staff', icon: Users, color: 'text-white', glow: 'shadow-blue-500/50', bg: 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 border border-blue-300/50 dark:border-blue-600/50' },
+    { id: 'presensiguru', label: 'Presensi Guru', icon: Clock3, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
     { id: 'jadwal', label: 'Jadwal Mengajar', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' }, // DIPINDAH: Menu Jadwal
     { id: 'rekapabsensi', label: 'Rekap Absen', icon: FileText, color: 'text-white', glow: 'shadow-orange-500/50', bg: 'bg-gradient-to-br from-orange-400 via-orange-500 to-orange-700 border border-orange-300/50 dark:border-orange-600/50' },
     { id: 'gaji', label: 'Komponen Gaji', icon: Calculator, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
@@ -1573,6 +1668,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
   const guruNav = [
     { id: 'portal_dashboard', label: 'Profil Pegawai', icon: UserCircle, color: 'text-white', glow: 'shadow-blue-500/50', bg: 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 border border-blue-300/50 dark:border-blue-600/50' },
+    { id: 'portal_presensi', label: 'Presensi Saya', icon: Clock3, color: 'text-white', glow: 'shadow-teal-500/50', bg: 'bg-gradient-to-br from-teal-400 via-teal-500 to-teal-700 border border-teal-300/50 dark:border-teal-600/50' },
     { id: 'portal_jadwal', label: 'Jadwal Saya', icon: CalendarDays, color: 'text-white', glow: 'shadow-pink-500/50', bg: 'bg-gradient-to-br from-pink-400 via-pink-500 to-pink-700 border border-pink-300/50 dark:border-pink-600/50' },
     { id: 'portal_kehadiran', label: 'Rekap Kehadiran', icon: Clock, color: 'text-white', glow: 'shadow-amber-500/50', bg: 'bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 border border-amber-300/50 dark:border-amber-600/50' },
     { id: 'portal_gaji', label: 'Slip Gaji Bulanan', icon: Wallet, color: 'text-white', glow: 'shadow-emerald-500/50', bg: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 border border-emerald-300/50 dark:border-emerald-600/50' },
@@ -1600,6 +1696,52 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     switch (activeTab) {
       case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
+      case 'presensiguru': 
+        return (
+          <PresensiGuruView 
+            teachers={teachers} 
+            presensiGuru={presensiGuru} 
+            setPresensiGuru={setPresensiGuru} 
+            currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Admin' }} 
+            schoolProfile={{ 
+              nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
+              npsn: settings.schoolNpsn || '10404040', 
+              alamat: settings.schoolAddress || 'Kandis', 
+              kepsek: settings.kepsekName || 'Kepala Sekolah', 
+              presensiGuruSettings: settings.presensiGuruSettings 
+            }} 
+            setSchoolProfile={(updater) => { 
+              setSettings(prev => { 
+                const updated = typeof updater === 'function' ? updater(prev) : updater; 
+                return { ...prev, ...updated, presensiGuruSettings: updated.presensiGuruSettings || updated }; 
+              }); 
+            }} 
+            addAuditLog={saveAuditLog} 
+          />
+        );
+      case 'portal_presensi':
+        return (
+          <PresensiGuruView 
+            teachers={teachers} 
+            presensiGuru={presensiGuru} 
+            setPresensiGuru={setPresensiGuru} 
+            currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
+            schoolProfile={{ 
+              nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
+              npsn: settings.schoolNpsn || '10404040', 
+              alamat: settings.schoolAddress || 'Kandis', 
+              kepsek: settings.kepsekName || 'Kepala Sekolah', 
+              presensiGuruSettings: settings.presensiGuruSettings 
+            }} 
+            setSchoolProfile={(updater) => { 
+              setSettings(prev => { 
+                const updated = typeof updater === 'function' ? updater(prev) : updater; 
+                return { ...prev, ...updated, presensiGuruSettings: updated.presensiGuruSettings || updated }; 
+              }); 
+            }} 
+            addAuditLog={saveAuditLog} 
+          />
+        );
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
       case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
@@ -8120,6 +8262,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
 function ArsipView({ archives, setArchives, settings }) {
   const [selectedArchive, setSelectedArchive] = useState(null);
   const [search, setSearch] = useState('');
+  const [detailSearch, setDetailSearch] = useState('');
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState(null);
   
@@ -8131,7 +8274,7 @@ function ArsipView({ archives, setArchives, settings }) {
   const availableYears = useMemo(() => {
     const ySet = new Set();
     (archives || []).forEach(arc => {
-       const parts = arc.periode.split(' ');
+       const parts = (arc.periode || '').split(' ');
        // Ambil bagian tahun (misal: "Mei 2024" -> "2024")
        if (parts.length > 1) ySet.add(parts[1]);
     });
@@ -8143,11 +8286,43 @@ function ArsipView({ archives, setArchives, settings }) {
 
   // Filter Arsip Berdasarkan Pencarian dan Tab Tahun Aktif
   const filteredArchives = (archives || []).filter(arc => {
-    const matchSearch = arc.periode.toLowerCase().includes(search.toLowerCase());
-    const parts = arc.periode.split(' ');
+    const matchSearch = (arc.periode || '').toLowerCase().includes(search.toLowerCase());
+    const parts = (arc.periode || '').split(' ');
     const matchYear = parts.length > 1 ? parts[1] === activeYear : false;
     return matchSearch && matchYear;
   });
+
+  // Filter Guru di dalam Rincian Arsip yang sedang dibuka
+  const filteredDetailGuru = useMemo(() => {
+    if (!selectedArchive || !selectedArchive.dataGuru) return [];
+    if (!detailSearch.trim()) return selectedArchive.dataGuru;
+    const s = detailSearch.trim().toLowerCase();
+    return selectedArchive.dataGuru.filter(g => {
+      const name = (g.name || '').toLowerCase();
+      const nipy = (g.nipy || '').toLowerCase();
+      const pos = (g.position || '').toLowerCase();
+      const st = (g.status || '').toLowerCase();
+      return name.includes(s) || nipy.includes(s) || pos.includes(s) || st.includes(s);
+    });
+  }, [selectedArchive, detailSearch]);
+
+  // Metrik Ringkasan Arsip yang sedang dibuka
+  const archiveMetrics = useMemo(() => {
+    if (!selectedArchive || !selectedArchive.dataGuru) return { totalPegawai: 0, totalKotor: 0, totalPotongan: 0, totalBersih: 0 };
+    let totalKotor = 0, totalPotongan = 0, totalBersih = 0;
+    selectedArchive.dataGuru.forEach(t => {
+      const slip = calculatePayroll(t, settings);
+      totalKotor += slip.totalKotor;
+      totalPotongan += slip.totalPotongan;
+      totalBersih += slip.totalBersih;
+    });
+    return {
+      totalPegawai: selectedArchive.dataGuru.length,
+      totalKotor,
+      totalPotongan,
+      totalBersih: selectedArchive.totalGaji || totalBersih
+    };
+  }, [selectedArchive, settings]);
 
   const handleDeleteArchive = (id) => {
     setConfirmDelete({ isOpen: true, id });
@@ -8161,7 +8336,7 @@ function ArsipView({ archives, setArchives, settings }) {
 
   // 🪄 FITUR BARU: Ekspor Full Database 1 Tahun ke JSON
   const handleBackupYearly = () => {
-     const yearData = (archives || []).filter(arc => arc.periode.includes(activeYear));
+     const yearData = (archives || []).filter(arc => arc.periode && arc.periode.includes(activeYear));
      if(yearData.length === 0) return alert('Tidak ada data arsip untuk tahun ini.');
 
      const backupData = {
@@ -8186,11 +8361,10 @@ function ArsipView({ archives, setArchives, settings }) {
 
   // 🪄 FITUR BARU: Tutup Buku Tahunan (Hapus dari Server untuk menjaga performa kilat)
   const executePurgeYear = () => {
-     const newArchives = (archives || []).filter(arc => !arc.periode.includes(activeYear));
+     const newArchives = (archives || []).filter(arc => !arc.periode || !arc.periode.includes(activeYear));
      setArchives(newArchives);
      setConfirmPurge(false);
      alert(`🚀 Pembersihan Server Berhasil!\n\nData tahun ${activeYear} telah dihapus dari memori server Google Sheets secara permanen. Aplikasi Anda sekarang akan berjalan jauh lebih ringan dan secepat kilat!`);
-     // Catatan: Efek useEffect utama di App.jsx akan otomatis me-lempar state 'newArchives' ini ke Google Sheets!
   };
 
   const handleExportCSV = (archive) => {
@@ -8266,7 +8440,7 @@ function ArsipView({ archives, setArchives, settings }) {
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
+    <div className="flex flex-col gap-6 animate-in fade-in min-h-full relative">
       
       {/* MODAL KONFIRMASI HAPUS ARSIP 1 BULAN */}
       {confirmDelete.isOpen && (
@@ -8316,18 +8490,20 @@ function ArsipView({ archives, setArchives, settings }) {
 
       {/* Modal Cetak Ulang Slip Gaji */}
       {isSlipModalOpen && selectedSlip && selectedArchive && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-teal-500"/> Arsip Slip Gaji ({selectedArchive.periode})</h3>
-              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2 truncate">
+                <FileText className="text-teal-500 shrink-0"/> Arsip Slip Gaji ({selectedArchive.periode})
+              </h3>
+              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors shrink-0"><X size={20}/></button>
             </div>
-            <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
+            <div className="overflow-y-auto overscroll-contain p-2 sm:p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 touch-pan-y">
               <SlipDocument teacher={selectedSlip} bulan={selectedArchive.periode} settings={settings} />
             </div>
-            <div className="p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors">
-                <Printer size={18}/> Print
+            <div className="p-3 sm:p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap justify-end gap-2 shrink-0">
+              <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors">
+                <Printer size={16}/> Print
               </button>
               <button 
                 onClick={async () => {
@@ -8339,12 +8515,12 @@ function ArsipView({ archives, setArchives, settings }) {
                   }
                 }} 
                 disabled={isExportingPDF}
-                className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={18}/>}
+                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
                 {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
               </button>
-              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors">
+              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm font-medium transition-colors">
                 Tutup
               </button>
             </div>
@@ -8362,7 +8538,7 @@ function ArsipView({ archives, setArchives, settings }) {
       </div>
 
       {!selectedArchive ? (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col min-h-full">
 
           {/* 🪄 TAB TAHUNAN DINAMIS */}
           <div className="bg-slate-100 dark:bg-slate-900/80 p-2 flex overflow-x-auto hide-scrollbar gap-2 border-b border-slate-200 dark:border-slate-700">
@@ -8409,7 +8585,7 @@ function ArsipView({ archives, setArchives, settings }) {
             </div>
           </div>
           
-          <div className="overflow-y-auto flex-1 p-5">
+          <div className="p-4 sm:p-5 flex-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
               {filteredArchives.length === 0 ? (
                 <div className="col-span-full p-10 text-center text-slate-500 flex flex-col items-center">
@@ -8443,7 +8619,7 @@ function ArsipView({ archives, setArchives, settings }) {
                     </div>
 
                     <div className="flex gap-2">
-                      <button onClick={() => setSelectedArchive(arc)} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
+                      <button onClick={() => { setSelectedArchive(arc); setDetailSearch(''); }} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
                         Buka Arsip
                       </button>
                       <button onClick={() => handleExportCSV(arc)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors shadow-sm" title="Export CSV Bulanan">
@@ -8457,24 +8633,146 @@ function ArsipView({ archives, setArchives, settings }) {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full animate-in slide-in-from-right-4">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col min-h-full animate-in slide-in-from-right-4">
+          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
             <div>
-              <button onClick={() => setSelectedArchive(null)} className="text-sm text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1.5 mb-1 font-semibold transition-colors">
+              <button 
+                onClick={() => { setSelectedArchive(null); setDetailSearch(''); }} 
+                className="text-xs sm:text-sm text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1.5 mb-1.5 font-bold transition-colors"
+              >
                 <ChevronRight size={16} className="rotate-180" /> Kembali ke Daftar Arsip
               </button>
-              <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
-                <FolderOpen className="text-teal-500" size={20} /> Rincian Arsip: {selectedArchive.periode}
+              <h3 className="text-base sm:text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <FolderOpen className="text-teal-500 shrink-0" size={22} /> Rincian Arsip: {selectedArchive.periode}
               </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                Diarsipkan pada {selectedArchive.dateArchived || '-'} • Dokumen Sah Keuangan
+              </p>
             </div>
-            <div className="flex gap-2 w-full md:w-auto">
-              <button onClick={() => handleExportCSV(selectedArchive)} className="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 shadow-sm">
-                <Download size={16} /> Export ke CSV
+            
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-56">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                <input 
+                  type="text" 
+                  placeholder="Cari nama / NIPY guru..." 
+                  value={detailSearch} 
+                  onChange={e => setDetailSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-sm"
+                />
+              </div>
+              <button 
+                onClick={() => handleExportCSV(selectedArchive)} 
+                className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+              >
+                <Download size={15} /> Export CSV
               </button>
             </div>
           </div>
-          
-          <div className="overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
+
+          {/* Kartu Ringkasan Metrik Arsip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 sm:p-5 bg-slate-100/60 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-700/60">
+            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Pegawai</span>
+              <span className="text-base sm:text-xl font-black text-slate-800 dark:text-white">{archiveMetrics.totalPegawai} Orang</span>
+            </div>
+            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Gaji Bersih</span>
+              <span className="text-base sm:text-xl font-black text-emerald-600 dark:text-emerald-400">{formatRp(archiveMetrics.totalBersih)}</span>
+            </div>
+            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Kotor</span>
+              <span className="text-base sm:text-xl font-black text-slate-700 dark:text-slate-300">{formatRp(archiveMetrics.totalKotor)}</span>
+            </div>
+            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Potongan</span>
+              <span className="text-base sm:text-xl font-black text-red-500">-{formatRp(archiveMetrics.totalPotongan)}</span>
+            </div>
+          </div>
+
+          {/* TAMPILAN KARTU RESPONSIP HP (< md) */}
+          <div className="md:hidden space-y-3 p-3 no-print">
+            {filteredDetailGuru.map(t => {
+              const slip = calculatePayroll(t, settings);
+              const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
+              const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null; 
+              const prevData = prevArchive?.dataGuru?.find(guru => {
+                if (!guru || !guru.name || !t || !t.name) return false;
+                const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                const tName = t.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                return gName === tName || (String(guru.id) === String(t.id) && gName.includes(tName));
+              });
+              const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
+              const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
+
+              return (
+                <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-base text-slate-800 dark:text-white">
+                        {t.name}
+                      </h4>
+                      <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                      {t.status || 'Pegawai'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-emerald-50/60 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800/40">
+                    <div>
+                      <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block uppercase">THP Bersih</span>
+                      <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</span>
+                    </div>
+                    <div className="text-right">
+                      {prevTHP !== null ? (
+                        diffIndividu !== 0 ? (
+                          <div className={`text-xs font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                            <TrendingUp size={12} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
+                            {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold text-slate-400 flex items-center justify-end gap-0.5">
+                            <Activity size={12}/> Sama
+                          </div>
+                        )
+                      ) : prevArchive ? (
+                        <div className="text-xs font-bold text-slate-400">Data Baru</div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                    <div><span className="text-slate-400">Total Kotor:</span> <span className="font-bold block dark:text-slate-200">{formatRp(slip.totalKotor)}</span></div>
+                    <div><span className="text-slate-400">Total Potongan:</span> <span className="font-bold text-red-500 block">-{formatRp(slip.totalPotongan)}</span></div>
+                    <div><span className="text-slate-400">T. Masa Kerja:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tMasaKerja)}</span></div>
+                    <div><span className="text-slate-400">T. Jabatan:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tJabatan)}</span></div>
+                    <div><span className="text-slate-400">Bonus Hadir:</span> <span className="font-medium text-emerald-600 block">+{formatRp(slip.bonusHadir)}</span></div>
+                    <div><span className="text-slate-400">Jam Lebih:</span> <span className="font-medium text-emerald-600 block">+{formatRp(slip.tMengajar)}</span></div>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setSelectedSlip(t);
+                      setIsSlipModalOpen(true);
+                    }}
+                    className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <FileText size={15} /> Lihat Slip Gaji
+                  </button>
+                </div>
+              );
+            })}
+
+            {filteredDetailGuru.length === 0 && (
+              <div className="p-8 text-center text-slate-500 text-sm bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 italic">
+                Tidak ada data pegawai yang cocok dengan pencarian "{detailSearch}".
+              </div>
+            )}
+          </div>
+
+          {/* TAMPILAN TABEL DESKTOP (>= md) */}
+          <div className="hidden md:block overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
             <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
               <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
                 <tr>
@@ -8486,13 +8784,18 @@ function ArsipView({ archives, setArchives, settings }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {(selectedArchive?.dataGuru || []).map(t => {
+                {filteredDetailGuru.map(t => {
                   const slip = calculatePayroll(t, settings);
                   
                   // 🪄 TAMBALAN CERDAS: Ambil data bulan sebelumnya dari arsip yang lebih lama dengan Perisai Data
                   const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
                   const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null; 
-                  const prevData = prevArchive?.dataGuru?.find(guru => guru.id === t.id);
+                  const prevData = prevArchive?.dataGuru?.find(guru => {
+                    if (!guru || !guru.name || !t || !t.name) return false;
+                    const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                    const tName = t.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+                    return gName === tName || (String(guru.id) === String(t.id) && gName.includes(tName));
+                  });
                   const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                   const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
@@ -8530,7 +8833,7 @@ function ArsipView({ archives, setArchives, settings }) {
                             setSelectedSlip(t);
                             setIsSlipModalOpen(true);
                           }}
-                          className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 w-full max-w-[140px] mx-auto shadow-sm"
+                          className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 w-full max-w-[140px] mx-auto shadow-sm cursor-pointer"
                         >
                           <FileText size={14} /> Lihat Slip
                         </button>
@@ -8538,6 +8841,13 @@ function ArsipView({ archives, setArchives, settings }) {
                   </tr>
                   );
                 })}
+                {filteredDetailGuru.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-8 text-center text-slate-500 italic">
+                      Tidak ada data pegawai yang cocok dengan pencarian "{detailSearch}".
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -9420,6 +9730,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, feedbacks, setF
 
   // 🪄 KONFIGURASI MENU BOTTOM NAVIGATION (ANDROID STYLE)
   const bottomNavItems = [
+    { id: 'portal_presensi', label: 'Presensi', icon: Clock3 },
     { id: 'portal_kehadiran', label: 'Absen', icon: Clock },
     { id: 'portal_jadwal', label: 'Jadwal', icon: CalendarDays },
     { id: 'portal_gaji', label: 'Gaji', icon: Wallet },
@@ -10605,6 +10916,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   }, [accounts]);
 
   const [activeTabSetting, setActiveTabSetting] = useState('umum');
+  const [logSearch, setLogSearch] = useState('');
+  const [logStatusFilter, setLogStatusFilter] = useState('ALL'); // ALL, SUCCESS, FAILED
   
   const settingTabs = [
     { id: 'umum', label: 'Umum & Tampilan', icon: Building, desc: 'Logo, Nama & Kontak' },
@@ -10615,6 +10928,28 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     { id: 'riwayat', label: 'Riwayat Login', icon: Clock, desc: 'Log Aktivitas Guru' },
     { id: 'saran', label: 'Kritik & Saran', icon: MessageSquare, desc: 'Aspirasi & Masukan' },
   ];
+
+  // 🪄 Riwayat Akses Terurut Kronologis & Terfilter
+  const sortedLogs = useMemo(() => {
+    return sortLoginLogs(loginHistory || []);
+  }, [loginHistory]);
+
+  const filteredLogs = useMemo(() => {
+    return sortedLogs.filter(log => {
+      const name = (log.name || '').toLowerCase();
+      const role = (log.role || '').toLowerCase();
+      const device = (log.device || '').toLowerCase();
+      const s = logSearch.toLowerCase().trim();
+      const matchSearch = !s || name.includes(s) || role.includes(s) || device.includes(s);
+      
+      const isFailed = String(log.status || '').toLowerCase().includes('gagal');
+      const matchStatus = logStatusFilter === 'ALL' 
+        ? true 
+        : logStatusFilter === 'SUCCESS' ? !isFailed : isFailed;
+      
+      return matchSearch && matchStatus;
+    });
+  }, [sortedLogs, logSearch, logStatusFilter]);
 
   // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun yang Jauh Lebih Mudah Dikelola
   useEffect(() => {
@@ -11948,10 +12283,22 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             {/* TAB: RIWAYAT LOGIN */}
             {activeTabSetting === 'riwayat' && (
               <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
-                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex items-center justify-between gap-3">
-                   <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                     <Clock className="text-slate-500" size={18} /> Riwayat Akses Sistem Terakhir
-                   </h3>
+                <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                       <Clock size={18} />
+                     </div>
+                     <div>
+                       <div className="flex items-center gap-2">
+                         <h3 className="font-bold text-slate-800 dark:text-white text-base">Riwayat Akses Sistem Terakhir</h3>
+                         <span className="text-[11px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-full">
+                           {filteredLogs.length} / {sortedLogs.length}
+                         </span>
+                       </div>
+                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Catatan aktivitas masuk pengguna terurut kronologis (terbaru di atas).</p>
+                     </div>
+                   </div>
+                   
                    <button 
                      type="button"
                      onClick={async () => {
@@ -11968,76 +12315,145 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                           alert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
                        }
                      }}
-                     className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                     className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer w-full sm:w-auto justify-center"
                    >
                       <Trash2 size={14} /> Bersihkan Riwayat
                    </button>
                 </div>
-                {/* FITUR BARU: Tampilan Kartu Mobile Riwayat Login (< md) */}
-                <div className="md:hidden space-y-3 p-3 no-print overflow-y-auto">
-                   {(loginHistory || []).map((log, idx) => (
-                      <div key={log.id || idx} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
-                         <div className="flex justify-between items-start">
-                            <div>
-                               <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
-                                  <UserCheck size={15} className="text-blue-500 shrink-0"/>
-                                  {log.name || 'Pengguna'}
-                               </h4>
-                               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                                  Role: {log.role || 'User'}
-                               </span>
-                            </div>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${String(log.status || '').includes('Gagal') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
-                               {log.status || 'Sukses'}
-                            </span>
-                         </div>
 
-                         <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                            <div>
-                               <span className="text-[10px] font-bold text-slate-400 block uppercase">Waktu Akses</span>
-                               <span className="font-medium text-slate-700 dark:text-slate-300">{log.time || log.timestamp || log.created_at || '-'}</span>
-                            </div>
-                            <div>
-                               <span className="text-[10px] font-bold text-slate-400 block uppercase">Perangkat / OS</span>
-                               <span className="font-mono text-slate-600 dark:text-slate-400 truncate block">{log.device || '-'}</span>
-                            </div>
-                         </div>
-                      </div>
-                   ))}
-                   {(loginHistory || []).length === 0 && (
+                {/* Filter & Toolbar Pencarian Log */}
+                <div className="p-3 sm:p-4 bg-white dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                    <input 
+                      type="text"
+                      placeholder="Cari pengguna, role, perangkat..."
+                      value={logSearch}
+                      onChange={e => setLogSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                    />
+                    {logSearch && (
+                      <button onClick={() => setLogSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto hide-scrollbar">
+                    <button
+                      type="button"
+                      onClick={() => setLogStatusFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                    >
+                      Semua ({sortedLogs.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogStatusFilter('SUCCESS')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'SUCCESS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'}`}
+                    >
+                      Sukses ({sortedLogs.filter(l => !String(l.status || '').toLowerCase().includes('gagal')).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogStatusFilter('FAILED')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'FAILED' ? 'bg-red-600 text-white shadow-xs' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100'}`}
+                    >
+                      Gagal ({sortedLogs.filter(l => String(l.status || '').toLowerCase().includes('gagal')).length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tampilan Kartu Mobile Riwayat Login (< md) */}
+                <div className="md:hidden space-y-3 p-3 no-print overflow-y-auto">
+                   {filteredLogs.map((log, idx) => {
+                      const isFailed = String(log.status || '').toLowerCase().includes('gagal');
+                      return (
+                        <div key={log.id || idx} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col gap-2.5">
+                           <div className="flex justify-between items-start">
+                              <div>
+                                 <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+                                    <UserCheck size={15} className="text-blue-500 shrink-0"/>
+                                    {log.name || 'Pengguna'}
+                                 </h4>
+                                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                    Role: <span className="font-bold text-slate-700 dark:text-slate-300">{log.role || 'User'}</span>
+                                 </span>
+                              </div>
+                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isFailed ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'}`}>
+                                 {log.status || 'Sukses'}
+                              </span>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                              <div>
+                                 <span className="text-[10px] font-bold text-slate-400 block uppercase">Waktu Akses</span>
+                                 <span className="font-medium text-slate-700 dark:text-slate-300 text-[11px] leading-tight block mt-0.5">
+                                   {log.time || log.timestamp || log.created_at || '-'}
+                                 </span>
+                              </div>
+                              <div>
+                                 <span className="text-[10px] font-bold text-slate-400 block uppercase">Perangkat / OS</span>
+                                 <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 truncate block mt-0.5" title={log.device}>
+                                   {log.device || '-'}
+                                 </span>
+                              </div>
+                           </div>
+                        </div>
+                      );
+                   })}
+                   {filteredLogs.length === 0 && (
                       <div className="p-8 text-center text-slate-500 text-sm bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 italic">
-                         Belum ada riwayat aktivitas yang terekam.
+                         {sortedLogs.length === 0 ? 'Belum ada riwayat aktivitas yang terekam.' : `Tidak ada riwayat aktivitas yang cocok dengan pencarian "${logSearch}".`}
                       </div>
                    )}
                 </div>
 
+                {/* Tampilan Tabel Desktop (>= md) */}
                 <div className="hidden md:block overflow-x-auto flex-1 relative p-0 touch-pan-x scroll-smooth">
                   <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
-                    <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
+                    <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-xs border-b border-slate-200 dark:border-slate-700">
                       <tr>
-                        <th className="p-4 font-bold">Waktu Akses</th>
+                        <th className="p-4 font-bold">Waktu Akses (WIB)</th>
                         <th className="p-4 font-bold">Pengguna</th>
-                        <th className="p-4 font-bold">Perangkat / OS</th>
-                        <th className="p-4 font-bold">Status</th>
+                        <th className="p-4 font-bold">Role</th>
+                        <th className="p-4 font-bold">Perangkat / Browser</th>
+                        <th className="p-4 font-bold text-center">Status Akses</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                      {(loginHistory || []).map((log, idx) => (
-                        <tr key={log.id || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                          <td className="p-4 text-slate-600 dark:text-slate-400 font-medium">{log.time || log.timestamp || log.created_at || '-'}</td>
-                          <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
-                            {log.name || 'Pengguna'} <span className="font-normal text-slate-500 text-xs ml-1">({log.role || 'User'})</span>
-                          </td>
-                          <td className="p-4 text-slate-500 text-xs">{log.device || '-'}</td>
-                          <td className="p-4">
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${String(log.status || '').includes('Gagal') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
-                              {log.status || 'Sukses'}
-                            </span>
+                      {filteredLogs.map((log, idx) => {
+                        const isFailed = String(log.status || '').toLowerCase().includes('gagal');
+                        return (
+                          <tr key={log.id || idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-4 text-slate-600 dark:text-slate-400 font-medium text-xs">
+                              {log.time || log.timestamp || log.created_at || '-'}
+                            </td>
+                            <td className="p-4 font-bold text-slate-800 dark:text-slate-200">
+                              {log.name || 'Pengguna'}
+                            </td>
+                            <td className="p-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                              <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                                {log.role || 'User'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-500 font-mono text-xs">
+                              {log.device || '-'}
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${isFailed ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                                {log.status || 'Sukses'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredLogs.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="p-8 text-center text-slate-500 italic">
+                            {sortedLogs.length === 0 ? 'Belum ada riwayat aktivitas yang terekam.' : `Tidak ada riwayat aktivitas yang cocok dengan pencarian "${logSearch}".`}
                           </td>
                         </tr>
-                      ))}
-                      {(loginHistory || []).length === 0 && (
-                        <tr><td colSpan="4" className="p-8 text-center text-slate-500">Belum ada riwayat aktivitas yang terekam.</td></tr>
                       )}
                     </tbody>
                   </table>

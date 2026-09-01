@@ -31,6 +31,7 @@ export const pushCloudData = async (action, payload) => {
   let targetArchives = payload.archives || (action === 'SAVE_ARCHIVES' ? payload : null);
   let targetFeedbacks = payload.feedbacks || (action === 'SAVE_FEEDBACKS' ? payload : null);
   let targetLogs = payload.loginHistory || (action === 'SAVE_LOGS' ? payload : null);
+  let targetPresensi = payload.presensiGuru || (action === 'SAVE_PRESENSI_GURU' ? payload : null);
 
   // Update LocalStorage cache seketika
   if (targetSettings && Object.keys(targetSettings).length > 0) {
@@ -47,6 +48,18 @@ export const pushCloudData = async (action, payload) => {
   }
   if (Array.isArray(targetLogs)) {
     safeStorageSet('payedu_loginHistory', targetLogs);
+  }
+  if (Array.isArray(targetPresensi)) {
+    safeStorageSet('payedu_presensi_guru', targetPresensi);
+    try {
+      localStorage.setItem('payedu_presensi_guru', JSON.stringify(targetPresensi));
+    } catch (e) {}
+    if (!targetSettings) {
+      const currentSettings = safeStorageGet('payedu_settings', {}) || {};
+      targetSettings = { ...currentSettings, presensiGuru: targetPresensi };
+    } else {
+      targetSettings.presensiGuru = targetPresensi;
+    }
   }
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
@@ -108,7 +121,7 @@ export const pushCloudData = async (action, payload) => {
         const logRecords = targetLogs.map(l => ({
           id: String(l.id || Date.now() + Math.random()),
           data: l,
-          created_at: l.timestamp || now
+          created_at: l.timestamp || l.created_at || (l.timeRaw ? new Date(l.timeRaw).toISOString() : now)
         }));
         const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
         if (error) console.error('Supabase login_logs upsert error:', error);
@@ -131,6 +144,7 @@ export const fetchCloudData = async () => {
   const localArchives = safeStorageGet('payedu_archives', []);
   const localFeedbacks = safeStorageGet('payedu_feedbacks', []);
   const localLogs = safeStorageGet('payedu_loginHistory', []);
+  const localPresensi = safeStorageGet('payedu_presensi_guru', []);
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
     console.log('Supabase tidak terkonfigurasi atau perangkat offline. Menggunakan LocalStorage.');
@@ -142,7 +156,8 @@ export const fetchCloudData = async () => {
         teachers: localTeachers,
         archives: localArchives,
         feedbacks: localFeedbacks,
-        loginHistory: localLogs
+        loginHistory: localLogs,
+        presensiGuru: (localSettings?.presensiGuru) || localPresensi || []
       }
     };
   }
@@ -180,10 +195,11 @@ export const fetchCloudData = async () => {
 
     if (feedbackErr) console.warn('Gagal mengambil feedbacks dari Supabase:', feedbackErr);
 
-    // 5. Fetch Login Logs
+    // 5. Fetch Login Logs (Terurut kronologis terbaru di atas)
     const { data: logRows, error: logErr } = await supabase
       .from('login_logs')
-      .select('id, data');
+      .select('id, data, created_at')
+      .order('created_at', { ascending: false });
 
     if (logErr) console.warn('Gagal mengambil login_logs dari Supabase:', logErr);
 
@@ -228,7 +244,16 @@ export const fetchCloudData = async () => {
 
     const serverArchives = archivesRows && archivesRows.length > 0 ? archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
     const serverFeedbacks = feedbackRows && feedbackRows.length > 0 ? feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
-    const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
+    const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => {
+      const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+      return {
+        id: r.id || parsed.id,
+        created_at: r.created_at || parsed.created_at || parsed.timestamp,
+        timestamp: parsed.timestamp || r.created_at,
+        ...parsed,
+        id: r.id || parsed.id
+      };
+    }) : null;
 
     // Failsafe: Jika Supabase masih kosong tetapi LocalStorage punya data, gunakan data lokal & Auto-Push ke Supabase!
     const finalSettings = serverSettings || localSettings || {};
@@ -236,6 +261,7 @@ export const fetchCloudData = async () => {
     const finalArchives = serverArchives || localArchives;
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;
+    const finalPresensi = (finalSettings && finalSettings.presensiGuru) || localPresensi || [];
 
     if (!serverTeachers && localTeachers.length > 0) {
       console.log('Database Cloud Supabase masih kosong. Melakukan auto-push data lokal ke Supabase...');
@@ -244,7 +270,8 @@ export const fetchCloudData = async () => {
         teachers: finalTeachers,
         archives: finalArchives,
         feedbacks: finalFeedbacks,
-        loginHistory: finalLogs
+        loginHistory: finalLogs,
+        presensiGuru: finalPresensi
       });
     }
 
@@ -254,6 +281,7 @@ export const fetchCloudData = async () => {
     safeStorageSet('payedu_archives', finalArchives);
     safeStorageSet('payedu_feedbacks', finalFeedbacks);
     safeStorageSet('payedu_loginHistory', finalLogs);
+    safeStorageSet('payedu_presensi_guru', finalPresensi);
 
     return {
       status: 'success',
@@ -263,7 +291,8 @@ export const fetchCloudData = async () => {
         teachers: finalTeachers,
         archives: finalArchives,
         feedbacks: finalFeedbacks,
-        loginHistory: finalLogs
+        loginHistory: finalLogs,
+        presensiGuru: finalPresensi
       }
     };
   } catch (error) {
@@ -276,7 +305,8 @@ export const fetchCloudData = async () => {
         teachers: localTeachers,
         archives: localArchives,
         feedbacks: localFeedbacks,
-        loginHistory: localLogs
+        loginHistory: localLogs,
+        presensiGuru: localPresensi
       }
     };
   }
