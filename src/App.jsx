@@ -618,9 +618,9 @@ export default function App() {
           setTeachers(serverTeachers); 
           setArchives(serverArchives);
           setFeedbacks(serverFeedbacks);
-          if (result.data.presensiGuru) {
-            setPresensiGuru(result.data.presensiGuru);
-            safeStorageSet('payedu_presensi_guru', JSON.stringify(result.data.presensiGuru));
+          if (res.data.presensiGuru) {
+            setPresensiGuru(res.data.presensiGuru);
+            safeStorageSet('payedu_presensi_guru', JSON.stringify(res.data.presensiGuru));
           }
           const sortedServerLogs = sortLoginLogs(serverLogs);
           setLoginHistory(sortedServerLogs);
@@ -1066,6 +1066,8 @@ export default function App() {
           setLoginHistory={setLoginHistory} // 🪄 TAMBAHAN: Meneruskan akses setLoginHistory
           archives={archives}
           setArchives={setArchives}
+          presensiGuru={presensiGuru}
+          setPresensiGuru={setPresensiGuru}
           syncStatus={syncStatus} 
           hasConflict={hasConflict} 
           resolveConflict={() => fetchCloudData(false)} 
@@ -1509,7 +1511,7 @@ function MaintenanceScreen({ onLogout, appName, schoolName, appVersion }) {
 }
 
 // --- MAIN LAYOUT & NAVIGATION ---
-function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
+function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
