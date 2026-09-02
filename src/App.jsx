@@ -14,9 +14,49 @@ import {
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
   Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3
 } from 'lucide-react';
-import { fetchCloudData as fetchFromSupabase, pushCloudData as pushToSupabase } from './services/dbService';
+import { 
+  fetchCloudData as fetchFromSupabase, 
+  pushCloudData as pushToSupabase,
+  fetchPresensiGuru,
+  pushPresensiGuru,
+  subscribePresensiGuru
+} from './services/dbService';
 import { isSupabaseConfigured } from './lib/supabase';
 import PresensiGuruView from './PresensiGuruView';
+
+// Helper Failsafe untuk Penyimpanan Lokal & Timezone Lokal Indonesia (WIB)
+const safeStorageGet = (key, fallback) => {
+  try {
+    const item = localStorage.getItem(key);
+    if (!item) return fallback;
+    const parsed = JSON.parse(item);
+    if (typeof parsed === 'string') {
+      try { return JSON.parse(parsed); } catch(e) { return fallback; }
+    }
+    return parsed;
+  } catch (e) {
+    return fallback;
+  }
+};
+
+const safeStorageSet = (key, value) => {
+  try {
+    const str = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, str);
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      console.error(`Penyimpanan penuh saat mencoba menyimpan ${key}`);
+      alert(`PERINGATAN KRITIKAL: Memori Penyimpanan Penuh!\n\nGagal menyimpan data baru. Memori penyimpanan browser Anda telah mencapai batas maksimal (sekitar 5MB).\n\nSolusi: Buka menu Pengaturan > Sistem, lakukan "Backup Database", lalu gunakan "Reset Keseluruhan Data Pegawai" untuk membersihkan memori lama.`);
+    } else {
+      console.error(`Gagal menyimpan ${key} ke LocalStorage:`, e);
+    }
+  }
+};
+
+const getLocalIsoDate = (d = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
 let TENURE_RATES = {
@@ -406,18 +446,6 @@ const sortLoginLogs = (logs) => {
   return [...logs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
 };
 
-// TAMBAHAN NO 1: Failsafe Storage Cerdas untuk mendeteksi limit memori browser (5MB)
-const safeStorageSet = (key, value) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-      console.error(`Penyimpanan penuh saat mencoba menyimpan ${key}`);
-      alert(`PERINGATAN KRITIKAL: Memori Penyimpanan Penuh!\n\nGagal menyimpan data baru. Memori penyimpanan browser Anda telah mencapai batas maksimal (sekitar 5MB).\n\nSolusi: Buka menu Pengaturan > Sistem, lakukan "Backup Database", lalu gunakan "Reset Keseluruhan Data Pegawai" untuk membersihkan memori lama.`);
-    }
-  }
-};
-
 // 🪄 FITUR BARU: Variabel Master Default untuk inisialisasi awal
 const defaultMasterRates = {
   TENURE_RATES: TENURE_RATES,
@@ -600,7 +628,7 @@ export default function App() {
              setGeneralSettings(prev => {
                 if (prev.maintenanceMode !== serverSettings.maintenanceMode) {
                    const updated = { ...prev, maintenanceMode: serverSettings.maintenanceMode };
-                   safeStorageSet('payedu_settings', JSON.stringify(updated));
+                   safeStorageSet('payedu_settings', updated);
                    return updated;
                 }
                 return prev;
@@ -618,21 +646,29 @@ export default function App() {
           setTeachers(serverTeachers); 
           setArchives(serverArchives);
           setFeedbacks(serverFeedbacks);
-          if (res.data.presensiGuru) {
-            setPresensiGuru(res.data.presensiGuru);
-            safeStorageSet('payedu_presensi_guru', JSON.stringify(res.data.presensiGuru));
-          }
           const sortedServerLogs = sortLoginLogs(serverLogs);
           setLoginHistory(sortedServerLogs);
           
-          safeStorageSet('payedu_settings', JSON.stringify(serverSettings));
-          safeStorageSet('payedu_teachers', JSON.stringify(serverTeachers));
-          safeStorageSet('payedu_archives', JSON.stringify(serverArchives));
-          safeStorageSet('payedu_feedbacks', JSON.stringify(serverFeedbacks));
-          safeStorageSet('payedu_loginHistory', JSON.stringify(sortedServerLogs));
+          safeStorageSet('payedu_settings', serverSettings);
+          safeStorageSet('payedu_teachers', serverTeachers);
+          safeStorageSet('payedu_archives', serverArchives);
+          safeStorageSet('payedu_feedbacks', serverFeedbacks);
+          safeStorageSet('payedu_loginHistory', sortedServerLogs);
           
           setHasConflict(false); 
         }
+      }
+
+      // 🌟 Fetch Presensi Guru dari baris terpisah di Cloud (kebal dari conflict settings)
+      try {
+        const presensiRes = await fetchPresensiGuru();
+        if (presensiRes.status === 'success' && Array.isArray(presensiRes.data)) {
+          setPresensiGuru(presensiRes.data);
+          lastSavedPresensiRef.current = JSON.stringify(presensiRes.data);
+          safeStorageSet('payedu_presensi_guru', presensiRes.data);
+        }
+      } catch (pErr) {
+        console.warn("[Info Presensi] Gagal sinkronisasi presensi cloud:", pErr);
       }
     } catch (err) {
       console.warn("[Info Cloud] Gagal menjangkau Supabase/Cloud. Menggunakan data sisa di LocalStorage.", err);
@@ -645,6 +681,20 @@ export default function App() {
 
   useEffect(() => {
     fetchCloudData();
+  }, []);
+
+  // 📡 Real-time Subscription: Menerima perubahan presensi langsung dari Supabase tanpa delay
+  useEffect(() => {
+    const unsubscribe = subscribePresensiGuru((updatedPresensi) => {
+      if (Array.isArray(updatedPresensi)) {
+        setPresensiGuru(updatedPresensi);
+        lastSavedPresensiRef.current = JSON.stringify(updatedPresensi);
+        safeStorageSet('payedu_presensi_guru', updatedPresensi);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Radar Latar Belakang (Polling) mengecek versi data dari Supabase Cloud (Setiap 8 detik)
@@ -804,16 +854,16 @@ export default function App() {
     postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
   }, [loginHistory, isDataLoaded, hasConflict]);
 
-  // Auto-Save Presensi Guru
+  // Auto-Save Presensi Guru (Independen dari settings conflict & langsung push ke Supabase)
   useEffect(() => {
-    if (!isDataLoaded || hasConflict) return;
+    if (!isDataLoaded) return;
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
     lastSavedPresensiRef.current = currentStr;
-    safeStorageSet('payedu_presensi_guru', currentStr);
-    postToGoogleSheets('SAVE_PRESENSI_GURU', presensiGuru).catch(e => console.warn(e));
-  }, [presensiGuru, isDataLoaded, hasConflict]);
+    safeStorageSet('payedu_presensi_guru', presensiGuru);
+    pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
+  }, [presensiGuru, isDataLoaded]);
 
   useEffect(() => {
     if (!user) return;
@@ -9455,7 +9505,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
   const liveDateStr = liveNow.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
   const liveTimeStr = liveNow.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':');
-  const todayIsoDate = liveNow.toISOString().split('T')[0];
+  const todayIsoDate = getLocalIsoDate(liveNow);
 
   const presensiSettings = settings?.presensiGuruSettings || {};
   const sesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
@@ -9518,8 +9568,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     if (typeof setPresensiGuru === 'function') {
       setPresensiGuru(updated);
     }
-    safeStorageSet('payedu_presensi_guru', JSON.stringify(updated));
-    try { localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated)); } catch(e){}
+    safeStorageSet('payedu_presensi_guru', updated);
+    pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
     alert(status === 'Terlambat' ? `Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
   };
 
@@ -9541,8 +9591,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       if (typeof setPresensiGuru === 'function') {
         setPresensiGuru(updated);
       }
-      safeStorageSet('payedu_presensi_guru', JSON.stringify(updated));
-      try { localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated)); } catch(e){}
+      safeStorageSet('payedu_presensi_guru', updated);
+      pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
       alert(`Absen Pulang (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
     }
   };

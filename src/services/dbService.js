@@ -4,7 +4,13 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 const safeStorageGet = (key, fallback) => {
   try {
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
+    if (!item) return fallback;
+    const parsed = JSON.parse(item);
+    // Deteksi double-encode: jika hasil parse masih string, parse sekali lagi
+    if (typeof parsed === 'string') {
+      try { return JSON.parse(parsed); } catch(e) { return fallback; }
+    }
+    return parsed;
   } catch (e) {
     console.error(`Gagal membaca ${key} dari LocalStorage:`, e);
     return fallback;
@@ -13,14 +19,202 @@ const safeStorageGet = (key, fallback) => {
 
 const safeStorageSet = (key, value) => {
   try {
-    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    // Selalu simpan sebagai JSON string, TIDAK pernah double-encode
+    const str = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, str);
   } catch (e) {
     console.error(`Gagal menyimpan ${key} ke LocalStorage:`, e);
   }
 };
 
+// ==========================================
+// PRESENSI GURU: PENYIMPANAN TERPISAH
+// Menggunakan baris terpisah di tabel `settings` dengan id='presensi_guru'
+// agar tidak bertabrakan dengan settings umum (id='general')
+// ==========================================
+
+/**
+ * Menyimpan data presensi guru ke LocalStorage dan Supabase (baris terpisah).
+ * Fungsi ini dipanggil langsung setiap kali ada perubahan presensi.
+ */
+export const pushPresensiGuru = async (presensiArray) => {
+  if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
+
+  // 1. Simpan ke LocalStorage seketika (sumber kebenaran offline)
+  safeStorageSet('payedu_presensi_guru', presensiArray);
+
+  // 2. Simpan ke Supabase sebagai baris terpisah di tabel settings
+  if (!isSupabaseConfigured() || !navigator.onLine) {
+    return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline)' };
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ 
+        id: 'presensi_guru', 
+        data: presensiArray, 
+        updated_at: now 
+      });
+    if (error) {
+      console.error('Supabase presensi_guru upsert error:', error);
+      return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud: ' + error.message };
+    }
+    return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud' };
+  } catch (error) {
+    console.error('Error saat menyimpan presensi ke Supabase:', error);
+    return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud' };
+  }
+};
+
+/**
+ * Mengambil data presensi guru dari Supabase (baris terpisah) dengan fallback LocalStorage.
+ */
+export const fetchPresensiGuru = async () => {
+  const localPresensi = safeStorageGet('payedu_presensi_guru', []);
+  // Pastikan localPresensi benar-benar array
+  const safeLocal = Array.isArray(localPresensi) ? localPresensi : [];
+
+  if (!isSupabaseConfigured() || !navigator.onLine) {
+    return { status: 'success', source: 'local', data: safeLocal };
+  }
+
+  try {
+    const { data: row, error } = await supabase
+      .from('settings')
+      .select('data, updated_at')
+      .eq('id', 'presensi_guru')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.warn('Gagal mengambil presensi_guru dari Supabase:', error);
+    }
+
+    let serverPresensi = null;
+    if (row?.data) {
+      const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+      if (Array.isArray(parsed)) {
+        serverPresensi = parsed;
+      }
+    }
+
+    // Jika server punya data, merge dengan lokal (prioritas server)
+    if (serverPresensi !== null) {
+      const merged = mergePresensiArrays(serverPresensi, safeLocal);
+      safeStorageSet('payedu_presensi_guru', merged);
+      return { status: 'success', source: 'supabase', data: merged };
+    }
+
+    // Server kosong — coba migrasi dari settings lama (field presensiGuru di general)
+    try {
+      const { data: generalRow } = await supabase
+        .from('settings')
+        .select('data')
+        .eq('id', 'general')
+        .single();
+      if (generalRow?.data) {
+        const generalData = typeof generalRow.data === 'string' ? JSON.parse(generalRow.data) : generalRow.data;
+        if (Array.isArray(generalData?.presensiGuru) && generalData.presensiGuru.length > 0) {
+          console.log('Migrasi presensi dari settings.general ke settings.presensi_guru...');
+          const migrated = mergePresensiArrays(generalData.presensiGuru, safeLocal);
+          await pushPresensiGuru(migrated);
+          return { status: 'success', source: 'migrated', data: migrated };
+        }
+      }
+    } catch (migErr) {
+      console.warn('Migrasi presensi gagal (tidak fatal):', migErr);
+    }
+
+    // Server benar-benar kosong, push lokal ke server
+    if (safeLocal.length > 0) {
+      console.log('Presensi cloud kosong, auto-push data lokal...');
+      pushPresensiGuru(safeLocal).catch(e => console.warn(e));
+    }
+
+    return { status: 'success', source: 'local', data: safeLocal };
+  } catch (error) {
+    console.error('Error saat fetch presensi dari Supabase:', error);
+    return { status: 'success', source: 'fallback', data: safeLocal };
+  }
+};
+
+/**
+ * Merge dua array presensi: server menang untuk record yang sama (by id), 
+ * record unik dari keduanya dipertahankan.
+ */
+function mergePresensiArrays(serverArr, localArr) {
+  const map = new Map();
+  // Masukkan lokal dulu
+  for (const r of localArr) {
+    if (r && r.id) map.set(r.id, r);
+    else if (r && r.teacherId && r.date) {
+      const key = `${r.teacherId}_${r.date}_${r.sesiId || 'default'}`;
+      map.set(key, r);
+    }
+  }
+  // Server menimpa (lebih prioritas)
+  for (const r of serverArr) {
+    if (r && r.id) map.set(r.id, r);
+    else if (r && r.teacherId && r.date) {
+      const key = `${r.teacherId}_${r.date}_${r.sesiId || 'default'}`;
+      map.set(key, r);
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Subscribe ke perubahan presensi real-time via Supabase Realtime.
+ * Callback dipanggil setiap kali baris presensi_guru berubah di server.
+ * Mengembalikan fungsi unsubscribe.
+ */
+export const subscribePresensiGuru = (onUpdate) => {
+  if (!isSupabaseConfigured() || !supabase) {
+    return () => {}; // noop unsubscribe
+  }
+
+  const channel = supabase
+    .channel('presensi-realtime')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'settings',
+        filter: 'id=eq.presensi_guru'
+      },
+      (payload) => {
+        if (payload.new?.data) {
+          const parsed = typeof payload.new.data === 'string' 
+            ? JSON.parse(payload.new.data) 
+            : payload.new.data;
+          if (Array.isArray(parsed)) {
+            console.log('[Realtime] Menerima update presensi dari server:', parsed.length, 'records');
+            safeStorageSet('payedu_presensi_guru', parsed);
+            onUpdate(parsed);
+          }
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log('[Realtime] Presensi subscription status:', status);
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};
+
+
+// ==========================================
+// FUNGSI UTAMA: PUSH & FETCH SEMUA DATA (Kecuali presensi)
+// Presensi kini menggunakan pushPresensiGuru & fetchPresensiGuru di atas.
+// ==========================================
+
 /**
  * Menyimpan / menyinkronkan data aplikasi ke Supabase & LocalStorage
+ * CATATAN: Presensi guru TIDAK lagi disimpan di sini — gunakan pushPresensiGuru.
  */
 export const pushCloudData = async (action, payload) => {
   if (!payload) return { status: 'success', message: 'Payload kosong' };
@@ -31,7 +225,24 @@ export const pushCloudData = async (action, payload) => {
   let targetArchives = payload.archives || (action === 'SAVE_ARCHIVES' ? payload : null);
   let targetFeedbacks = payload.feedbacks || (action === 'SAVE_FEEDBACKS' ? payload : null);
   let targetLogs = payload.loginHistory || (action === 'SAVE_LOGS' ? payload : null);
-  let targetPresensi = payload.presensiGuru || (action === 'SAVE_PRESENSI_GURU' ? payload : null);
+
+  // PERBAIKAN KRITIS: Hapus presensiGuru dari settings agar tidak menimpa baris 'general'
+  if (targetSettings) {
+    const { presensiGuru, ...cleanSettings } = targetSettings;
+    targetSettings = cleanSettings;
+    // Jika ada presensi yang menumpang di payload, simpan terpisah
+    if (Array.isArray(presensiGuru) && presensiGuru.length > 0) {
+      pushPresensiGuru(presensiGuru).catch(e => console.warn(e));
+    }
+  }
+
+  // Backward compatibility: jika dipanggil dengan SAVE_PRESENSI_GURU, alihkan ke fungsi baru
+  if (action === 'SAVE_PRESENSI_GURU') {
+    const presensiData = payload.presensiGuru || payload;
+    if (Array.isArray(presensiData)) {
+      return pushPresensiGuru(presensiData);
+    }
+  }
 
   // Update LocalStorage cache seketika
   if (targetSettings && Object.keys(targetSettings).length > 0) {
@@ -49,18 +260,6 @@ export const pushCloudData = async (action, payload) => {
   if (Array.isArray(targetLogs)) {
     safeStorageSet('payedu_loginHistory', targetLogs);
   }
-  if (Array.isArray(targetPresensi)) {
-    safeStorageSet('payedu_presensi_guru', targetPresensi);
-    try {
-      localStorage.setItem('payedu_presensi_guru', JSON.stringify(targetPresensi));
-    } catch (e) {}
-    if (!targetSettings) {
-      const currentSettings = safeStorageGet('payedu_settings', {}) || {};
-      targetSettings = { ...currentSettings, presensiGuru: targetPresensi };
-    } else {
-      targetSettings.presensiGuru = targetPresensi;
-    }
-  }
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', message: 'Tersimpan di LocalStorage (Offline / Supabase belum dikonfigurasi)' };
@@ -69,7 +268,7 @@ export const pushCloudData = async (action, payload) => {
   try {
     const now = new Date().toISOString();
 
-    // 1. Simpan Settings
+    // 1. Simpan Settings (TANPA presensiGuru di dalamnya)
     if (targetSettings && Object.keys(targetSettings).length > 0) {
       const { error } = await supabase
         .from('settings')
@@ -137,6 +336,7 @@ export const pushCloudData = async (action, payload) => {
 
 /**
  * Mengambil seluruh data aplikasi dari Supabase (dengan fallback ke LocalStorage & Auto-Push jika Supabase kosong).
+ * CATATAN: Presensi guru kini diambil TERPISAH via fetchPresensiGuru().
  */
 export const fetchCloudData = async () => {
   const localSettings = safeStorageGet('payedu_settings', null);
@@ -144,7 +344,6 @@ export const fetchCloudData = async () => {
   const localArchives = safeStorageGet('payedu_archives', []);
   const localFeedbacks = safeStorageGet('payedu_feedbacks', []);
   const localLogs = safeStorageGet('payedu_loginHistory', []);
-  const localPresensi = safeStorageGet('payedu_presensi_guru', []);
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
     console.log('Supabase tidak terkonfigurasi atau perangkat offline. Menggunakan LocalStorage.');
@@ -157,7 +356,6 @@ export const fetchCloudData = async () => {
         archives: localArchives,
         feedbacks: localFeedbacks,
         loginHistory: localLogs,
-        presensiGuru: (localSettings?.presensiGuru) || localPresensi || []
       }
     };
   }
@@ -203,9 +401,14 @@ export const fetchCloudData = async () => {
 
     if (logErr) console.warn('Gagal mengambil login_logs dari Supabase:', logErr);
 
-    // Dapatkan data dari Supabase jika ada (dengan parsing JSON aman jika dalam format string)
-    const serverSettings = settingsRow?.data ? (typeof settingsRow.data === 'string' ? JSON.parse(settingsRow.data) : settingsRow.data) : null;
+    // Parse data dari Supabase
+    let serverSettings = settingsRow?.data ? (typeof settingsRow.data === 'string' ? JSON.parse(settingsRow.data) : settingsRow.data) : null;
     
+    // PERBAIKAN: Bersihkan field presensiGuru dari settings agar tidak membengkak
+    if (serverSettings) {
+      delete serverSettings.presensiGuru;
+    }
+
     const serverTeachers = teachersRows && teachersRows.length > 0 ? teachersRows.map(r => {
       const parsedData = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
       return {
@@ -226,7 +429,7 @@ export const fetchCloudData = async () => {
         payroll: parsedData.payroll || {
           jabatans: [], kompetensi: [], disiplin: {}, insentifTambahan: [], potonganLainnya: [], jamMengajar: {}, kegiatanInsidental: []
         },
-        ...parsedData, // Preservasi seluruh field kustom lainnya
+        ...parsedData,
         id: r.id || parsedData.id
       };
     }) : null;
@@ -255,13 +458,11 @@ export const fetchCloudData = async () => {
       };
     }) : null;
 
-    // Failsafe: Jika Supabase masih kosong tetapi LocalStorage punya data, gunakan data lokal & Auto-Push ke Supabase!
     const finalSettings = serverSettings || localSettings || {};
     const finalTeachers = serverTeachers || localTeachers;
     const finalArchives = serverArchives || localArchives;
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;
-    const finalPresensi = (finalSettings && finalSettings.presensiGuru) || localPresensi || [];
 
     if (!serverTeachers && localTeachers.length > 0) {
       console.log('Database Cloud Supabase masih kosong. Melakukan auto-push data lokal ke Supabase...');
@@ -271,7 +472,6 @@ export const fetchCloudData = async () => {
         archives: finalArchives,
         feedbacks: finalFeedbacks,
         loginHistory: finalLogs,
-        presensiGuru: finalPresensi
       });
     }
 
@@ -281,7 +481,6 @@ export const fetchCloudData = async () => {
     safeStorageSet('payedu_archives', finalArchives);
     safeStorageSet('payedu_feedbacks', finalFeedbacks);
     safeStorageSet('payedu_loginHistory', finalLogs);
-    safeStorageSet('payedu_presensi_guru', finalPresensi);
 
     return {
       status: 'success',
@@ -292,7 +491,6 @@ export const fetchCloudData = async () => {
         archives: finalArchives,
         feedbacks: finalFeedbacks,
         loginHistory: finalLogs,
-        presensiGuru: finalPresensi
       }
     };
   } catch (error) {
@@ -306,8 +504,8 @@ export const fetchCloudData = async () => {
         archives: localArchives,
         feedbacks: localFeedbacks,
         loginHistory: localLogs,
-        presensiGuru: localPresensi
       }
     };
   }
 };
+

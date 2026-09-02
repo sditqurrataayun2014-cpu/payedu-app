@@ -6,6 +6,7 @@ import {
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff
 } from 'lucide-react';
 import jsQR from 'jsqr';
+import { pushPresensiGuru } from './services/dbService';
 
 // ==========================================
 // KONSTANTA & HELPER LOKAL
@@ -37,7 +38,10 @@ const STATUS_OPTIONS = ['Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Cuti', '
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const QR_PREFIX = 'EDUFINANCE-PRESENSI';
 
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = (d = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 const toMinutes = (hhmm) => {
   if (!hhmm) return 0;
   const [h, m] = hhmm.split(':').map(Number);
@@ -308,10 +312,11 @@ export default function PresensiGuruView({
       setPresensiGuru(updated);
     }
 
-    // INSTANT LOCALSTORAGE BACKUP
+    // INSTANT LOCALSTORAGE BACKUP & DIRECT CLOUD PUSH
     try {
       localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
     } catch (e) {}
+    pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Push warning:', e));
   };
 
   // Identifikasi profil guru yang sedang aktif/login
@@ -1066,7 +1071,12 @@ function AdminRekapPanel({
     const rec = getRecord(teacher.id);
     if (!rec) return;
     showConfirm(`Hapus catatan presensi ${teacher.name} hari ini? Tindakan ini tidak bisa dibatalkan.`, () => {
-      setPresensiGuru(presensiGuru.filter(r => r.id !== rec.id));
+      const updated = presensiGuru.filter(r => r.id !== rec.id);
+      setPresensiGuru(updated);
+      try {
+        localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
+      } catch (e) {}
+      pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Delete sync warning:', e));
       showToast('Catatan presensi berhasil dihapus.', 'success');
     });
   };
