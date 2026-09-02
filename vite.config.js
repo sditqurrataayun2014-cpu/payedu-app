@@ -10,16 +10,48 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        cleanupOutdatedCaches: true
+        cleanupOutdatedCaches: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 tahun
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 tahun
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
       },
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'Sistem Penggajian',
-        short_name: 'Gajian SD-IT QA',
-        description: 'Sistem Informasi SDM dan Finansial Sekolah',
-        theme_color: '#2563eb', // Warna header di peramban HP
+        name: 'Sistem Penggajian & Presensi SDIT Qurrata A\'yun',
+        short_name: 'PayEdu QA',
+        description: 'Sistem Informasi SDM, Presensi, dan Finansial Sekolah',
+        theme_color: '#0d9488',
         background_color: '#f8fafc',
-        display: 'standalone', // Hilangkan address bar saat diinstal
+        display: 'standalone',
+        orientation: 'portrait',
         icons: [
           {
             src: 'pwa-192x192.png',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer 
@@ -12,7 +12,8 @@ import {
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
   Info, MessageSquare, ChevronDown, ChevronUp, Send, History, Bell, BellRing,
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
-  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3
+  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3,
+  WifiOff, FileSpreadsheet, Filter
 } from 'lucide-react';
 import { 
   fetchCloudData as fetchFromSupabase, 
@@ -632,6 +633,68 @@ export default function App() {
       return [];
     }
   });
+  const [auditLogs, setAuditLogs] = useState(() => {
+    const saved = localStorage.getItem('payedu_audit_logs');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  // 📡 Deteksi Koneksi Internet & Auto-Sync Saat Online Kembali
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetchCloudData(true);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // 🛡️ Fungsi Universal Pencatat Jejak Audit (Audit Trail)
+  const saveAuditLog = useCallback((param1, param2, param3, param4, param5) => {
+    let entry = {};
+    // Signature 1: saveAuditLog(teacherObj, fieldLabel, oldVal, newVal)
+    if (param1 && typeof param1 === 'object' && param1.name) {
+      entry = {
+        id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date().toISOString(),
+        actor: user?.name || 'Administrator',
+        action: 'Ubah ' + (param2 || 'Komponen Gaji'),
+        target: param1.name,
+        detail: `Mengubah ${param2} dari Rp ${Number(param3 || 0).toLocaleString('id-ID')} menjadi Rp ${Number(param4 || 0).toLocaleString('id-ID')}`,
+        category: 'finansial',
+      };
+    } 
+    // Signature 2: saveAuditLog(actor, action, target, detail, category)
+    else {
+      entry = {
+        id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date().toISOString(),
+        actor: param1 || user?.name || 'Administrator',
+        action: param2 || 'Aktivitas Sistem',
+        target: param3 || '-',
+        detail: typeof param4 === 'object' ? JSON.stringify(param4) : String(param4 || '-'),
+        category: param5 || 'finansial',
+      };
+    }
+
+    setAuditLogs(prev => {
+      const updated = [entry, ...(prev || [])].slice(0, 400);
+      safeStorageSet('payedu_audit_logs', updated);
+      return updated;
+    });
+  }, [user]);
 
   const [isLoadingDb, setIsLoadingDb] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -1206,6 +1269,10 @@ export default function App() {
           setArchives={setArchives}
           presensiGuru={presensiGuru}
           setPresensiGuru={setPresensiGuru}
+          auditLogs={auditLogs}
+          setAuditLogs={setAuditLogs}
+          saveAuditLog={saveAuditLog}
+          isOnline={isOnline}
           syncStatus={syncStatus} 
           hasConflict={hasConflict} 
           resolveConflict={() => fetchCloudData(false)} 
@@ -1655,7 +1722,7 @@ function MaintenanceScreen({ onLogout, appName, schoolName, appVersion }) {
 }
 
 // --- MAIN LAYOUT & NAVIGATION ---
-function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
+function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, auditLogs, setAuditLogs, saveAuditLog, isOnline, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
@@ -1675,52 +1742,23 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
      const bufferKeys = Object.keys(auditBufferRef.current);
      if (bufferKeys.length === 0) return;
 
-     const newLogs = [];
-     const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
-     const timestamp = Date.now();
-
-     bufferKeys.forEach((key, idx) => {
+     bufferKeys.forEach((key) => {
         const item = auditBufferRef.current[key];
         if (Number(item.oldVal) === Number(item.newVal) || String(item.oldVal) === String(item.newVal)) return;
 
-        // Dapatkan kalkulasi total gaji TERBARU setelah pengetikan selesai
-        const latestTeacher = latestTeachersRef.current.find(t => t.id === item.teacherId);
-        const calcLatest = latestTeacher ? calculatePayroll(latestTeacher, settings) : null;
-        const newTotal = calcLatest ? calcLatest.totalBersih : 0;
-        const newTotalKotor = calcLatest ? calcLatest.totalKotor : 0;
-
-        newLogs.push({
-           id: timestamp + idx,
-           date: nowStr,
-           teacher: item.teacherName,
-           field: item.field,
-           old: item.oldVal,
-           new: item.newVal,
-           oldTotal: item.oldTotal,
-           newTotal: newTotal,
-           oldTotalKotor: item.oldTotalKotor,
-           newTotalKotor: newTotalKotor
-        });
+        saveAuditLog?.(
+           user?.name || 'Administrator',
+           `Ubah ${item.field}`,
+           item.teacherName,
+           `Mengubah ${item.field} dari Rp ${Number(item.oldVal || 0).toLocaleString('id-ID')} menjadi Rp ${Number(item.newVal || 0).toLocaleString('id-ID')}`,
+           'finansial'
+        );
      });
 
      auditBufferRef.current = {};
-
-     if (newLogs.length > 0) {
-        setSettings(prev => {
-           const existingLogs = prev.auditLogs || [];
-           const updatedLogs = [...newLogs, ...existingLogs].slice(0, 150); // Maksimal 150 riwayat di Cloud
-           const newState = { ...prev, auditLogs: updatedLogs, lastModified: Date.now() };
-           
-           // 🪄 PERBAIKAN MUTLAK 2: SIMPAN LANGSUNG KE CLOUD SEKETIKA! (Mencegah hilang saat di-refresh)
-           safeStorageSet('payedu_settings', JSON.stringify(newState));
-           postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Audit log sync error:", e));
-           
-           return newState;
-        });
-     }
   };
 
-  const saveAuditLog = (targetTeacher, fieldLabel, oldVal, newVal) => {
+  const recordDebouncedAudit = (targetTeacher, fieldLabel, oldVal, newVal) => {
      if (!targetTeacher) return;
      const teacherId = targetTeacher.id;
      const bufferKey = `${teacherId}_${fieldLabel}`;
@@ -1903,7 +1941,29 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             saveAuditLog={saveAuditLog}
           />
         );
-      case 'pengaturan': return <PengaturanView teachers={teachers} setTeachers={setTeachers} settings={settings} setSettings={setSettings} feedbacks={feedbacks} setFeedbacks={setFeedbacks} loginHistory={loginHistory} setLoginHistory={setLoginHistory} archives={archives} setArchives={setArchives} fundingSources={fundingSources} setFundingSources={setFundingSources} onToggleMaintenance={onToggleMaintenance} />;
+      case 'pengaturan': 
+        return (
+          <PengaturanView 
+            teachers={teachers} 
+            setTeachers={setTeachers} 
+            settings={settings} 
+            setSettings={setSettings} 
+            feedbacks={feedbacks} 
+            setFeedbacks={setFeedbacks} 
+            loginHistory={loginHistory} 
+            setLoginHistory={setLoginHistory} 
+            archives={archives} 
+            setArchives={setArchives} 
+            fundingSources={fundingSources} 
+            setFundingSources={setFundingSources} 
+            onToggleMaintenance={onToggleMaintenance}
+            auditLogs={auditLogs}
+            setAuditLogs={setAuditLogs}
+            saveAuditLog={saveAuditLog}
+            presensiGuru={presensiGuru}
+            setPresensiGuru={setPresensiGuru}
+          />
+        );
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
     }
   };
@@ -1925,7 +1985,16 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   };
 
   return (
-    <div className="flex min-h-screen md:h-screen md:overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans relative">
+    <div className="flex flex-col min-h-screen md:h-screen md:overflow-hidden bg-slate-50 dark:bg-slate-900 font-sans relative">
+      {/* 📡 BANNER OFFLINE MODE */}
+      {!isOnline && (
+        <div className="bg-amber-600 text-white px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2 shadow-lg sticky top-0 z-50 animate-in slide-in-from-top duration-300">
+          <WifiOff size={16} className="shrink-0 animate-pulse" />
+          <span>Mode Offline Aktif — Anda tetap dapat bekerja &amp; presensi tanpa hambatan. Data tersimpan aman di perangkat dan akan disinkronkan otomatis ke Cloud begitu internet tersambung kembali.</span>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden relative">
       {isSidebarOpen && window.innerWidth < 768 && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-20 md:hidden no-print animate-in fade-in" onClick={() => setIsSidebarOpen(false)} />
       )}
@@ -2209,6 +2278,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }
@@ -11310,7 +11380,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 }
 
 // --- PENGATURAN VIEW ---
-function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance }) {
+function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance, auditLogs = [], setAuditLogs, saveAuditLog, presensiGuru = [], setPresensiGuru }) {
   const fileInputRef = useRef(null);
 
   // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
@@ -11357,12 +11427,53 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   const [logSearch, setLogSearch] = useState('');
   const [logStatusFilter, setLogStatusFilter] = useState('ALL'); // ALL, SUCCESS, FAILED
   
+  // 🛡️ State Log Audit Finansial & Sistem
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditCategoryFilter, setAuditCategoryFilter] = useState('ALL'); // ALL, finansial, presensi_guru, pegawai, sistem
+
+  const filteredAuditLogs = useMemo(() => {
+    return (auditLogs || []).filter(log => {
+      const actor = (log.actor || '').toLowerCase();
+      const action = (log.action || '').toLowerCase();
+      const target = (log.target || '').toLowerCase();
+      const detail = (log.detail || '').toLowerCase();
+      const s = auditSearch.toLowerCase().trim();
+      const matchSearch = !s || actor.includes(s) || action.includes(s) || target.includes(s) || detail.includes(s);
+      
+      const matchCategory = auditCategoryFilter === 'ALL' || log.category === auditCategoryFilter;
+      return matchSearch && matchCategory;
+    });
+  }, [auditLogs, auditSearch, auditCategoryFilter]);
+
+  const handleExportAuditCSV = () => {
+    const headers = ['Waktu & Tanggal', 'Aktor / Petugas', 'Kategori', 'Tindakan', 'Sasaran', 'Rincian Perubahan'];
+    const rows = filteredAuditLogs.map(log => [
+      log.timestamp ? `${formatDateId(log.timestamp.split('T')[0])} ${new Date(log.timestamp).toLocaleTimeString('id-ID')}` : '-',
+      log.actor || '-',
+      log.category || 'sistem',
+      log.action || '-',
+      log.target || '-',
+      log.detail || '-'
+    ]);
+
+    const csvContent = [headers.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','), ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Log_Audit_Finansial_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const settingTabs = [
     { id: 'umum', label: 'Umum & Tampilan', icon: Building, desc: 'Logo, Nama & Kontak' },
     { id: 'tarif', label: 'Master Tarif', icon: Database, desc: 'Variabel Dinamis Gaji' }, // 🪄 TAMBAHAN: Tab Tarif
     { id: 'portal', label: 'Teks Portal Guru', icon: FileText, desc: 'Aturan & Info Penggajian' },
     { id: 'akun', label: 'Manajemen Akses', icon: Key, desc: 'Kelola Akun & Login' },
     { id: 'sistem', label: 'Pengaturan Sistem', icon: Settings, desc: 'Sistem & Keamanan' },
+    { id: 'audit', label: 'Log Audit Finansial', icon: ShieldCheck, desc: 'Jejak Audit Keuangan & Sistem' },
     { id: 'riwayat', label: 'Riwayat Login', icon: Clock, desc: 'Log Aktivitas Guru' },
     { id: 'saran', label: 'Kritik & Saran', icon: MessageSquare, desc: 'Aspirasi & Masukan' },
   ];
@@ -11670,14 +11781,16 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 
   // Fungsionalitas Sistem (Backup, Restore, Reset, Toggles)
   const handleBackupData = () => {
-    // 🪄 TAMBALAN CERDAS 1: Memastikan seluruh instrumen aplikasi tercadangkan tanpa ada yang tertinggal
+    // 🪄 TAMBALAN CERDAS: Memastikan seluruh instrumen aplikasi tercadangkan tanpa ada yang tertinggal
     const backupData = { 
        timestamp: new Date().toISOString(),
-       version: '1.5.Pro',
+       version: '2.0.Pro',
        settings, 
        teachers, 
        accounts,
        archives,
+       presensiGuru,
+       auditLogs,
        fundingSources,
        feedbacks,
        loginHistory
@@ -11690,6 +11803,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    saveAuditLog?.('Administrator', 'Backup Database', 'Seluruh Database', 'Mengunduh file backup JSON lengkap (Pegawai, Gaji, Arsip, Presensi, Log)', 'sistem');
   };
 
   const handleRestoreData = (e) => {
@@ -11704,7 +11818,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           setIsSaving(true); // Memunculkan indikator loading
           
           // 1. Terapkan data ke State Komponen (UI React)
-          setTeachers(data.teachers);
+          const cleanTeachers = sanitizeTeacherList(data.teachers);
+          setTeachers(cleanTeachers);
           setSettings(data.settings);
           if (data.accounts) {
              setAccounts(data.accounts);
@@ -11715,26 +11830,37 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           if (data.fundingSources && setFundingSources) setFundingSources(data.fundingSources);
           if (data.feedbacks && setFeedbacks) setFeedbacks(data.feedbacks);
           if (data.loginHistory && setLoginHistory) setLoginHistory(data.loginHistory);
+          if (data.presensiGuru && setPresensiGuru && Array.isArray(data.presensiGuru)) {
+             setPresensiGuru(data.presensiGuru);
+             safeStorageSet('payedu_presensi_guru', data.presensiGuru);
+             pushPresensiGuru(data.presensiGuru).catch(err => console.warn(err));
+          }
+          if (data.auditLogs && setAuditLogs && Array.isArray(data.auditLogs)) {
+             setAuditLogs(data.auditLogs);
+             safeStorageSet('payedu_audit_logs', data.auditLogs);
+          }
 
           // 2. Paksa Sinkronisasi ke LocalStorage Perangkat (Safety First)
-          safeStorageSet('payedu_settings', JSON.stringify(data.settings));
-          safeStorageSet('payedu_teachers', JSON.stringify(data.teachers));
-          if(data.archives) safeStorageSet('payedu_archives', JSON.stringify(data.archives));
+          safeStorageSet('payedu_settings', data.settings);
+          safeStorageSet('payedu_teachers', cleanTeachers);
+          if(data.archives) safeStorageSet('payedu_archives', data.archives);
           if(data.fundingSources) localStorage.setItem('payedu_funding', JSON.stringify(data.fundingSources));
-          if(data.feedbacks) safeStorageSet('payedu_feedbacks', JSON.stringify(data.feedbacks));
-          if(data.loginHistory) safeStorageSet('payedu_loginHistory', JSON.stringify(data.loginHistory));
+          if(data.feedbacks) safeStorageSet('payedu_feedbacks', data.feedbacks);
+          if(data.loginHistory) safeStorageSet('payedu_loginHistory', data.loginHistory);
 
           // 3. 🪄 PAKSA SINKRONISASI PARIPURNA KE SUPABASE CLOUD
           if (navigator.onLine) {
-             await pushToSupabase('RESTORE_ALL', data);
+             await pushToSupabase('RESTORE_ALL', { ...data, teachers: cleanTeachers });
           }
 
           // Kunci ref agar auto-save tidak memicu konflik
           lastSavedSettingsRef.current = JSON.stringify({ ...data.settings, lastModified: 0 });
-          lastSavedTeachersRef.current = JSON.stringify(data.teachers);
+          lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
+
+          saveAuditLog?.('Administrator', 'Restore Database', 'Seluruh Database', 'Memulihkan database dari file backup JSON', 'sistem');
 
           setIsSaving(false);
-          alert("✅ RESTORE & SYNC PARIPURNA BERHASIL!\n\nSeluruh data (Pengaturan, Pegawai, Akses, Arsip, dll) telah sukses dipulihkan ke perangkat dan disinkronkan sepenuhnya ke Supabase Cloud!");
+          alert("✅ RESTORE & SYNC LENGKAP BERHASIL!\n\nSeluruh data (Pengaturan, Pegawai, Akses, Arsip, Presensi Guru, dan Log Audit) telah sukses dipulihkan ke perangkat dan disinkronkan sepenuhnya ke Supabase Cloud!");
         } else {
           alert("File backup tidak valid atau rusak (kehilangan data konfigurasi kunci).");
         }
@@ -12714,6 +12840,146 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                          </button>
                       </div>
                    </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: LOG AUDIT FINANSIAL & SISTEM (AUDIT TRAIL) */}
+            {activeTabSetting === 'audit' && (
+              <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
+                <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                       <ShieldCheck size={18} />
+                     </div>
+                     <div>
+                       <div className="flex items-center gap-2">
+                         <h3 className="font-bold text-slate-800 dark:text-white text-base">Jejak Audit Finansial &amp; Sistem</h3>
+                         <span className="text-[11px] bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 font-bold px-2 py-0.5 rounded-full">
+                           {filteredAuditLogs.length} / {auditLogs.length}
+                         </span>
+                       </div>
+                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Rekaman transparan mutasi gaji, penyesuaian nominal, presensi, dan aktivitas admin.</p>
+                     </div>
+                   </div>
+                   
+                   <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                     <button 
+                       type="button"
+                       onClick={handleExportAuditCSV}
+                       className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 md:flex-none justify-center border border-emerald-200 dark:border-emerald-800"
+                     >
+                       <Download size={14} /> Ekspor CSV
+                     </button>
+                     <button 
+                       type="button"
+                       onClick={() => {
+                         if (window.confirm("Apakah Anda yakin ingin MEMBERSIHKAN LOG AUDIT? Catatan mutasi finansial akan direset.")) {
+                            setAuditLogs([]);
+                            localStorage.removeItem('payedu_audit_logs');
+                            safeStorageSet('payedu_audit_logs', []);
+                            alert("✨ Seluruh Log Audit Finansial berhasil dibersihkan!");
+                         }
+                       }}
+                       className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 md:flex-none justify-center"
+                     >
+                       <Trash2 size={14} /> Bersihkan Log
+                     </button>
+                   </div>
+                </div>
+
+                {/* Filter Toolbar */}
+                <div className="p-3 sm:p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 flex flex-col sm:flex-row gap-3 items-center justify-between shrink-0">
+                   <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl gap-1 w-full sm:w-auto overflow-x-auto">
+                     {[
+                       { id: 'ALL', label: 'Semua' },
+                       { id: 'finansial', label: '💰 Finansial / Gaji' },
+                       { id: 'presensi_guru', label: '📋 Presensi' },
+                       { id: 'pegawai', label: '👥 Pegawai' },
+                       { id: 'sistem', label: '⚙️ Sistem' }
+                     ].map(cat => (
+                       <button
+                         key={cat.id}
+                         type="button"
+                         onClick={() => setAuditCategoryFilter(cat.id)}
+                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${auditCategoryFilter === cat.id ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                       >
+                         {cat.label}
+                       </button>
+                     ))}
+                   </div>
+                   <div className="relative w-full sm:w-72">
+                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                     <input 
+                       type="text" 
+                       placeholder="Cari aktor, target, atau detail..." 
+                       value={auditSearch} 
+                       onChange={e => setAuditSearch(e.target.value)}
+                       className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                     />
+                   </div>
+                </div>
+
+                {/* Table Log */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                  {filteredAuditLogs.length === 0 ? (
+                    <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+                      <ShieldCheck size={40} className="mx-auto mb-2 opacity-30" />
+                      <p className="font-bold text-sm">Belum Ada Rekaman Log Audit</p>
+                      <p className="text-xs mt-1">Seluruh aktivitas perubahan gaji, mutasi data, dan presensi akan otomatis tercatat di sini.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 uppercase tracking-wider text-[10px] font-black border-b border-slate-200 dark:border-slate-700">
+                            <th className="p-3 pl-4">Waktu</th>
+                            <th className="p-3">Aktor</th>
+                            <th className="p-3">Kategori</th>
+                            <th className="p-3">Tindakan</th>
+                            <th className="p-3">Sasaran</th>
+                            <th className="p-3 pr-4">Rincian Perubahan</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-800/60">
+                          {filteredAuditLogs.map(log => {
+                            const badgeColor = log.category === 'finansial' 
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                              : log.category === 'presensi_guru'
+                              ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                              : log.category === 'pegawai'
+                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+
+                            return (
+                              <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800 transition-colors">
+                                <td className="p-3 pl-4 font-mono text-[11px] text-slate-500 shrink-0 whitespace-nowrap">
+                                  {formatDateId(log.timestamp?.split('T')[0])} {log.timestamp ? new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </td>
+                                <td className="p-3 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                  {log.actor || 'Administrator'}
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider ${badgeColor}`}>
+                                    {log.category || 'sistem'}
+                                  </span>
+                                </td>
+                                <td className="p-3 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                  {log.action}
+                                </td>
+                                <td className="p-3 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                  {log.target || '-'}
+                                </td>
+                                <td className="p-3 pr-4 text-slate-600 dark:text-slate-300 leading-relaxed font-mono text-[11px]">
+                                  {log.detail || '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
