@@ -8100,89 +8100,107 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                     </div>
                  </div>
 
-                 {(!settings.auditLogs || settings.auditLogs.length === 0) ? (
-                    <div className="text-center py-10 text-slate-500 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
-                       <History size={40} className="mx-auto mb-3 opacity-30 text-amber-500" />
-                       <p className="font-bold">Belum ada riwayat perbaikan yang tercatat.</p>
-                    </div>
-                 ) : (
-                    <div className="space-y-4">
-                       {settings.auditLogs
-                          .filter(log => 
-                             log.teacher.toLowerCase().includes(searchAudit.toLowerCase()) || 
-                             log.field.toLowerCase().includes(searchAudit.toLowerCase())
-                          )
-                          .map((log) => {
-                          const renderLogValue = (val) => {
-                             if (val === '' || val === null || val === undefined) return '0 / Kosong';
-                             if (isNaN(val) || typeof val === 'string') return val;
-                             return formatRp(val);
-                          };
-                          return (
-                            <div key={log.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm hover:border-amber-300 dark:hover:border-amber-600 transition-colors">
-                               
-                               <div className="flex justify-between items-center mb-3">
-                                  <div className="flex items-center gap-2">
-                                     <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-bold">
-                                        {log.teacher.charAt(0)}
-                                     </div>
-                                     <div>
-                                        <div className="font-bold text-slate-800 dark:text-slate-200 text-sm md:text-base">{log.teacher}</div>
-                                        <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock size={10}/> {log.date}</div>
-                                     </div>
-                                  </div>
-                                  <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] sm:text-xs font-bold rounded-md border border-amber-200 dark:border-amber-800/50 flex items-center gap-1.5">
-                                     <Edit size={12}/> {log.field}
-                                  </span>
-                               </div>
+                 {(() => {
+                    const rawLogs = settings?.auditLogs || [];
+                    const search = (searchAudit || '').toLowerCase().trim();
+                    const filtered = rawLogs.filter(log => {
+                       const teacherName = String(log?.teacher || log?.target || log?.actor || '').toLowerCase();
+                       const fieldName = String(log?.field || log?.action || '').toLowerCase();
+                       const detailStr = String(log?.detail || '').toLowerCase();
+                       return !search || teacherName.includes(search) || fieldName.includes(search) || detailStr.includes(search);
+                    });
 
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                                  
-                                  {/* Kolom Perubahan Nilai Komponen */}
-                                  <div className="flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 pb-3 md:pb-0 md:pr-4">
-                                     <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Nilai Komponen Yang Diubah</span>
-                                     <div className="flex items-center gap-2 justify-between">
-                                        <div className="flex flex-col">
-                                           <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
-                                           <span className="text-sm font-bold text-slate-500 line-through">{renderLogValue(log.old)}</span>
-                                        </div>
-                                        <div className="bg-slate-200 dark:bg-slate-700 p-1 rounded-full"><ChevronRight size={14} className="text-slate-500 dark:text-slate-400" /></div>
-                                        <div className="flex flex-col text-right">
-                                           <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
-                                           <span className="text-sm font-black text-amber-600 dark:text-amber-400">{renderLogValue(log.new)}</span>
-                                        </div>
-                                     </div>
-                                  </div>
-
-                                  {/* Kolom Perubahan Total Gaji */}
-                                  <div className="flex flex-col md:pl-2">
-                                     <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Dampak Pada Total Gaji (THP)</span>
-                                     <div className="flex items-center gap-2 justify-between">
-                                        <div className="flex flex-col">
-                                           <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
-                                           <span className="text-sm font-bold text-red-500 line-through">{formatRp(log.oldTotal)}</span>
-                                        </div>
-                                        <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1 rounded-full"><ChevronRight size={14} className="text-emerald-600 dark:text-emerald-400" /></div>
-                                        <div className="flex flex-col text-right">
-                                           <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
-                                           <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatRp(log.newTotal)}</span>
-                                        </div>
-                                     </div>
-                                  </div>
-
-                               </div>
-                            </div>
-                          );
-                       })}
-                       
-                       {/* Pesan jika pencarian tidak ditemukan */}
-                       {settings.auditLogs && settings.auditLogs.filter(log => log.teacher.toLowerCase().includes(searchAudit.toLowerCase()) || log.field.toLowerCase().includes(searchAudit.toLowerCase())).length === 0 && (
-                          <div className="text-center py-6 text-slate-500">
-                             Tidak ada riwayat perbaikan yang cocok dengan pencarian "{searchAudit}".
+                    if (filtered.length === 0) {
+                       return (
+                          <div className="text-center py-10 text-slate-500 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
+                             <History size={40} className="mx-auto mb-3 opacity-30 text-amber-500" />
+                             <p className="font-bold">
+                                {rawLogs.length === 0 ? "Belum ada riwayat perbaikan yang tercatat." : `Tidak ada riwayat perbaikan yang cocok dengan pencarian "${searchAudit}".`}
+                             </p>
                           </div>
-                       )}
-                    </div>
-                 )}
+                       );
+                    }
+
+                    const renderLogValue = (val) => {
+                       if (val === '' || val === null || val === undefined) return '-';
+                       if (isNaN(val) || typeof val === 'string') return String(val);
+                       return formatRp(val);
+                    };
+
+                    return (
+                       <div className="space-y-4">
+                          {filtered.map((log, idx) => {
+                             const teacherName = log?.teacher || log?.target || log?.actor || 'Pegawai / Sistem';
+                             const fieldName = log?.field || log?.action || 'Perubahan Data';
+                             const dateStr = log?.date || (log?.timestamp ? `${formatDateId(log.timestamp.split('T')[0])} ${new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : '-');
+                             const hasOldNew = (log?.old !== undefined || log?.new !== undefined);
+                             const hasTotals = (log?.oldTotal !== undefined || log?.newTotal !== undefined);
+
+                             return (
+                               <div key={log?.id || `audit_${idx}`} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm hover:border-amber-300 dark:hover:border-amber-600 transition-colors">
+                                  
+                                  <div className="flex justify-between items-center mb-3">
+                                     <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-bold">
+                                           {typeof teacherName === 'string' && teacherName.length > 0 ? teacherName.charAt(0).toUpperCase() : 'G'}
+                                        </div>
+                                        <div>
+                                           <div className="font-bold text-slate-800 dark:text-slate-200 text-sm md:text-base">{teacherName}</div>
+                                           <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock size={10}/> {dateStr} {log?.actor ? `• oleh ${log.actor}` : ''}</div>
+                                        </div>
+                                     </div>
+                                     <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] sm:text-xs font-bold rounded-md border border-amber-200 dark:border-amber-800/50 flex items-center gap-1.5">
+                                        <Edit size={12}/> {fieldName}
+                                     </span>
+                                  </div>
+
+                                  {hasOldNew || hasTotals ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                                       
+                                       {/* Kolom Perubahan Nilai Komponen */}
+                                       <div className="flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 pb-3 md:pb-0 md:pr-4">
+                                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Nilai Komponen Yang Diubah</span>
+                                          <div className="flex items-center gap-2 justify-between">
+                                             <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
+                                                <span className="text-sm font-bold text-slate-500 line-through">{renderLogValue(log.old)}</span>
+                                             </div>
+                                             <div className="bg-slate-200 dark:bg-slate-700 p-1 rounded-full"><ChevronRight size={14} className="text-slate-500 dark:text-slate-400" /></div>
+                                             <div className="flex flex-col text-right">
+                                                <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
+                                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">{renderLogValue(log.new)}</span>
+                                             </div>
+                                          </div>
+                                       </div>
+
+                                       {/* Kolom Perubahan Total Gaji */}
+                                       <div className="flex flex-col md:pl-2">
+                                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Dampak Pada Total Gaji (THP)</span>
+                                          <div className="flex items-center gap-2 justify-between">
+                                             <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
+                                                <span className="text-sm font-bold text-red-500 line-through">{log.oldTotal !== undefined ? formatRp(log.oldTotal) : '-'}</span>
+                                             </div>
+                                             <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1 rounded-full"><ChevronRight size={14} className="text-emerald-600 dark:text-emerald-400" /></div>
+                                             <div className="flex flex-col text-right">
+                                                <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
+                                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{log.newTotal !== undefined ? formatRp(log.newTotal) : '-'}</span>
+                                             </div>
+                                          </div>
+                                       </div>
+
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 font-mono leading-relaxed">
+                                       {log?.detail || '-'}
+                                    </div>
+                                  )}
+                               </div>
+                             );
+                          })}
+                       </div>
+                    );
+                 })()}
               </div>
               <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
                  <button onClick={() => setIsConfirmClearHistoryOpen(true)} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg text-xs font-bold transition-colors">
