@@ -320,12 +320,61 @@ function FormattedRupiahInput({ value, onChange, className = "", placeholder = "
   );
 };
 
+const parseSmartDate = (dateStr) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date && !isNaN(dateStr.getTime())) return dateStr;
+  
+  let str = String(dateStr).trim();
+  if (!str || str === '-' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') return null;
+
+  // Format YYYY-MM-DD
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // Format DD-MM-YYYY atau DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const [_, d, m, y] = dmyMatch.map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // Format DD-Bulan-YYYY (misal: 10 Mei 2020 atau 10-May-2020)
+  const bulanMap = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, jun: 6, jul: 7, agu: 8, ags: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
+  const dmyTextMatch = str.toLowerCase().match(/^(\d{1,2})[\/\-\s]+([a-z]+)[\/\-\s]+(\d{2,4})$/);
+  if (dmyTextMatch) {
+    const d = Number(dmyTextMatch[1]);
+    const bKey = dmyTextMatch[2].substring(0, 3);
+    const m = bulanMap[bKey] || 1;
+    let y = Number(dmyTextMatch[3]);
+    if (y < 100) y = y > 30 ? 1900 + y : 2000 + y;
+    return new Date(y, m - 1, d);
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return parsed;
+  return null;
+};
+
 const formatDateId = (dateString) => {
-  if (!dateString) return '-';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return dateString; // Failsafe untuk mencegah Invalid Date merusak UI
+  if (!dateString || dateString === '-') return '-';
+  const d = parseSmartDate(dateString);
+  if (!d) return dateString;
   const options = { day: 'numeric', month: 'long', year: 'numeric' };
   return d.toLocaleDateString('id-ID', options);
+};
+
+const calculateYearsFromDate = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '?';
+  const d = parseSmartDate(dateStr);
+  if (!d) return '?';
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) {
+    years--;
+  }
+  return years >= 0 ? years : '?';
 };
 
 // Fungsi Hash Sederhana untuk menyamarkan password di LocalStorage
@@ -3165,7 +3214,7 @@ function DataGuruView({ teachers, setTeachers }) {
                         <tbody>
                           <tr><td className="py-1.5 text-slate-500 w-32">Jenis Kelamin</td><td className="font-medium dark:text-slate-200">: {modal.data.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Tempat Lahir</td><td className="font-medium dark:text-slate-200">: {modal.data.pob}</td></tr>
-                          <tr><td className="py-1.5 text-slate-500">Tanggal Lahir</td><td className="font-medium dark:text-slate-200">: {formatDateId(modal.data.dob)} <span className="text-blue-500 font-bold ml-1">({new Date().getFullYear() - new Date(modal.data.dob).getFullYear()} Thn)</span></td></tr>
+                          <tr><td className="py-1.5 text-slate-500">Tanggal Lahir</td><td className="font-medium dark:text-slate-200">: {formatDateId(modal.data.dob)} <span className="text-blue-500 font-bold ml-1">({calculateYearsFromDate(modal.data.dob)} Thn)</span></td></tr>
                           {/* TAMBAHAN: Detail No WA */}
                           <tr><td className="py-1.5 text-slate-500">No. WhatsApp</td><td className="font-medium dark:text-slate-200">: {modal.data.phone || '-'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Pendidikan</td><td className="font-medium dark:text-slate-200">: {modal.data.education}</td></tr>
@@ -3180,7 +3229,7 @@ function DataGuruView({ teachers, setTeachers }) {
                       <table className="w-full">
                         <tbody>
                           <tr><td className="py-1.5 text-slate-500 w-32">Mulai Tugas (TMT)</td><td className="font-medium dark:text-slate-200">: {formatDateId(modal.data.tmt)}</td></tr>
-                          <tr><td className="py-1.5 text-slate-500">Masa Kerja</td><td className="font-medium dark:text-slate-200">: {new Date().getFullYear() - new Date(modal.data.tmt).getFullYear()} Tahun</td></tr>
+                          <tr><td className="py-1.5 text-slate-500">Masa Kerja</td><td className="font-medium dark:text-slate-200">: {calculateYearsFromDate(modal.data.tmt)} Tahun</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Status Menikah</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.wife === 1 ? 'Menikah' : modal.data.family?.wife === 2 ? 'Menikah (Ditanggung Suami)' : 'Belum Menikah'}</td></tr>
                           <tr><td className="py-1.5 text-slate-500">Jumlah Anak</td><td className="font-medium dark:text-slate-200">: {modal.data.family?.wife === 1 ? (modal.data.family?.children || 0) : 0} Anak (Masuk Tunjangan)</td></tr>
                         </tbody>
@@ -3457,7 +3506,7 @@ function DataGuruView({ teachers, setTeachers }) {
                   </td>
                   <td className="p-4">
                     <div className="text-slate-700 dark:text-slate-300 font-medium">
-                      {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({!isNaN(new Date(t.dob).getTime()) ? new Date().getFullYear() - new Date(t.dob).getFullYear() : '?'} thn)</span>
+                      {t.pob}, {formatDateId(t.dob)} <span className="text-blue-500 font-bold ml-1">({calculateYearsFromDate(t.dob)} thn)</span>
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">Gender: {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'} • WA: {t.phone || '-'}</div>
                   </td>
@@ -3474,7 +3523,7 @@ function DataGuruView({ teachers, setTeachers }) {
                   </td>
                   <td className="p-4">
                     <div className="text-slate-700 dark:text-slate-300 font-medium">{formatDateId(t.tmt)}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{!isNaN(new Date(t.tmt).getTime()) ? new Date().getFullYear() - new Date(t.tmt).getFullYear() : '?'} Tahun</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{calculateYearsFromDate(t.tmt)} Tahun</div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

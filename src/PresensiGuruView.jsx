@@ -1144,6 +1144,9 @@ function AdminRekapPanel({
   // BUKAN akumulasi total menit keterlambatan — sesuai kebutuhan laporan bulanan.
   const rekapData = useMemo(() => {
     const prefix = `${filterYear}-${String(filterMonth).padStart(2, '0')}`;
+    const sesiPagi = sesiList.find(s => s.id === 'pagi' || (s.nama || '').toLowerCase().includes('pagi')) || sesiList[0];
+    const sesiSore = sesiList.find(s => s.id === 'sore' || (s.nama || '').toLowerCase().includes('sore') || (s.nama || '').toLowerCase().includes('halaqoh'));
+
     return filteredTeachers.map(t => {
       const recs = presensiGuru.filter(r => r.teacherId === t.id && r.date.startsWith(prefix) && (r.sesiId || sesiUtamaId) === filterSesiId);
       const hadir = recs.filter(r => r.status === 'Hadir').length;
@@ -1153,23 +1156,41 @@ function AdminRekapPanel({
       const alpa = recs.filter(r => r.status === 'Alpa').length;
       const cuti = recs.filter(r => ['Cuti', 'Dinas Luar'].includes(r.status)).length;
       const totalTercatat = recs.length;
+
+      // Hitung Rata-rata Masuk Sesi Terpilih
       const jamMasukRecs = recs.filter(r => r.jamMasuk);
       const avgMasukMin = jamMasukRecs.length > 0
         ? Math.round(jamMasukRecs.reduce((sum, r) => sum + toMinutes(r.jamMasuk.slice(0, 5)), 0) / jamMasukRecs.length)
         : null;
+
+      // Hitung Khusus Rata-rata Masuk Pagi & Masuk Sore
+      const allMonthRecs = presensiGuru.filter(r => (r.teacherId === t.id || (r.teacherName && t.name && r.teacherName.trim().toLowerCase() === t.name.trim().toLowerCase())) && r.date.startsWith(prefix));
+      
+      const pagiRecs = allMonthRecs.filter(r => (r.sesiId === sesiPagi?.id || (!r.sesiId && sesiUtamaId === sesiPagi?.id) || (r.sesiNama || '').toLowerCase().includes('pagi')) && r.jamMasuk);
+      const avgPagiMin = pagiRecs.length > 0
+        ? Math.round(pagiRecs.reduce((sum, r) => sum + toMinutes(r.jamMasuk.slice(0, 5)), 0) / pagiRecs.length)
+        : null;
+
+      const soreRecs = allMonthRecs.filter(r => (r.sesiId === sesiSore?.id || (sesiSore && r.sesiId === sesiSore.id) || (r.sesiNama || '').toLowerCase().includes('sore') || (r.sesiNama || '').toLowerCase().includes('halaqoh')) && r.jamMasuk);
+      const avgSoreMin = soreRecs.length > 0
+        ? Math.round(soreRecs.reduce((sum, r) => sum + toMinutes(r.jamMasuk.slice(0, 5)), 0) / soreRecs.length)
+        : null;
+
       const persentase = totalTercatat > 0 ? Math.round(((hadir + terlambat) / totalTercatat) * 100) : 0;
       return {
-        id: t.id, name: t.name, nip: t.nip, position: t.position,
+        id: t.id, name: t.name, nip: t.nipy || t.nip || '-', position: t.position || 'Guru',
         hadir, terlambat, sakit, izin, alpa, cuti, totalTercatat,
         avgMasuk: avgMasukMin != null ? `${String(Math.floor(avgMasukMin / 60)).padStart(2, '0')}:${String(avgMasukMin % 60).padStart(2, '0')}` : '-',
+        avgMasukPagi: avgPagiMin != null ? `${String(Math.floor(avgPagiMin / 60)).padStart(2, '0')}:${String(avgPagiMin % 60).padStart(2, '0')}` : '-',
+        avgMasukSore: avgSoreMin != null ? `${String(Math.floor(avgSoreMin / 60)).padStart(2, '0')}:${String(avgSoreMin % 60).padStart(2, '0')}` : '-',
         persentase,
       };
     });
-  }, [filteredTeachers, presensiGuru, filterMonth, filterYear, filterSesiId, sesiUtamaId]);
+  }, [filteredTeachers, presensiGuru, filterMonth, filterYear, filterSesiId, sesiUtamaId, sesiList]);
 
   const handleExportRekap = () => {
-    const headers = ['Nama', 'NIP', 'Jabatan', 'Hadir', 'Jumlah Kali Terlambat', 'Sakit', 'Izin', 'Alpa', 'Cuti/Dinas Luar', 'Rata-rata Jam Masuk', 'Persentase Hadir'];
-    const rows = rekapData.map(r => [r.name, r.nip, r.position, r.hadir, r.terlambat, r.sakit, r.izin, r.alpa, r.cuti, r.avgMasuk, `${r.persentase}%`]);
+    const headers = ['Nama', 'NIP / NIPY', 'Jabatan', 'Hadir', 'Jumlah Kali Terlambat', 'Sakit', 'Izin', 'Alpa', 'Cuti/Dinas Luar', 'Rata-rata Masuk (Pagi)', 'Rata-rata Masuk (Sore)', 'Persentase Hadir'];
+    const rows = rekapData.map(r => [r.name, r.nip, r.position, r.hadir, r.terlambat, r.sakit, r.izin, r.alpa, r.cuti, r.avgMasukPagi, r.avgMasukSore, `${r.persentase}%`]);
     const csv = [headers, ...rows].map(row => row.map(formatCSVField).join(',')).join('\n');
     showCsvPreview(csv, `Rekap_Presensi_Guru_${MONTH_NAMES[filterMonth - 1]}_${filterYear}.csv`);
   };
@@ -1407,19 +1428,20 @@ function AdminRekapPanel({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest print:border-black">
-                  <th className="p-3 pl-6 text-left print:border print:border-black">Nama</th>
+                  <th className="p-3 pl-6 text-left print:border print:border-black">Nama Guru / Staff</th>
                   <th className="p-2 text-center text-emerald-600 print:border print:border-black">Hadir</th>
                   <th className="p-2 text-center text-amber-600 print:border print:border-black">Telat (Kali)</th>
                   <th className="p-2 text-center text-blue-600 print:border print:border-black">Sakit</th>
                   <th className="p-2 text-center text-violet-600 print:border print:border-black">Izin</th>
                   <th className="p-2 text-center text-rose-600 print:border print:border-black">Alpa</th>
-                  <th className="p-2 text-center print:border print:border-black">Rata² Jam Masuk</th>
+                  <th className="p-2 text-center print:border print:border-black text-sky-700 dark:text-sky-400">Rata² Masuk (Pagi)</th>
+                  <th className="p-2 text-center print:border print:border-black text-amber-700 dark:text-amber-400">Rata² Masuk (Sore)</th>
                   <th className="p-2 text-center pr-6 print:border print:border-black">Persentase</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
                 {rekapData.length === 0 ? (
-                  <tr><td colSpan={8} className="p-12 text-center text-slate-400 italic">Tidak ada data rekap.</td></tr>
+                  <tr><td colSpan={9} className="p-12 text-center text-slate-400 italic">Tidak ada data rekap.</td></tr>
                 ) : rekapData.map(r => {
                   let badgeColor = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
                   if (r.persentase >= 90) badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
@@ -1430,14 +1452,15 @@ function AdminRekapPanel({
                     <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                       <td className="p-3 pl-6 print:border print:border-black">
                         <p className="font-bold text-slate-800 dark:text-white">{r.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{r.position || 'Guru'}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{r.position || 'Guru'} • NIP: {r.nip || '-'}</p>
                       </td>
                       <td className="p-3 text-center font-black text-emerald-600 print:border print:border-black">{r.hadir}</td>
                       <td className="p-3 text-center font-black text-amber-600 print:border print:border-black">{r.terlambat}x</td>
                       <td className="p-3 text-center font-black text-blue-600 print:border print:border-black">{r.sakit}</td>
                       <td className="p-3 text-center font-black text-violet-600 print:border print:border-black">{r.izin}</td>
                       <td className="p-3 text-center font-black text-rose-600 print:border print:border-black">{r.alpa}</td>
-                      <td className="p-3 text-center font-mono font-bold print:border print:border-black">{r.avgMasuk}</td>
+                      <td className="p-3 text-center font-mono font-bold print:border print:border-black text-sky-700 dark:text-sky-400">{r.avgMasukPagi}</td>
+                      <td className="p-3 text-center font-mono font-bold print:border print:border-black text-amber-700 dark:text-amber-400">{r.avgMasukSore}</td>
                       <td className="p-3 text-center pr-6 print:border print:border-black">
                         <span className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wide inline-block shadow-sm ${badgeColor} print:bg-transparent print:text-black`}>{r.persentase}%</span>
                       </td>
