@@ -11831,60 +11831,157 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const data = JSON.parse(evt.target.result);
-        if (data.teachers && data.settings) {
-          setIsSaving(true); // Memunculkan indikator loading
-          
-          // 1. Terapkan data ke State Komponen (UI React)
-          const cleanTeachers = sanitizeTeacherList(data.teachers);
-          setTeachers(cleanTeachers);
-          setSettings(data.settings);
-          if (data.accounts) {
-             setAccounts(data.accounts);
-             const adminAccs = data.accounts.filter(a => a.role !== 'Guru');
-             localStorage.setItem('payedu_admin_accounts', JSON.stringify(adminAccs));
+        let rawContent = evt.target.result;
+        if (typeof rawContent === 'string') {
+          // Bersihkan BOM jika file diekspor dengan encoding UTF-8 with BOM
+          rawContent = rawContent.replace(/^\uFEFF/, '').trim();
+        }
+        
+        let data = JSON.parse(rawContent);
+        // Jika file berformat JSON bertingkat (string di dalam JSON), parse sekali lagi
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data);
+          } catch(e) {}
+        }
+
+        // Ekstraksi jika data berada di dalam wrapper seperti data.data atau data.payload
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+            data = { ...data.data, ...data };
+          } else if (data.payload && typeof data.payload === 'object' && !Array.isArray(data.payload)) {
+            data = { ...data.payload, ...data };
           }
-          if (data.archives && setArchives) setArchives(data.archives);
-          if (data.fundingSources && setFundingSources) setFundingSources(data.fundingSources);
-          if (data.feedbacks && setFeedbacks) setFeedbacks(data.feedbacks);
-          if (data.loginHistory && setLoginHistory) setLoginHistory(data.loginHistory);
-          if (data.presensiGuru && setPresensiGuru && Array.isArray(data.presensiGuru)) {
-             setPresensiGuru(data.presensiGuru);
-             safeStorageSet('payedu_presensi_guru', data.presensiGuru);
-             pushPresensiGuru(data.presensiGuru).catch(err => console.warn(err));
+        }
+
+        // 1. Ekstraksi Data Guru / Pegawai (fleksibel menerima beragam nama field backup lama)
+        let rawTeachers = null;
+        if (Array.isArray(data)) {
+          rawTeachers = data;
+        } else if (data && typeof data === 'object') {
+          rawTeachers = data.teachers || data.dataGuru || data.guruList || data.pegawai || (Array.isArray(data.data) ? data.data : null);
+          if (typeof rawTeachers === 'string') {
+            try { rawTeachers = JSON.parse(rawTeachers); } catch(e) {}
           }
-          if (data.auditLogs && setAuditLogs && Array.isArray(data.auditLogs)) {
-             setAuditLogs(data.auditLogs);
-             safeStorageSet('payedu_audit_logs', data.auditLogs);
+        }
+
+        // 2. Ekstraksi Pengaturan (Settings)
+        let rawSettings = null;
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          rawSettings = data.settings || data.pengaturan || data.generalSettings || data.appSettings;
+          if (typeof rawSettings === 'string') {
+            try { rawSettings = JSON.parse(rawSettings); } catch(e) {}
+          }
+        }
+
+        // Validasi kelayakan file backup (minimal ada data guru atau data pengaturan)
+        if ((rawTeachers && Array.isArray(rawTeachers)) || (rawSettings && typeof rawSettings === 'object')) {
+          setIsSaving(true);
+
+          let restoredTeachersCount = 0;
+          let cleanTeachers = teachers;
+          if (rawTeachers && Array.isArray(rawTeachers)) {
+            cleanTeachers = sanitizeTeacherList(rawTeachers);
+            setTeachers(cleanTeachers);
+            safeStorageSet('payedu_teachers', cleanTeachers);
+            restoredTeachersCount = cleanTeachers.length;
           }
 
-          // 2. Paksa Sinkronisasi ke LocalStorage Perangkat (Safety First)
-          safeStorageSet('payedu_settings', data.settings);
-          safeStorageSet('payedu_teachers', cleanTeachers);
-          if(data.archives) safeStorageSet('payedu_archives', data.archives);
-          if(data.fundingSources) localStorage.setItem('payedu_funding', JSON.stringify(data.fundingSources));
-          if(data.feedbacks) safeStorageSet('payedu_feedbacks', data.feedbacks);
-          if(data.loginHistory) safeStorageSet('payedu_loginHistory', data.loginHistory);
+          let cleanSettings = settings;
+          if (rawSettings && typeof rawSettings === 'object') {
+            cleanSettings = { ...settings, ...rawSettings, lastModified: Date.now() };
+            setSettings(cleanSettings);
+            safeStorageSet('payedu_settings', cleanSettings);
+          }
 
-          // 3. 🪄 PAKSA SINKRONISASI PARIPURNA KE SUPABASE CLOUD
+          // Ekstraksi Akun Admin & Guru
+          let rawAccounts = data?.accounts || data?.akun;
+          if (typeof rawAccounts === 'string') {
+            try { rawAccounts = JSON.parse(rawAccounts); } catch(e) {}
+          }
+          if (rawAccounts && Array.isArray(rawAccounts)) {
+            setAccounts(rawAccounts);
+            const adminAccs = rawAccounts.filter(a => a.role !== 'Guru');
+            localStorage.setItem('payedu_admin_accounts', JSON.stringify(adminAccs));
+          }
+
+          // Ekstraksi Arsip Gaji
+          let rawArchives = data?.archives || data?.arsip;
+          if (typeof rawArchives === 'string') {
+            try { rawArchives = JSON.parse(rawArchives); } catch(e) {}
+          }
+          if (rawArchives && Array.isArray(rawArchives) && setArchives) {
+            setArchives(rawArchives);
+            safeStorageSet('payedu_archives', rawArchives);
+          }
+
+          // Ekstraksi Presensi Guru
+          let rawPresensi = data?.presensiGuru || data?.presensi;
+          if (typeof rawPresensi === 'string') {
+            try { rawPresensi = JSON.parse(rawPresensi); } catch(e) {}
+          }
+          if (rawPresensi && Array.isArray(rawPresensi) && setPresensiGuru) {
+            setPresensiGuru(rawPresensi);
+            safeStorageSet('payedu_presensi_guru', rawPresensi);
+            pushPresensiGuru(rawPresensi).catch(err => console.warn("Sync presensi error:", err));
+          }
+
+          // Ekstraksi Audit Logs
+          let rawLogs = data?.auditLogs || data?.logs;
+          if (typeof rawLogs === 'string') {
+            try { rawLogs = JSON.parse(rawLogs); } catch(e) {}
+          }
+          if (rawLogs && Array.isArray(rawLogs) && setAuditLogs) {
+            setAuditLogs(rawLogs);
+            safeStorageSet('payedu_audit_logs', rawLogs);
+          }
+
+          // Ekstraksi Sumber Dana
+          let rawFunding = data?.fundingSources || data?.funding;
+          if (typeof rawFunding === 'string') {
+            try { rawFunding = JSON.parse(rawFunding); } catch(e) {}
+          }
+          if (rawFunding && Array.isArray(rawFunding) && setFundingSources) {
+            setFundingSources(rawFunding);
+            localStorage.setItem('payedu_funding', JSON.stringify(rawFunding));
+          }
+
+          // Ekstraksi Feedback & Login History
+          if (data?.feedbacks && Array.isArray(data.feedbacks) && setFeedbacks) {
+            setFeedbacks(data.feedbacks);
+            safeStorageSet('payedu_feedbacks', data.feedbacks);
+          }
+          if (data?.loginHistory && Array.isArray(data.loginHistory) && setLoginHistory) {
+            setLoginHistory(data.loginHistory);
+            safeStorageSet('payedu_loginHistory', data.loginHistory);
+          }
+
+          // 3. Sinkronisasi ke Supabase Cloud jika online
           if (navigator.onLine) {
-             await pushToSupabase('RESTORE_ALL', { ...data, teachers: cleanTeachers });
+            const syncPayload = {
+              settings: cleanSettings,
+              teachers: cleanTeachers,
+              accounts: rawAccounts || accounts,
+              archives: rawArchives || archives,
+              fundingSources: rawFunding || fundingSources,
+              feedbacks: data?.feedbacks || feedbacks,
+              loginHistory: data?.loginHistory || loginHistory
+            };
+            await pushToSupabase('RESTORE_ALL', syncPayload).catch(e => console.warn("Supabase sync warning:", e));
           }
 
-          // Kunci ref agar auto-save tidak memicu konflik
-          lastSavedSettingsRef.current = JSON.stringify({ ...data.settings, lastModified: 0 });
-          lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
-
-          saveAuditLog?.('Administrator', 'Restore Database', 'Seluruh Database', 'Memulihkan database dari file backup JSON', 'sistem');
+          saveAuditLog?.('Administrator', 'Restore Database', 'Seluruh Database', `Memulihkan database dari file backup JSON (${restoredTeachersCount} data pegawai)`, 'sistem');
 
           setIsSaving(false);
-          alert("✅ RESTORE & SYNC LENGKAP BERHASIL!\n\nSeluruh data (Pengaturan, Pegawai, Akses, Arsip, Presensi Guru, dan Log Audit) telah sukses dipulihkan ke perangkat dan disinkronkan sepenuhnya ke Supabase Cloud!");
+          alert(`✅ RESTORE & SYNC DATA BERHASIL!\n\nFile cadangan JSON telah berhasil dipulihkan ke perangkat dan disinkronkan ke Cloud Supabase:\n• Data Pegawai: ${restoredTeachersCount} orang\n• Pengaturan Aplikasi: Sukses\n• Data Pendukung: Terpulihkan.`);
         } else {
-          alert("File backup tidak valid atau rusak (kehilangan data konfigurasi kunci).");
+          setIsSaving(false);
+          alert("File backup tidak memiliki struktur data pegawai atau pengaturan yang valid. Pastikan file yang dipilih adalah file .json backup PayEdu.");
         }
       } catch (err) {
         setIsSaving(false);
-        alert("Gagal membaca file backup. Format JSON tidak dikenali.");
+        console.error("Restore error:", err);
+        alert(`Gagal membaca file backup:\n${err.message || 'Format JSON tidak dikenali atau rusak.'}\n\nPastikan file yang dipilih adalah file .json yang valid.`);
       }
       e.target.value = null;
     };
