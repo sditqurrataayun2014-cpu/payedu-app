@@ -165,6 +165,37 @@ function mergePresensiArrays(serverArr, localArr) {
 }
 
 /**
+ * Deduplikasi data arsip gaji berdasarkan nama periode atau ID.
+ * Mencegah munculnya arsip ganda untuk bulan yang sama (seperti 'Juli 2026' x2).
+ */
+export const deduplicateArchives = (archivesList) => {
+  if (!Array.isArray(archivesList)) return [];
+  const map = new Map();
+  for (const arc of archivesList) {
+    if (!arc) continue;
+    // Bersihkan nama periode untuk pencocokan unik
+    const periodKey = String(arc.periode || arc.period || arc.id || '').trim().toLowerCase();
+    if (!periodKey) {
+      map.set(`arc_${Math.random()}`, arc);
+      continue;
+    }
+    
+    if (map.has(periodKey)) {
+      const existing = map.get(periodKey);
+      const existingTime = new Date(existing.date || existing.createdAt || existing.timestamp || 0).getTime();
+      const newTime = new Date(arc.date || arc.createdAt || arc.timestamp || 0).getTime();
+      // Pertahankan versi yang paling baru atau memiliki data pegawai lebih lengkap
+      if (newTime >= existingTime || (arc.dataGuru?.length || 0) >= (existing.dataGuru?.length || 0)) {
+        map.set(periodKey, arc);
+      }
+    } else {
+      map.set(periodKey, arc);
+    }
+  }
+  return Array.from(map.values());
+};
+
+/**
  * Subscribe ke perubahan presensi real-time via Supabase Realtime.
  * Callback dipanggil setiap kali baris presensi_guru berubah di server.
  * Mengembalikan fungsi unsubscribe.
@@ -288,16 +319,36 @@ export const pushCloudData = async (action, payload) => {
       if (error) console.error('Supabase teachers upsert error:', error);
     }
 
-    // 3. Simpan Archives
-    if (Array.isArray(targetArchives) && targetArchives.length > 0) {
-      const archiveRecords = targetArchives.map(a => ({
-        id: String(a.id || a.period || a.periode || Date.now() + Math.random()),
-        period: a.period || a.periode || '',
-        data: a,
-        updated_at: now
-      }));
-      const { error } = await supabase.from('archives').upsert(archiveRecords, { onConflict: 'id' });
-      if (error) console.error('Supabase archives upsert error:', error);
+    // 3. Simpan Archives (dengan Sinkronisasi Hapus Permanen & Anti-Duplikasi)
+    if (Array.isArray(targetArchives)) {
+      const cleanArchives = deduplicateArchives(targetArchives);
+      if (cleanArchives.length === 0) {
+        const { error: delAllErr } = await supabase.from('archives').delete().neq('id', '000_dummy_keep');
+        if (delAllErr) console.error('Supabase archives clear error:', delAllErr);
+      } else {
+        const archiveRecords = cleanArchives.map(a => ({
+          id: String(a.id || a.period || a.periode),
+          period: a.period || a.periode || '',
+          data: a,
+          updated_at: now
+        }));
+        const { error } = await supabase.from('archives').upsert(archiveRecords, { onConflict: 'id' });
+        if (error) console.error('Supabase archives upsert error:', error);
+
+        // Bersihkan data arsip lama di Supabase yang sudah dihapus oleh admin
+        try {
+          const validIds = archiveRecords.map(r => r.id);
+          const { data: existingRows } = await supabase.from('archives').select('id');
+          if (existingRows && existingRows.length > 0) {
+            const idsToDelete = existingRows.map(r => r.id).filter(id => !validIds.includes(String(id)));
+            if (idsToDelete.length > 0) {
+              await supabase.from('archives').delete().in('id', idsToDelete);
+            }
+          }
+        } catch (delErr) {
+          console.warn('Gagal membersihkan row arsip usang di Supabase:', delErr);
+        }
+      }
     }
 
     // 4. Simpan Feedbacks
@@ -460,7 +511,7 @@ export const fetchCloudData = async () => {
 
     const finalSettings = serverSettings || localSettings || {};
     const finalTeachers = serverTeachers || localTeachers;
-    const finalArchives = serverArchives || localArchives;
+    const finalArchives = deduplicateArchives(serverArchives || localArchives || []);
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;
 

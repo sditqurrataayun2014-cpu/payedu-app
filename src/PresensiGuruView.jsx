@@ -280,8 +280,16 @@ export default function PresensiGuruView({
       sesiList: getSesiList(merged),
     };
   }, [schoolProfile?.presensiGuruSettings]);
-  const sesiUtamaId = settings.sesiList[0]?.id;
-  const activeTeachers = useMemo(() => (teachers || []).filter(t => t.status !== 'Non-Aktif').sort((a, b) => (a.name || '').localeCompare(b.name || '')), [teachers]);
+  const isTeacherActive = (t) => {
+    if (!t) return false;
+    if (t.isActive === false) return false;
+    const ws = String(t.workStatus || '').trim().toLowerCase();
+    if (ws === 'non-aktif' || ws === 'tidak aktif' || ws === 'nonaktif' || ws === 'resign' || ws === 'keluar' || ws === 'berhenti') return false;
+    const st = String(t.status || '').trim().toLowerCase();
+    if (st === 'non-aktif' || st === 'tidak aktif' || st === 'nonaktif' || st === 'resign' || st === 'keluar' || st === 'berhenti') return false;
+    return true;
+  };
+  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [teachers]);
 
   // Jam berjalan (live clock)
   const [now, setNow] = useState(new Date());

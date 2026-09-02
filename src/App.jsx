@@ -20,10 +20,29 @@ import {
   pushCloudData as pushToSupabase,
   fetchPresensiGuru,
   pushPresensiGuru,
-  subscribePresensiGuru
+  subscribePresensiGuru,
+  deduplicateArchives
 } from './services/dbService';
 import { isSupabaseConfigured } from './lib/supabase';
 import PresensiGuruView from './PresensiGuruView';
+
+// 🪄 HELPER UNIVERSAL: Mengecek status keaktifan pegawai (Mencegah pegawai Non-Aktif / Resign muncul di operasional gaji & presensi)
+export const isTeacherActive = (t) => {
+  if (!t) return false;
+  if (t.isActive === false) return false;
+  
+  const ws = String(t.workStatus || '').trim().toLowerCase();
+  if (ws === 'non-aktif' || ws === 'tidak aktif' || ws === 'nonaktif' || ws === 'resign' || ws === 'keluar' || ws === 'berhenti') {
+    return false;
+  }
+  
+  const st = String(t.status || '').trim().toLowerCase();
+  if (st === 'non-aktif' || st === 'tidak aktif' || st === 'nonaktif' || st === 'resign' || st === 'keluar' || st === 'berhenti') {
+    return false;
+  }
+
+  return true;
+};
 
 // Helper Failsafe untuk Penyimpanan Lokal & Timezone Lokal Indonesia (WIB)
 const safeStorageGet = (key, fallback) => {
@@ -801,25 +820,56 @@ export default function App() {
                 return prev;
              });
           }
-          if (serverSettings.lastModified > (generalSettings.lastModified + 5000) && !isPushingDataRef.current) {
-             setHasConflict(true); 
-             return; 
+          
+          const cleanTeachers = sanitizeTeacherList(serverTeachers);
+          const cleanArchives = deduplicateArchives(serverArchives);
+
+          // 🪄 PERBAIKAN MUTLAK: Guru tidak pernah memicu banner konflik (Presensi & Slip Guru selalu berjalan mulus)
+          if (!user || user.role === 'guru') {
+            setGeneralSettings(serverSettings);
+            setTeachers(cleanTeachers);
+            setArchives(cleanArchives);
+            setFeedbacks(serverFeedbacks);
+            safeStorageSet('payedu_settings', serverSettings);
+            safeStorageSet('payedu_teachers', cleanTeachers);
+            safeStorageSet('payedu_archives', cleanArchives);
+            safeStorageSet('payedu_feedbacks', serverFeedbacks);
+            setHasConflict(false);
+          } else {
+            // Untuk Admin / Kepsek: Selama Admin tidak sedang mem-push perubahan, terapkan update cloud secara halus
+            if (serverSettings.lastModified > (generalSettings.lastModified + 3000) && !isPushingDataRef.current) {
+               lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
+               lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
+               lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
+               
+               setGeneralSettings(serverSettings);
+               setTeachers(cleanTeachers);
+               setArchives(cleanArchives);
+               setFeedbacks(serverFeedbacks);
+               safeStorageSet('payedu_settings', serverSettings);
+               safeStorageSet('payedu_teachers', cleanTeachers);
+               safeStorageSet('payedu_archives', cleanArchives);
+               safeStorageSet('payedu_feedbacks', serverFeedbacks);
+               setHasConflict(false);
+            }
           }
         } else {
           const cleanTeachers = sanitizeTeacherList(serverTeachers);
+          const cleanArchives = deduplicateArchives(serverArchives);
           lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
           lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
+          lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
 
           setGeneralSettings(serverSettings);
           setTeachers(cleanTeachers); 
-          setArchives(serverArchives);
+          setArchives(cleanArchives);
           setFeedbacks(serverFeedbacks);
           const sortedServerLogs = sortLoginLogs(serverLogs);
           setLoginHistory(sortedServerLogs);
           
           safeStorageSet('payedu_settings', serverSettings);
           safeStorageSet('payedu_teachers', cleanTeachers);
-          safeStorageSet('payedu_archives', serverArchives);
+          safeStorageSet('payedu_archives', cleanArchives);
           safeStorageSet('payedu_feedbacks', serverFeedbacks);
           safeStorageSet('payedu_loginHistory', sortedServerLogs);
           
@@ -922,7 +972,7 @@ export default function App() {
     isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
-      postToGoogleSheets('SAVE_SETTINGS', payloadWithTime)
+      pushToSupabase('SAVE_SETTINGS', payloadWithTime)
       .then(() => setSyncStatus('synced'))
       .catch(err => {
          console.warn("Info Sync:", err.message);
@@ -958,7 +1008,7 @@ export default function App() {
     isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
-      postToGoogleSheets('SAVE_TEACHERS', teachers)
+      pushToSupabase('SAVE_TEACHERS', teachers)
       .then(() => setSyncStatus('synced'))
       .catch(err => {
          console.warn("Info Sync:", err.message);
@@ -980,7 +1030,7 @@ export default function App() {
     lastSavedArchivesRef.current = currentStr;
 
     safeStorageSet('payedu_archives', currentStr);
-    postToGoogleSheets('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
+    pushToSupabase('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
   }, [archives, isDataLoaded, hasConflict, user]);
 
   useEffect(() => {
@@ -991,7 +1041,7 @@ export default function App() {
     lastSavedFeedbacksRef.current = currentStr;
 
     safeStorageSet('payedu_feedbacks', currentStr);
-    postToGoogleSheets('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
+    pushToSupabase('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
   }, [feedbacks, isDataLoaded, hasConflict, user]);
 
   // Auto-Save Riwayat Login
@@ -1002,7 +1052,7 @@ export default function App() {
 
     lastSavedLogsRef.current = currentStr;
     safeStorageSet('payedu_loginHistory', currentStr);
-    postToGoogleSheets('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
+    pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
   }, [loginHistory, isDataLoaded, hasConflict]);
 
   // Auto-Save Presensi Guru (Independen dari settings conflict & langsung push ke Supabase)
@@ -2090,11 +2140,11 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                   setIsManualSyncing(true);
                   try {
                     await Promise.allSettled([
-                      postToGoogleSheets('SAVE_TEACHERS', teachers),
-                      postToGoogleSheets('SAVE_SETTINGS', settings),
-                      postToGoogleSheets('SAVE_ARCHIVES', archives),
-                      postToGoogleSheets('SAVE_FEEDBACKS', feedbacks),
-                      postToGoogleSheets('SAVE_LOGS', loginHistory)
+                      pushToSupabase('SAVE_TEACHERS', teachers),
+                      pushToSupabase('SAVE_SETTINGS', settings),
+                      pushToSupabase('SAVE_ARCHIVES', archives),
+                      pushToSupabase('SAVE_FEEDBACKS', feedbacks),
+                      pushToSupabase('SAVE_LOGS', loginHistory)
                     ]);
                     setIsManualSyncing(false);
                     alert("✨ SINKRONISASI BERHASIL! ✨\n\nSeluruh data Pegawai, Pengaturan, Arsip, dan Log Aktivitas telah berhasil disinkronkan ke Cloud.");
@@ -2207,7 +2257,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                    const updated = { ...settings, maintenanceMode: false, lastModified: Date.now() };
                    setSettings(updated);
                    safeStorageSet('payedu_settings', JSON.stringify(updated));
-                   postToGoogleSheets('SAVE_SETTINGS', updated);
+                   pushToSupabase('SAVE_SETTINGS', updated);
                  }
                }}
                className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-sm cursor-pointer"
@@ -2217,21 +2267,18 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
            </div>
         )}
 
-        {/* TAMBAHAN: Banner Peringatan Konflik Darurat */}
-        {hasConflict && (
-           <div className="bg-red-600 text-white px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md z-40 relative animate-in slide-in-from-top-2 no-print">
-             <div className="flex items-center gap-3">
-               <AlertCircle className="shrink-0 animate-pulse" size={24} />
-               <div>
-                 <h4 className="font-bold text-sm">Konflik Data Terdeteksi!</h4>
-                 <p className="text-xs text-red-100 mt-0.5">Pengguna lain (Admin/Kepsek) baru saja menyimpan perubahan data. Auto-Save Anda telah <strong>dibekukan sementara</strong> untuk mencegah penimpaan data.</p>
-               </div>
+        {/* TAMBAHAN: Notifikasi Pembaruan Data Cloud (Non-blocking) */}
+        {hasConflict && isManagementRole && (
+           <div className="bg-amber-600 text-white px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md z-40 relative animate-in slide-in-from-top-2 no-print">
+             <div className="flex items-center gap-2">
+               <AlertCircle className="shrink-0" size={18} />
+               <p className="text-xs font-semibold">Terdapat perubahan data terbaru di Cloud dari perangkat lain.</p>
              </div>
              <button 
                onClick={resolveConflict} 
-               className="shrink-0 whitespace-nowrap bg-white text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-transform hover:scale-105 flex items-center gap-2"
+               className="shrink-0 whitespace-nowrap bg-white text-amber-800 hover:bg-amber-50 px-3 py-1 rounded-lg font-bold text-xs shadow-sm transition-transform hover:scale-105 flex items-center gap-1.5 cursor-pointer"
              >
-               <RefreshCw size={16} /> Muat Ulang Data Terbaru
+               <RefreshCw size={14} /> Sinkronkan Versi Terbaru
              </button>
            </div>
         )}
@@ -2239,7 +2286,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         <div 
           ref={mainContentRef}
           onScroll={handleMainScroll}
-          className={`flex-1 p-3 sm:p-6 lg:p-8 pb-24 md:pb-12 md:overflow-y-auto ${hasConflict ? 'opacity-50 pointer-events-none blur-[1px] transition-all' : 'transition-all'}`}
+          className="flex-1 p-3 sm:p-6 lg:p-8 pb-24 md:pb-12 md:overflow-y-auto transition-all"
         >
           {renderContent()}
         </div>
@@ -2356,15 +2403,17 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
   const [isConfirmApproveOpen, setIsConfirmApproveOpen] = useState(false);
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
 
+  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive), [teachers]);
+
   const eduDetails = useMemo(() => {
     const grouped = { 'S2': [], 'S1': [], 'Diploma': [], 'SMA/Pondok': [] };
-    teachers.forEach(t => {
+    activeTeachers.forEach(t => {
       if (grouped[t.education]) {
         grouped[t.education].push(t);
       }
     });
     return grouped;
-  }, [teachers]);
+  }, [activeTeachers]);
 
   const stats = useMemo(() => {
     let lk = 0, pr = 0, tetap = 0, tdkTetap = 0, totalGaji = 0, totalKotor = 0;
@@ -2374,7 +2423,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
     const listTetap = [];
     const listTidakTetap = [];
 
-    teachers.forEach(t => {
+    activeTeachers.forEach(t => {
       if (t.gender === 'L') lk++; else pr++;
       
       if (t.status === 'Tetap') {
@@ -2398,22 +2447,22 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
     });
 
     return { 
-      lk, pr, tetap, tdkTetap, eduCount, totalGaji, totalKotor, total: teachers.length, 
+      lk, pr, tetap, tdkTetap, eduCount, totalGaji, totalKotor, total: activeTeachers.length, 
       opsCount, listTetap, listTidakTetap 
     };
-  }, [teachers]);
+  }, [activeTeachers, settings]);
 
   // TAMBAHAN: Kalkulasi Metrik Peringatan (Alerts)
   const alerts = useMemo(() => {
      let lateTeachers = 0;
      let totalUnpaidLoans = 0;
-     teachers.forEach(t => {
+     activeTeachers.forEach(t => {
         if ((t.payroll?.disiplin?.telat || 0) >= 3) lateTeachers++;
         const loans = t.payroll?.potonganLainnya?.filter(p => p.ket.toLowerCase().match(/kasbon|koperasi|pinjaman/)) || [];
         loans.forEach(l => totalUnpaidLoans += (l.sisaHutang !== undefined ? l.sisaHutang : l.nominal * 4)); 
      });
      return { lateTeachers, totalUnpaidLoans };
-  }, [teachers]);
+  }, [activeTeachers]);
 
   // 🪄 FIX NO 5: Menggunakan Gaji Kotor (Gross Pay) murni untuk Visualisasi Tren Pengeluaran Gaji
   const chartData = useMemo(() => {
@@ -2963,8 +3012,13 @@ function DataGuruView({ teachers, setTeachers }) {
     const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
     
     // 🪄 FITUR BARU: Logika Pencarian & Filter Keaktifan Pegawai
-    const currentWorkStatus = t.workStatus || 'Aktif';
-    const matchWorkStatus = filterWorkStatus === 'Semua' ? true : currentWorkStatus === filterWorkStatus;
+    const isAct = isTeacherActive(t);
+    let matchWorkStatus = true;
+    if (filterWorkStatus === 'Aktif') {
+      matchWorkStatus = isAct;
+    } else if (filterWorkStatus === 'Non-Aktif' || filterWorkStatus === 'Resign' || filterWorkStatus === 'Tidak Aktif') {
+      matchWorkStatus = !isAct;
+    }
     
     return matchSearch && matchStatus && matchWorkStatus;
   });
@@ -4386,7 +4440,9 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     }
   }, [externalFilter, setExternalFilter]);
 
-  const filtered = teachers.filter(t => {
+  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive), [teachers]);
+
+  const filtered = activeTeachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
     
     let matchFilter = true;
@@ -4408,7 +4464,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     let kurangJam = 0;
     let seringTelat = 0;
 
-    teachers.forEach(t => {
+    activeTeachers.forEach(t => {
       const real = t.payroll?.jamMengajar?.realisasi || 0;
       const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
       const telat = t.payroll?.disiplin?.telat || 0;
@@ -4419,7 +4475,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     });
 
     return { totalJam, kurangJam, seringTelat };
-  }, [teachers]);
+  }, [activeTeachers]);
 
   // Fungsi Helper untuk mensimulasikan sebaran jam mengajar 1-31 hari (Preview)
   // Ini akan memecah "Total Realisasi" ke beberapa tanggal agar tabel tidak kosong
@@ -5262,7 +5318,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
   const month = Number(m) - 1; // 0-indexed month
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const filtered = teachers.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search));
+  const filtered = teachers.filter(t => isTeacherActive(t) && (t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search)));
 
   // 🪄 FUNGSI BARU: Mengumpulkan seluruh kegiatan massal ke Riwayat Terpadu
   const massActivities = useMemo(() => {
@@ -6141,9 +6197,10 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   const [massSearch, setMassSearch] = useState('');
   const [isSavingMass, setIsSavingMass] = useState(false);
 
-  // 🪄 FITUR BARU: Menghitung daftar target potongan massal secara dinamis
+  // 🪄 FITUR BARU: Menghitung daftar target potongan massal secara dinamis (Hanya Pegawai Aktif)
   const targetedTeachers = useMemo(() => {
       return teachers.filter(t => {
+          if (!isTeacherActive(t)) return false;
           if (massForm.targetGroup === 'L' && t.gender !== 'L') return false;
           if (massForm.targetGroup === 'P' && t.gender !== 'P') return false;
           if (massSearch && !t.name.toLowerCase().includes(massSearch.toLowerCase()) && !t.nipy.includes(massSearch)) return false;
@@ -6333,8 +6390,9 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
   ];
 
   const filtered = teachers.filter(t => {
+    const isAct = isTeacherActive(t);
     const matchSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.nipy.includes(searchTerm);
-    const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
+    const matchStatus = filterStatus === 'Semua' ? isAct : (filterStatus === 'Non-Aktif' ? !isAct : (t.status === filterStatus && isAct));
     return matchSearch && matchStatus;
   });
 
@@ -7270,12 +7328,26 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   const prevArchive = archives && archives.length > 0 ? archives[0] : null;
   const prevTotalTHP = prevArchive ? prevArchive.totalGaji : 0;
 
-  // 🪄 PERBAIKAN: Menambahkan filter status pada tabel rekap
-  const filtered = teachers.filter(t => {
-    const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
-    const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  // 🪄 PERBAIKAN: Menampilkan Pegawai Aktif secara default (Non-Aktif / Resign disembunyikan kecuali dipilih)
+  const filtered = useMemo(() => {
+    return teachers.filter(t => {
+      const isAct = isTeacherActive(t);
+      const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
+      
+      let matchStatus = true;
+      if (filterStatus === 'Semua') {
+        matchStatus = isAct; // Default hanya pegawai aktif
+      } else if (filterStatus === 'Semua (Termasuk Non-Aktif)') {
+        matchStatus = true;
+      } else if (filterStatus === 'Non-Aktif') {
+        matchStatus = !isAct;
+      } else {
+        matchStatus = (t.status === filterStatus) && isAct;
+      }
+
+      return matchSearch && matchStatus;
+    });
+  }, [teachers, search, filterStatus]);
 
   // 🪄 FITUR BARU: Fungsi untuk mengedit nilai kolom secara manual langsung dari tabel Rekap Gaji
   const handleInlineOverride = (teacherId, field, value) => {
@@ -7426,11 +7498,12 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     const customTanggal = new Date(archiveDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
     try {
-      // 🪄 TAMBALAN CERDAS: Susun Data Arsip Terlebih Dahulu Sebelum Menembak ke Server
-      const totalBersihBulanIni = teachers.reduce((sum, t) => sum + calculatePayroll(t, settings).totalBersih, 0);
+      // 🪄 TAMBALAN CERDAS: Susun Data Arsip Terlebih Dahulu (Hanya Pegawai Aktif)
+      const activeTeachersForArchive = teachers.filter(isTeacherActive);
+      const totalBersihBulanIni = activeTeachersForArchive.reduce((sum, t) => sum + calculatePayroll(t, settings).totalBersih, 0);
 
-      // 🪄 OPTIMASI MEMORI SUPER KETAT: Memangkas data sensitif (Password, Rekening) & data panjang agar JSON muat di limit Google Sheets (50.000 karakter)
-      const optimizedTeachers = teachers.map(t => {
+      // 🪄 OPTIMASI MEMORI SUPER KETAT: Memangkas data sensitif & menyaring pegawai aktif
+      const optimizedTeachers = activeTeachersForArchive.map(t => {
         return {
           id: t.id,
           name: t.name,
@@ -8043,16 +8116,30 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
             </div>
           </div>
 
-          {/* Baris Bawah: Pencarian & Export/Cetak */}
+          {/* Baris Bawah: Pencarian & Filter & Export/Cetak */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-slate-200 border-dashed dark:border-slate-700">
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Cari Pegawai atau NIPY..." 
-                value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white transition-all shadow-sm"
-              />
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-60">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Cari Pegawai atau NIPY..." 
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white transition-all shadow-sm"
+                />
+              </div>
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="w-full sm:w-auto px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="Semua">Pegawai Aktif Saja</option>
+                <option value="Tetap">Tetap (Aktif)</option>
+                <option value="Kontrak">Kontrak (Aktif)</option>
+                <option value="Honor">Honor (Aktif)</option>
+                <option value="Non-Aktif">Non-Aktif / Resign</option>
+                <option value="Semua (Termasuk Non-Aktif)">Semua (Termasuk Non-Aktif)</option>
+              </select>
             </div>
             
             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -8514,22 +8601,24 @@ function ArsipView({ archives, setArchives, settings }) {
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
   const [confirmPurge, setConfirmPurge] = useState(false);
 
+  const cleanArchivesList = useMemo(() => deduplicateArchives(archives || []), [archives]);
+
   // 🪄 FITUR BARU: Pemisahan Tahun Dinamis (Auto-Archiving Tahunan)
   const availableYears = useMemo(() => {
     const ySet = new Set();
-    (archives || []).forEach(arc => {
+    cleanArchivesList.forEach(arc => {
        const parts = (arc.periode || '').split(' ');
        // Ambil bagian tahun (misal: "Mei 2024" -> "2024")
        if (parts.length > 1) ySet.add(parts[1]);
     });
     const arr = Array.from(ySet).sort().reverse();
     return arr.length > 0 ? arr : [new Date().getFullYear().toString()];
-  }, [archives]);
+  }, [cleanArchivesList]);
 
   const [activeYear, setActiveYear] = useState(availableYears[0]);
 
   // Filter Arsip Berdasarkan Pencarian dan Tab Tahun Aktif
-  const filteredArchives = (archives || []).filter(arc => {
+  const filteredArchives = cleanArchivesList.filter(arc => {
     const matchSearch = (arc.periode || '').toLowerCase().includes(search.toLowerCase());
     const parts = (arc.periode || '').split(' ');
     const matchYear = parts.length > 1 ? parts[1] === activeYear : false;
@@ -8572,15 +8661,24 @@ function ArsipView({ archives, setArchives, settings }) {
     setConfirmDelete({ isOpen: true, id });
   };
 
-  const executeDeleteArchive = () => {
-    setArchives(prev => prev.filter(arc => arc.id !== confirmDelete.id));
-    if(selectedArchive?.id === confirmDelete.id) setSelectedArchive(null);
+  const executeDeleteArchive = async () => {
+    const targetId = confirmDelete.id;
+    const updatedArchives = deduplicateArchives((archives || []).filter(arc => String(arc.id) !== String(targetId)));
+    setArchives(updatedArchives);
+    safeStorageSet('payedu_archives', updatedArchives);
+    if(selectedArchive?.id === targetId) setSelectedArchive(null);
     setConfirmDelete({ isOpen: false, id: null });
+
+    try {
+      await pushToSupabase('SAVE_ARCHIVES', updatedArchives);
+    } catch(err) {
+      console.warn("Gagal sinkronisasi hapus arsip ke Cloud:", err);
+    }
   };
 
   // 🪄 FITUR BARU: Ekspor Full Database 1 Tahun ke JSON
   const handleBackupYearly = () => {
-     const yearData = (archives || []).filter(arc => arc.periode && arc.periode.includes(activeYear));
+     const yearData = cleanArchivesList.filter(arc => arc.periode && arc.periode.includes(activeYear));
      if(yearData.length === 0) return alert('Tidak ada data arsip untuk tahun ini.');
 
      const backupData = {
@@ -8604,11 +8702,17 @@ function ArsipView({ archives, setArchives, settings }) {
   };
 
   // 🪄 FITUR BARU: Tutup Buku Tahunan (Hapus dari Server untuk menjaga performa kilat)
-  const executePurgeYear = () => {
-     const newArchives = (archives || []).filter(arc => !arc.periode || !arc.periode.includes(activeYear));
+  const executePurgeYear = async () => {
+     const newArchives = deduplicateArchives((archives || []).filter(arc => !arc.periode || !arc.periode.includes(activeYear)));
      setArchives(newArchives);
+     safeStorageSet('payedu_archives', newArchives);
      setConfirmPurge(false);
-     alert(`🚀 Pembersihan Server Berhasil!\n\nData tahun ${activeYear} telah dihapus dari memori server Google Sheets secara permanen. Aplikasi Anda sekarang akan berjalan jauh lebih ringan dan secepat kilat!`);
+     try {
+        await pushToSupabase('SAVE_ARCHIVES', newArchives);
+     } catch (err) {
+        console.warn("Gagal tutup buku di Cloud:", err);
+     }
+     alert(`🚀 Pembersihan Server Berhasil!\n\nData tahun ${activeYear} telah dihapus dari memori server Cloud secara permanen. Aplikasi Anda sekarang akan berjalan jauh lebih ringan dan secepat kilat!`);
   };
 
   const handleExportCSV = (archive) => {
@@ -9162,6 +9266,8 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
     { hex: '#f43f5e', bg: 'bg-rose-500' }
   ];
 
+  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive), [teachers]);
+
   const reportData = useMemo(() => {
     let totalKotor = 0, totalPotongan = 0, totalBersih = 0;
     let sumMasaKerja = 0, sumJabatan = 0, sumPendidikan = 0, sumKompetensi = 0, sumLainnya = 0;
@@ -9170,7 +9276,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
     let costTetap = 0, costTidakTetap = 0;
     let potongTelat = 0, potongKasbon = 0;
 
-    teachers.forEach(t => {
+    activeTeachers.forEach(t => {
       const slip = calculatePayroll(t, settings);
       totalKotor += slip.totalKotor;
       totalPotongan += slip.totalPotongan;
