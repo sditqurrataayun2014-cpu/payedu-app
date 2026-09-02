@@ -58,6 +58,56 @@ const getLocalIsoDate = (d = new Date()) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+// 🪄 AUTO-REPAIR & SANITIZER DATA GURU (Membersihkan JSON nyasar di kolom pendidikan & merapikan data)
+const sanitizeTeacherData = (t) => {
+  if (!t || typeof t !== 'object') return t;
+  let result = { ...t };
+
+  // Jika field education berisi JSON string (korupsi akibat import/backup)
+  if (typeof result.education === 'string' && result.education.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(result.education);
+      if (parsed && typeof parsed === 'object') {
+        const cleanEdu = parsed.education || parsed.payroll?.pendidikan?.tingkat || 'S1';
+        result = {
+          ...parsed,
+          ...result,
+          education: cleanEdu,
+          pob: (result.pob && result.pob !== 'Tetap' && result.pob !== 'Tidak Tetap') ? result.pob : (parsed.pob || '-'),
+          dob: result.dob || parsed.dob || '',
+          status: (result.status === 'Tetap' || result.status === 'Tidak Tetap') ? result.status : (parsed.status || 'Tetap'),
+          position: (result.position && result.position !== 'Tetap' && result.position !== 'Tidak Tetap') ? result.position : (parsed.position || 'Guru'),
+          family: result.family || parsed.family || { wife: 0, children: 0 },
+          payroll: result.payroll || parsed.payroll || {}
+        };
+      }
+    } catch(e) {}
+  }
+
+  // Jika education adalah object
+  if (result.education && typeof result.education === 'object') {
+    result.education = result.education.tingkat || 'S1';
+  }
+
+  // Pastikan field-field dasar terisi dengan benar
+  if (!result.education || result.education === '-') {
+    result.education = result.payroll?.pendidikan?.tingkat || 'S1';
+  }
+  if (!result.status || result.status === '-') {
+    result.status = 'Tetap';
+  }
+  if (!result.position || result.position === '-') {
+    result.position = result.payroll?.jabatans?.[0]?.detail || result.payroll?.jabatans?.[0]?.kategori || 'Guru';
+  }
+
+  return result;
+};
+
+const sanitizeTeacherList = (list) => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeTeacherData);
+};
+
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
 let TENURE_RATES = {
   2010: 1921768, 2011: 1812989, 2012: 1710367, 2013: 1613554, 2014: 1522221,
@@ -496,7 +546,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 export default function App() {
   const [teachers, setTeachers] = useState(() => {
     const saved = localStorage.getItem('payedu_teachers');
-    return saved ? JSON.parse(saved) : initialTeachers;
+    try {
+      const parsed = saved ? JSON.parse(saved) : initialTeachers;
+      return sanitizeTeacherList(parsed);
+    } catch (e) {
+      return initialTeachers;
+    }
   });
   const [user, setUser] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('payedu_theme') === 'dark');
@@ -639,18 +694,19 @@ export default function App() {
              return; 
           }
         } else {
+          const cleanTeachers = sanitizeTeacherList(serverTeachers);
           lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
-          lastSavedTeachersRef.current = JSON.stringify(serverTeachers);
+          lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
 
           setGeneralSettings(serverSettings);
-          setTeachers(serverTeachers); 
+          setTeachers(cleanTeachers); 
           setArchives(serverArchives);
           setFeedbacks(serverFeedbacks);
           const sortedServerLogs = sortLoginLogs(serverLogs);
           setLoginHistory(sortedServerLogs);
           
           safeStorageSet('payedu_settings', serverSettings);
-          safeStorageSet('payedu_teachers', serverTeachers);
+          safeStorageSet('payedu_teachers', cleanTeachers);
           safeStorageSet('payedu_archives', serverArchives);
           safeStorageSet('payedu_feedbacks', serverFeedbacks);
           safeStorageSet('payedu_loginHistory', sortedServerLogs);
@@ -709,23 +765,6 @@ export default function App() {
 
     return () => clearInterval(pollInterval);
   }, [isDataLoaded, generalSettings.lastModified, hasConflict]);
-
-  // 🪄 TAMBALAN CERDAS: AUTO-MIGRASI ID GURU (Format Acak -> GxxQA) 🪄
-  useEffect(() => {
-    if (!isDataLoaded || hasConflict || teachers.length === 0) return;
-    
-    const needsMigration = teachers.some(t => String(t.id).includes('-') || String(t.id).length > 8);
-    
-    if (needsMigration) {
-       console.log("Menjalankan Auto-Migrasi ID Pegawai ke format GxxQA...");
-       const updatedTeachers = teachers.map((t, index) => {
-          const paddedNumber = String(index + 1).padStart(2, '0');
-          return { ...t, id: `G${paddedNumber}QA` };
-       });
-       setTeachers(updatedTeachers);
-       alert("✨ PEMBARUAN SISTEM: Seluruh ID & Username Pegawai telah berhasil dirapikan menjadi format berurutan (G01QA, G02QA, dst) secara otomatis!");
-    }
-  }, [isDataLoaded, teachers, hasConflict]);
 
   // 🪄 FUNGSI MUTLAK: Mengubah Status Mode Maintenance & Push Langsung ke Cloud Supabase
   const handleToggleMaintenanceMode = async (newVal) => {
@@ -1177,23 +1216,29 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
             authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username };
          }
       } 
-      // 2. Jika akun Guru
-      else if (username.startsWith('G')) {
-         const teacherData = teachers.find(t => t.id === username);
-         if (teacherData) {
-            // SANGAT SEDERHANA: Cek password custom ATAU plain password yang tersimpan
-            const isPasswordCorrect = 
-                (teacherData.customPassword && teacherData.customPassword === hashedInputPassword) || 
-                (teacherData.plainPassword && teacherData.plainPassword === password);
+      // 2. Jika akun Guru (Bisa login via ID Pegawai, NIPY, Linked Username, atau Nama)
+      const inputLower = username.trim().toLowerCase();
+      const teacherData = teachers.find(t => 
+        String(t.id).toLowerCase() === inputLower ||
+        (t.nipy && String(t.nipy).trim().toLowerCase() === inputLower) ||
+        (t.linkedUsername && String(t.linkedUsername).trim().toLowerCase() === inputLower) ||
+        (t.name && t.name.trim().toLowerCase() === inputLower)
+      );
 
-            // Fallback default jika admin belum pernah menyentuh password guru ini sama sekali
-            const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-            const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
-            
-            if (isPasswordCorrect || (!teacherData.customPassword && !teacherData.plainPassword && password === defaultPass)) {
-               recordLogin(teacherData.name, 'Guru', 'Sukses');
-               authUser = { role: 'guru', id: username, name: teacherData.name };
-            }
+      if (teacherData && !authUser) {
+         // Cek password custom ATAU plain password ATAU default password (2 huruf inisial kapital + 123)
+         const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+         const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
+         
+         const isPasswordCorrect = 
+             (teacherData.customPassword && teacherData.customPassword === hashedInputPassword) || 
+             (teacherData.plainPassword && String(teacherData.plainPassword).trim() === password.trim()) ||
+             (password.trim() === defaultPass) ||
+             (teacherData.customPassword && teacherData.customPassword === password.trim());
+
+         if (isPasswordCorrect) {
+            recordLogin(teacherData.name, 'Guru', 'Sukses');
+            authUser = { role: 'guru', id: teacherData.id, name: teacherData.name };
          }
       }
       // 3. Fallback Hardcoded (Jika storage benar-benar hilang/kosong)
@@ -3017,20 +3062,26 @@ function DataGuruView({ teachers, setTeachers }) {
         if (values.length >= 10 && values[1] !== "") {
            const impId = values[0];
            const impName = values[1];
-           
+           const isNewFormat = values.length >= 13;
+           const impPhone = isNewFormat ? (values[6] || '-') : '-';
+           const impEdu = isNewFormat ? (values[7] || 'S1') : (values[6] || 'S1');
+           const impStatus = isNewFormat ? (values[8] || 'Tetap') : (values[7] || 'Tetap');
+           const impWorkStatus = isNewFormat ? (values[9] || 'Aktif') : 'Aktif';
+           const impPosition = isNewFormat ? (values[10] || 'Guru') : (values[8] || 'Guru');
+           const impTmt = isNewFormat ? parseDateSmart(values[11]) : parseDateSmart(values[9]);
+           const wifeStatus = isNewFormat ? Number(values[12] || 0) : Number(values[10] || 0);
+           const childrenCount = isNewFormat ? Number(values[13] || 0) : Number(values[11] || 0);
+
            const existingId = teachers.find(t => t.id === impId || t.name.toLowerCase() === impName?.toLowerCase());
            
-           const wifeStatus = values.length >= 12 && values[10] !== "" ? Number(values[10]) : 0;
-           const childrenCount = values.length >= 12 && values[11] !== "" ? Number(values[11]) : 0;
-
            const teacherObj = existingId ? { ...existingId } : { 
              id: impId && impId !== '' ? impId : generateUniqueId('G-'),
              family: { wife: wifeStatus, children: childrenCount },
              payroll: {
                 tahunMasaKerja: new Date().getFullYear(),
                 tunjanganMasaKerjaManual: '',
-                jabatans: [{ kategori: 'Guru', detail: values[8] || '', kinerja: 'Baik', nominal: 0 }],
-                pendidikan: { tingkat: values[6] || '', nominalOverride: '' },
+                jabatans: [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }],
+                pendidikan: { tingkat: impEdu, nominalOverride: '' },
                 kompetensi: [],
                 disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
                 insentifTambahan: [],
@@ -3046,16 +3097,21 @@ function DataGuruView({ teachers, setTeachers }) {
            teacherObj.gender = values[3] || 'L';
            teacherObj.pob = values[4] || '-';
            teacherObj.dob = parseDateSmart(values[5]);
-           teacherObj.education = values[6] || '-';
-           teacherObj.status = values[7] || '-';
-           teacherObj.position = values[8] || '-';
-           teacherObj.tmt = parseDateSmart(values[9]);
-           
-           if(existingId) {
-             teacherObj.family = { wife: wifeStatus, children: childrenCount };
+           teacherObj.phone = impPhone;
+           teacherObj.education = impEdu;
+           teacherObj.status = impStatus;
+           teacherObj.workStatus = impWorkStatus;
+           teacherObj.position = impPosition;
+           teacherObj.tmt = impTmt;
+           teacherObj.family = { wife: wifeStatus, children: childrenCount };
+           if (teacherObj.payroll) {
+              teacherObj.payroll.pendidikan = { tingkat: impEdu, nominalOverride: teacherObj.payroll?.pendidikan?.nominalOverride || '' };
+              if (!teacherObj.payroll.jabatans || teacherObj.payroll.jabatans.length === 0) {
+                 teacherObj.payroll.jabatans = [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }];
+              }
            }
            
-           importedTeachers.push(teacherObj);
+           importedTeachers.push(sanitizeTeacherData(teacherObj));
            successCount++;
         }
       }
@@ -3063,10 +3119,10 @@ function DataGuruView({ teachers, setTeachers }) {
       setTeachers(prev => {
         const map = new Map(prev.map(t => [t.id, t]));
         importedTeachers.forEach(t => map.set(t.id, t));
-        return Array.from(map.values());
+        return sanitizeTeacherList(Array.from(map.values()));
       });
       
-      alert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Tunggu indikator Cloud menjadi "Tersimpan" agar masuk ke Google Sheet.`);
+      alert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Data akan otomatis disinkronkan ke Supabase Cloud.`);
       e.target.value = null;
     };
     reader.readAsText(file);

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
-  CalendarClock, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
+  CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff
 } from 'lucide-react';
 import jsQR from 'jsqr';
@@ -11,6 +11,15 @@ import { pushPresensiGuru } from './services/dbService';
 // ==========================================
 // KONSTANTA & HELPER LOKAL
 // ==========================================
+const formatCSVField = (val) => {
+  if (val === null || val === undefined) return '""';
+  const str = String(val);
+  if (str.includes(',') || str.includes(';') || str.includes('\n') || str.includes('"')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return `"${str}"`;
+};
+
 const cx = {
   label: "block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 pl-1",
   input: "w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 dark:text-white text-sm transition-shadow",
@@ -139,12 +148,6 @@ const computeStatus = (captureDate, sesi) => {
   const actualMin = captureDate.getHours() * 60 + captureDate.getMinutes();
   const terlambatMenit = Math.max(0, actualMin - targetMin);
   return { status: terlambatMenit > 0 ? 'Terlambat' : 'Hadir', terlambatMenit };
-};
-
-const formatCSVField = (data) => {
-  if (data === null || data === undefined) return '""';
-  const str = String(data);
-  return `"${str.replace(/"/g, '""')}"`;
 };
 
 const STATUS_BADGE = {
@@ -992,13 +995,23 @@ function AdminRekapPanel({
   const [filterSesiId, setFilterSesiId] = useState(sesiUtamaId);
   const sesiTerpilih = sesiList.find(s => s.id === filterSesiId) || sesiList[0];
 
-  const today = todayStr();
-  const hariIni = getHariIni(new Date());
+  // 📅 State Filter Tanggal Harian (Default: Hari Ini)
+  const [filterDate, setFilterDate] = useState(todayStr());
+  const selectedDateObj = useMemo(() => {
+    try {
+      if (!filterDate) return new Date();
+      const [y, m, d] = filterDate.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    } catch(e) {
+      return new Date();
+    }
+  }, [filterDate]);
+  const hariIni = getHariIni(selectedDateObj);
 
-  const getRecord = (teacherId) => presensiGuru.find(r => r.teacherId === teacherId && r.date === today && (r.sesiId || sesiUtamaId) === filterSesiId);
+  const getRecord = (teacherId) => presensiGuru.find(r => r.teacherId === teacherId && r.date === filterDate && (r.sesiId || sesiUtamaId) === filterSesiId);
 
   const filteredTeachers = teachers.filter(t =>
-    (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (t.nip || '').includes(searchQuery)
+    (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (t.nipy || t.nip || '').includes(searchQuery)
   );
 
   // PERBAIKAN: untuk tampilan Harian, hanya guru yang DIJADWALKAN Admin pada
@@ -1009,7 +1022,7 @@ function AdminRekapPanel({
     [filteredTeachers, settings, hariIni, filterSesiId]
   );
 
-  // ---- STATISTIK HARI INI ----
+  // ---- STATISTIK HARIAN SESUAI TANGGAL TERPILIH ----
   const todayRecords = filteredTeachersHarian.map(t => getRecord(t.id));
   const totalHadir = todayRecords.filter(r => r?.status === 'Hadir').length;
   const totalTerlambat = todayRecords.filter(r => r?.status === 'Terlambat').length;
@@ -1051,26 +1064,26 @@ function AdminRekapPanel({
       status = computed.status;
       terlambatMenit = computed.terlambatMenit;
     }
-    upsertRecord(editRow.id, editRow.name, today, filterSesiId, {
+    upsertRecord(editRow.id, editRow.name, filterDate, filterSesiId, {
       jamMasuk, jamPulang: editForm.jamPulang ? `${editForm.jamPulang}:00` : null,
       status, terlambatMenit, keterangan: editForm.keterangan, sesiNama: sesiTerpilih.nama,
     });
-    addAuditLog?.(currentUser?.name, 'Edit Presensi Guru (Manual)', editRow.name, `Sesi ${sesiTerpilih.nama}, ${status}${jamMasuk ? `, masuk ${editForm.jamMasuk}` : ''}`, 'presensi_guru');
-    showToast(`Presensi ${editRow.name} berhasil diperbarui.`, 'success');
+    addAuditLog?.(currentUser?.name, 'Edit Presensi Guru (Manual)', editRow.name, `Tanggal ${filterDate}, Sesi ${sesiTerpilih.nama}, ${status}${jamMasuk ? `, masuk ${editForm.jamMasuk}` : ''}`, 'presensi_guru');
+    showToast(`Presensi ${editRow.name} tanggal ${filterDate} berhasil diperbarui.`, 'success');
     setEditRow(null);
     setEditForm(null);
   };
 
   const handleQuickStatus = (teacher, status) => {
-    upsertRecord(teacher.id, teacher.name, today, filterSesiId, { status, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiTerpilih.nama });
-    showToast(`${teacher.name} ditandai ${status} hari ini.`, 'success');
-    addAuditLog?.(currentUser?.name, `Tandai ${status}`, teacher.name, today, 'presensi_guru');
+    upsertRecord(teacher.id, teacher.name, filterDate, filterSesiId, { status, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiTerpilih.nama });
+    showToast(`${teacher.name} ditandai ${status} pada tanggal ${filterDate}.`, 'success');
+    addAuditLog?.(currentUser?.name, `Tandai ${status}`, teacher.name, `${filterDate} (Sesi ${sesiTerpilih.nama})`, 'presensi_guru');
   };
 
   const handleDeleteRecord = (teacher) => {
     const rec = getRecord(teacher.id);
     if (!rec) return;
-    showConfirm(`Hapus catatan presensi ${teacher.name} hari ini? Tindakan ini tidak bisa dibatalkan.`, () => {
+    showConfirm(`Hapus catatan presensi ${teacher.name} pada tanggal ${filterDate}? Tindakan ini tidak bisa dibatalkan.`, () => {
       const updated = presensiGuru.filter(r => r.id !== rec.id);
       setPresensiGuru(updated);
       try {
@@ -1079,6 +1092,51 @@ function AdminRekapPanel({
       pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Delete sync warning:', e));
       showToast('Catatan presensi berhasil dihapus.', 'success');
     });
+  };
+
+  // 📥 EKSPOR LAPORAN HARIAN (CSV/EXCEL)
+  const handleExportHarianCSV = () => {
+    const headers = ['No', 'Nama Guru / Staff', 'NIP / NIPY', 'Jabatan', 'Sesi', 'Jam Masuk', 'Jam Pulang', 'Status Kehadiran', 'Keterlambatan (Menit)', 'Verifikasi Masuk', 'Verifikasi Pulang', 'Keterangan'];
+    const rows = filteredTeachersHarian.map((t, idx) => {
+      const rec = getRecord(t.id);
+      const status = rec?.status && (rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(rec.status)) ? rec.status : 'Belum Absen';
+      const verifMasuk = `${rec?.lokasiMasuk ? 'GPS' : ''}${rec?.qrValidMasuk ? ' QR' : ''}`.trim() || (rec?.jamMasuk ? 'Manual' : '-');
+      const verifPulang = `${rec?.lokasiPulang ? 'GPS' : ''}${rec?.qrValidPulang ? ' QR' : ''}`.trim() || (rec?.jamPulang ? 'Manual' : '-');
+      return [
+        idx + 1,
+        t.name,
+        t.nipy || t.nip || '-',
+        t.position || 'Guru',
+        sesiTerpilih.nama,
+        rec?.jamMasuk ? rec.jamMasuk.slice(0, 5) : '-',
+        rec?.jamPulang ? rec.jamPulang.slice(0, 5) : '-',
+        status,
+        rec?.terlambatMenit || 0,
+        verifMasuk,
+        verifPulang,
+        rec?.keterangan || '-'
+      ];
+    });
+
+    const summaryRows = [
+      ['LAPORAN PRESENSI HARIAN GURU & STAFF'],
+      ['Tanggal', filterDate],
+      ['Hari', hariIni],
+      ['Sesi', sesiTerpilih.nama],
+      ['Total Hadir Tepat Waktu', totalHadir],
+      ['Total Terlambat', totalTerlambat],
+      ['Total Sakit / Izin / Cuti', totalIzinSakit],
+      ['Total Belum Absen', Math.max(0, totalBelumAbsen)],
+      []
+    ];
+
+    const csv = [
+      ...summaryRows.map(row => row.map(formatCSVField).join(',')),
+      headers.map(formatCSVField).join(','),
+      ...rows.map(row => row.map(formatCSVField).join(','))
+    ].join('\n');
+
+    showCsvPreview(csv, `Presensi_Harian_${filterDate}_Sesi_${sesiTerpilih.nama.replace(/\s+/g, '_')}.csv`);
   };
 
   // ---- REKAP BULANAN ----
@@ -1203,15 +1261,42 @@ function AdminRekapPanel({
             </select>
           )}
           {viewMode === 'harian' && (
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Cari nama / NIP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 text-sm dark:text-white" />
-            </div>
+            <>
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
+                <CalendarDays size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                <input 
+                  type="date" 
+                  value={filterDate} 
+                  onChange={e => setFilterDate(e.target.value)} 
+                  className="bg-transparent text-sm font-bold dark:text-white outline-none cursor-pointer"
+                />
+                {filterDate !== todayStr() && (
+                  <button 
+                    type="button" 
+                    onClick={() => setFilterDate(todayStr())} 
+                    className="text-[10px] bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-black px-2 py-0.5 rounded-md hover:bg-teal-200 transition-colors shrink-0"
+                    title="Kembali ke Hari Ini"
+                  >
+                    Hari Ini
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Cari nama / NIP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 text-sm dark:text-white" />
+              </div>
+            </>
           )}
           {multiSesi && (
             <select value={filterSesiId} onChange={e => setFilterSesiId(e.target.value)} className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold dark:text-white cursor-pointer">
               {sesiList.map(s => <option key={s.id} value={s.id}>Sesi {s.nama}</option>)}
             </select>
+          )}
+          {viewMode === 'harian' && (
+            <>
+              <button type="button" onClick={handleExportHarianCSV} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors" title="Download Rekap Harian CSV/Excel"><Download size={14} /> CSV</button>
+              <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors" title="Cetak Presensi Harian"><Printer size={14} /> Cetak</button>
+            </>
           )}
           {(viewMode === 'rekap' || viewMode === 'detail_guru') && (
             <>
@@ -1232,49 +1317,56 @@ function AdminRekapPanel({
       </div>
 
       {viewMode === 'harian' ? (
-        <div className={`${cx.card3xl} overflow-hidden`}>
+        <div className={`${cx.card3xl} overflow-hidden print-section`}>
+          {/* Header Cetak Dokumen Resmi */}
+          <div className="hidden print:block p-5 border-b-2 border-black text-center mb-4">
+            <h2 className="text-xl font-black uppercase tracking-wider text-black">{schoolProfile?.nama || 'SDIT QURRATA A\'YUN'}</h2>
+            <p className="text-sm font-bold text-black uppercase mt-0.5">REKAPITULASI PRESENSI HARIAN GURU &amp; STAFF</p>
+            <p className="text-xs text-black mt-1">Hari: <strong>{hariIni}</strong>, Tanggal: <strong>{filterDate}</strong> • Sesi: <strong>{sesiTerpilih.nama}</strong> ({sesiTerpilih.jamMasuk} - {sesiTerpilih.jamPulang})</p>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                  <th className="p-3 pl-6 text-left">Nama Guru / Staff</th>
-                  <th className="p-3 text-center">Jam Masuk</th>
-                  <th className="p-3 text-center">Jam Pulang</th>
-                  <th className="p-3 text-center">Status</th>
-                  {!readOnly && <th className="p-3 pr-6 text-center">Aksi</th>}
+                <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest print:border-b-2 print:border-black print:text-black">
+                  <th className="p-3 pl-6 text-left print:border print:border-black">Nama Guru / Staff</th>
+                  <th className="p-3 text-center print:border print:border-black">Jam Masuk</th>
+                  <th className="p-3 text-center print:border print:border-black">Jam Pulang</th>
+                  <th className="p-3 text-center print:border print:border-black">Status</th>
+                  {!readOnly && <th className="p-3 pr-6 text-center no-print">Aksi</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40 print:divide-black">
                 {filteredTeachersHarian.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
+                  <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
                 ) : filteredTeachersHarian.map(t => {
                   const rec = getRecord(t.id);
                   const status = rec?.status && (rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(rec.status)) ? rec.status : 'Belum Absen';
                   return (
-                    <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 pl-6">
-                        <p className="font-bold text-slate-800 dark:text-white">{t.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.position || 'Guru'} • NIP: {t.nip || '-'}</p>
+                    <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors print:border-b print:border-black">
+                      <td className="p-3 pl-6 print:border print:border-black">
+                        <p className="font-bold text-slate-800 dark:text-white print:text-black">{t.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 print:text-black uppercase tracking-wider">{t.position || 'Guru'} • NIP: {t.nipy || t.nip || '-'}</p>
                       </td>
-                      <td className="p-3 text-center font-mono font-bold">
+                      <td className="p-3 text-center font-mono font-bold print:border print:border-black">
                         <div className="flex items-center justify-center gap-1">
                           {formatJam(rec?.jamMasuk)}
-                          {rec?.lokasiMasuk && <MapPin size={11} className="text-emerald-500" title={`Terverifikasi GPS, jarak ±${rec.lokasiMasuk.jarakMeter}m`} />}
-                          {rec?.qrValidMasuk && <ScanLine size={11} className="text-emerald-500" title="Terverifikasi QR" />}
+                          {rec?.lokasiMasuk && <MapPin size={11} className="text-emerald-500 no-print" title={`Terverifikasi GPS, jarak ±${rec.lokasiMasuk.jarakMeter}m`} />}
+                          {rec?.qrValidMasuk && <ScanLine size={11} className="text-emerald-500 no-print" title="Terverifikasi QR" />}
                         </div>
                       </td>
-                      <td className="p-3 text-center font-mono font-bold">
+                      <td className="p-3 text-center font-mono font-bold print:border print:border-black">
                         <div className="flex items-center justify-center gap-1">
                           {formatJam(rec?.jamPulang)}
-                          {rec?.lokasiPulang && <MapPin size={11} className="text-emerald-500" title={`Terverifikasi GPS, jarak ±${rec.lokasiPulang.jarakMeter}m`} />}
-                          {rec?.qrValidPulang && <ScanLine size={11} className="text-emerald-500" title="Terverifikasi QR" />}
+                          {rec?.lokasiPulang && <MapPin size={11} className="text-emerald-500 no-print" title={`Terverifikasi GPS, jarak ±${rec.lokasiPulang.jarakMeter}m`} />}
+                          {rec?.qrValidPulang && <ScanLine size={11} className="text-emerald-500 no-print" title="Terverifikasi QR" />}
                         </div>
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-3 text-center print:border print:border-black">
                         <Badge colorClass={STATUS_BADGE[status]}>{status}{status === 'Terlambat' ? ` ${rec.terlambatMenit}m` : ''}</Badge>
                       </td>
                       {!readOnly && (
-                        <td className="p-3 pr-6">
+                        <td className="p-3 pr-6 no-print">
                           <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             <button type="button" onClick={() => openEdit(t)} title="Edit manual" className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors"><Edit size={14} /></button>
                             <button type="button" onClick={() => handleQuickStatus(t, 'Sakit')} title="Tandai Sakit" className="px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase hover:bg-blue-100 transition-colors">Sakit</button>
@@ -1288,6 +1380,19 @@ function AdminRekapPanel({
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Lembar Tanda Tangan Cetak */}
+          <div className="hidden print:flex justify-between items-end p-8 text-xs font-bold text-black mt-8">
+            <div className="text-center">
+              <p className="mb-20">Mengetahui,<br/>Kepala Sekolah</p>
+              <p className="underline underline-offset-4 decoration-2">{schoolProfile?.kepalaSekolah || 'ILWANI, S.Pd.I'}</p>
+            </div>
+            <div className="text-center">
+              <p className="mb-1">{schoolProfile?.alamat?.split(',')[0] || 'Kuala Pembuang'}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p className="mb-20">Petugas / Tata Usaha,</p>
+              <p className="underline underline-offset-4 decoration-2">{currentUser?.name || '___________________________'}</p>
+            </div>
           </div>
         </div>
       ) : viewMode === 'rekap' ? (
