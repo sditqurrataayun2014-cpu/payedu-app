@@ -196,6 +196,37 @@ export const deduplicateArchives = (archivesList) => {
 };
 
 /**
+ * Deduplikasi data guru berdasarkan ID, NIPY, atau Nama Lengkap yang dinormalisasi.
+ * Mencegah munculnya data guru ganda di seluruh sistem.
+ */
+export const deduplicateTeachers = (teachersList) => {
+  if (!Array.isArray(teachersList)) return [];
+  const map = new Map();
+  for (const t of teachersList) {
+    if (!t) continue;
+    const normName = String(t.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const nipy = String(t.nipy || '').trim();
+    const hasNipy = nipy && nipy !== '-' && nipy !== '';
+    const key = hasNipy ? `nipy_${nipy}` : (normName ? `name_${normName}` : `id_${t.id}`);
+
+    if (map.has(key)) {
+      const existing = map.get(key);
+      const scoreT = (t.dob ? 2 : 0) + (t.pob && t.pob !== '-' ? 2 : 0) + (t.phone && t.phone !== '-' ? 2 : 0) + (t.bankAccount ? 2 : 0) + (t.payroll?.jabatans?.length || 0);
+      const scoreExisting = (existing.dob ? 2 : 0) + (existing.pob && existing.pob !== '-' ? 2 : 0) + (existing.phone && existing.phone !== '-' ? 2 : 0) + (existing.bankAccount ? 2 : 0) + (existing.payroll?.jabatans?.length || 0);
+      
+      if (scoreT >= scoreExisting) {
+        map.set(key, { ...existing, ...t, id: existing.id || t.id, payroll: { ...(existing.payroll || {}), ...(t.payroll || {}) } });
+      } else {
+        map.set(key, { ...t, ...existing, id: existing.id || t.id, payroll: { ...(t.payroll || {}), ...(existing.payroll || {}) } });
+      }
+    } else {
+      map.set(key, t);
+    }
+  }
+  return Array.from(map.values());
+};
+
+/**
  * Subscribe ke perubahan presensi real-time via Supabase Realtime.
  * Callback dipanggil setiap kali baris presensi_guru berubah di server.
  * Mengembalikan fungsi unsubscribe.
@@ -204,39 +235,25 @@ export const subscribePresensiGuru = (onUpdate) => {
   if (!isSupabaseConfigured() || !supabase) {
     return () => {}; // noop unsubscribe
   }
-
   const channel = supabase
-    .channel('presensi-realtime')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'settings',
-        filter: 'id=eq.presensi_guru'
-      },
-      (payload) => {
-        if (payload.new?.data) {
-          const parsed = typeof payload.new.data === 'string' 
-            ? JSON.parse(payload.new.data) 
-            : payload.new.data;
-          if (Array.isArray(parsed)) {
-            console.log('[Realtime] Menerima update presensi dari server:', parsed.length, 'records');
-            safeStorageSet('payedu_presensi_guru', parsed);
-            onUpdate(parsed);
-          }
+    .channel('public:presensi_guru')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'presensi_guru' }, async () => {
+      // Saat ada perubahan di tabel presensi_guru, re-fetch data presensi terbaru
+      try {
+        const res = await fetchPresensiGuru();
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          onUpdate(res.data);
         }
+      } catch (err) {
+        console.warn('Gagal sinkronisasi presensi real-time:', err);
       }
-    )
-    .subscribe((status) => {
-      console.log('[Realtime] Presensi subscription status:', status);
-    });
+    })
+    .subscribe();
 
   return () => {
     supabase.removeChannel(channel);
   };
 };
-
 
 // ==========================================
 // FUNGSI UTAMA: PUSH & FETCH SEMUA DATA (Kecuali presensi)
@@ -275,15 +292,19 @@ export const pushCloudData = async (action, payload) => {
     }
   }
 
-  // Update LocalStorage cache seketika
+  // Update LocalStorage cache seketika (dengan deduplikasi otomatis)
   if (targetSettings && Object.keys(targetSettings).length > 0) {
     safeStorageSet('payedu_settings', targetSettings);
   }
   if (Array.isArray(targetTeachers)) {
-    safeStorageSet('payedu_teachers', targetTeachers);
+    const cleanT = deduplicateTeachers(targetTeachers);
+    safeStorageSet('payedu_teachers', cleanT);
+    targetTeachers = cleanT;
   }
   if (Array.isArray(targetArchives)) {
-    safeStorageSet('payedu_archives', targetArchives);
+    const cleanA = deduplicateArchives(targetArchives);
+    safeStorageSet('payedu_archives', cleanA);
+    targetArchives = cleanA;
   }
   if (Array.isArray(targetFeedbacks)) {
     safeStorageSet('payedu_feedbacks', targetFeedbacks);
@@ -307,16 +328,36 @@ export const pushCloudData = async (action, payload) => {
       if (error) console.error('Supabase settings upsert error:', error);
     }
 
-    // 2. Simpan Teachers
-    if (Array.isArray(targetTeachers) && targetTeachers.length > 0) {
-      const teacherRecords = targetTeachers.map(t => ({
-        id: String(t.id),
-        name: t.name || '',
-        data: t,
-        updated_at: now
-      }));
-      const { error } = await supabase.from('teachers').upsert(teacherRecords, { onConflict: 'id' });
-      if (error) console.error('Supabase teachers upsert error:', error);
+    // 2. Simpan Teachers (dengan Sinkronisasi Hapus Permanen & Anti-Duplikasi)
+    if (Array.isArray(targetTeachers)) {
+      const cleanTeachers = deduplicateTeachers(targetTeachers);
+      if (cleanTeachers.length === 0) {
+        const { error: delAllErr } = await supabase.from('teachers').delete().neq('id', '000_dummy_keep');
+        if (delAllErr) console.error('Supabase teachers clear error:', delAllErr);
+      } else {
+        const teacherRecords = cleanTeachers.map(t => ({
+          id: String(t.id),
+          name: t.name || '',
+          data: t,
+          updated_at: now
+        }));
+        const { error } = await supabase.from('teachers').upsert(teacherRecords, { onConflict: 'id' });
+        if (error) console.error('Supabase teachers upsert error:', error);
+
+        // Hapus baris guru di Supabase yang sudah tidak ada di payload (misal baru dihapus admin)
+        try {
+          const validIds = teacherRecords.map(r => r.id);
+          if (validIds.length > 0) {
+            const { error: delErr } = await supabase
+              .from('teachers')
+              .delete()
+              .not('id', 'in', `(${validIds.map(id => `"${id}"`).join(',')})`);
+            if (delErr) console.warn('Pembersihan guru lama Supabase:', delErr);
+          }
+        } catch (delCatch) {
+          console.warn('Gagal bersihkan guru lama di Supabase:', delCatch);
+        }
+      }
     }
 
     // 3. Simpan Archives (dengan Sinkronisasi Hapus Permanen & Anti-Duplikasi)
@@ -338,12 +379,12 @@ export const pushCloudData = async (action, payload) => {
         // Bersihkan data arsip lama di Supabase yang sudah dihapus oleh admin
         try {
           const validIds = archiveRecords.map(r => r.id);
-          const { data: existingRows } = await supabase.from('archives').select('id');
-          if (existingRows && existingRows.length > 0) {
-            const idsToDelete = existingRows.map(r => r.id).filter(id => !validIds.includes(String(id)));
-            if (idsToDelete.length > 0) {
-              await supabase.from('archives').delete().in('id', idsToDelete);
-            }
+          if (validIds.length > 0) {
+            const { error: delErr } = await supabase
+              .from('archives')
+              .delete()
+              .not('id', 'in', `(${validIds.map(id => `"${id}"`).join(',')})`);
+            if (delErr) console.warn('Pembersihan arsip lama Supabase:', delErr);
           }
         } catch (delErr) {
           console.warn('Gagal membersihkan row arsip usang di Supabase:', delErr);
@@ -510,7 +551,7 @@ export const fetchCloudData = async () => {
     }) : null;
 
     const finalSettings = serverSettings || localSettings || {};
-    const finalTeachers = serverTeachers || localTeachers;
+    const finalTeachers = deduplicateTeachers(serverTeachers || localTeachers || []);
     const finalArchives = deduplicateArchives(serverArchives || localArchives || []);
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;

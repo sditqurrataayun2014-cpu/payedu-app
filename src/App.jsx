@@ -21,9 +21,10 @@ import {
   fetchPresensiGuru,
   pushPresensiGuru,
   subscribePresensiGuru,
-  deduplicateArchives
+  deduplicateArchives,
+  deduplicateTeachers
 } from './services/dbService';
-import { isSupabaseConfigured } from './lib/supabase';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 import PresensiGuruView from './PresensiGuruView';
 
 // 🪄 HELPER UNIVERSAL: Mengecek status keaktifan pegawai (Mencegah pegawai Non-Aktif / Resign muncul di operasional gaji & presensi)
@@ -125,7 +126,8 @@ const sanitizeTeacherData = (t) => {
 
 const sanitizeTeacherList = (list) => {
   if (!Array.isArray(list)) return [];
-  return list.map(sanitizeTeacherData);
+  const sanitized = list.map(sanitizeTeacherData);
+  return deduplicateTeachers(sanitized);
 };
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
@@ -3026,9 +3028,42 @@ function DataGuruView({ teachers, setTeachers }) {
   const openModal = (type, data) => setModal({ isOpen: true, type, data });
   const closeModal = () => setModal({ isOpen: false, type: null, data: null });
 
-  const handleDelete = () => {
-    setTeachers(prev => prev.filter(t => t.id !== modal.data.id));
+  const handleDelete = async () => {
+    if (!modal.data) return;
+    const targetId = modal.data.id;
+    const updated = teachers.filter(t => t.id !== targetId);
+    setTeachers(updated);
+    safeStorageSet('payedu_teachers', updated);
     closeModal();
+
+    try {
+      await pushToSupabase('SAVE_TEACHERS', updated);
+      if (isSupabaseConfigured() && supabase) {
+        await supabase.from('teachers').delete().eq('id', String(targetId));
+      }
+    } catch (err) {
+      console.warn('Gagal menghapus data guru di Cloud:', err);
+    }
+  };
+
+  // 🪄 FITUR BARU: Pembersihan Data Guru Ganda Seketika (1-Klik Anti-Duplikasi)
+  const handleCleanDuplicates = async () => {
+    const cleanList = deduplicateTeachers(teachers);
+    const countRemoved = teachers.length - cleanList.length;
+    if (countRemoved <= 0) {
+      alert("✅ Data Pegawai Bersih!\n\nTidak ditemukan data guru yang ganda pada sistem.");
+      return;
+    }
+    if (window.confirm(`Ditemukan ${countRemoved} data pegawai ganda di sistem.\n\nApakah Anda ingin menggabungkan dan membersihkan duplikasi tersebut secara permanen ke Cloud?`)) {
+      setTeachers(cleanList);
+      safeStorageSet('payedu_teachers', cleanList);
+      try {
+        await pushToSupabase('SAVE_TEACHERS', cleanList);
+        alert(`✨ Alhamdulillah! Berhasil membersihkan ${countRemoved} data ganda dan tersimpan permanen ke Cloud Supabase.`);
+      } catch (err) {
+        console.warn("Gagal sinkronisasi pembersihan duplikat:", err);
+      }
+    }
   };
 
   const handleEditSubmit = (e) => {
@@ -3553,6 +3588,14 @@ function DataGuruView({ teachers, setTeachers }) {
             </div>
             
             <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+              <button 
+                type="button"
+                onClick={handleCleanDuplicates}
+                className="flex-1 sm:flex-none justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                title="Pindai dan bersihkan data ganda / duplikat"
+              >
+                 <Sparkles size={16} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan Duplikat</span><span className="sm:hidden">Duplikat</span>
+              </button>
               <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
                  <Upload size={16} /> <span className="hidden sm:inline">Impor</span>
               </button>
@@ -3649,15 +3692,15 @@ function DataGuruView({ teachers, setTeachers }) {
                     <div className="text-slate-700 dark:text-slate-300 font-medium">{formatDateId(t.tmt)}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{calculateYearsFromDate(t.tmt)} Tahun</div>
                   </td>
-                  <td className="p-4">
-                    <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openModal('view', t)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-lg transition-colors" title="Lihat Detail">
+                  <td className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button onClick={() => openModal('view', t)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-lg transition-colors shadow-sm" title="Lihat Detail">
                         <Eye size={16} />
                       </button>
-                      <button onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors" title="Edit Data">
+                      <button onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors shadow-sm" title="Edit Data">
                         <Edit size={16} />
                       </button>
-                      <button onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Hapus Data">
+                      <button onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors shadow-sm" title="Hapus Data">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -9795,7 +9838,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   // 🪄 FITUR BARU: State Animasi Selebrasi Konfeti
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini
+  // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini (Mendukung Sesi Pagi & Sore / Seluruh Sesi)
   const [liveNow, setLiveNow] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setLiveNow(new Date()), 1000);
@@ -9807,15 +9850,34 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   const todayIsoDate = getLocalIsoDate(liveNow);
 
   const presensiSettings = settings?.presensiGuruSettings || {};
-  const sesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
+  const defaultSesiList = [
+    { id: 'pagi', nama: 'Sesi Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' },
+    { id: 'sore', nama: 'Sesi Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' }
+  ];
+  const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
     ? presensiSettings.sesiList 
-    : [{ id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' }];
-  const sesiUtama = sesiList[0];
+    : defaultSesiList;
+
+  // Pastikan jika hanya ada 1 sesi default di settings, kita sediakan opsi sesi Sore juga agar Guru Halaqoh/Sore bisa presensi
+  const sesiList = rawSesiList.length === 1 && rawSesiList[0].id === 'pagi'
+    ? [...rawSesiList, { id: 'sore', nama: 'Sesi Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' }]
+    : rawSesiList;
+
+  const [selectedQuickSesiId, setSelectedQuickSesiId] = useState(() => {
+    const currentHour = new Date().getHours();
+    if (currentHour >= 12 && sesiList.some(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'))) {
+      const sore = sesiList.find(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'));
+      return sore ? sore.id : sesiList[0]?.id;
+    }
+    return sesiList[0]?.id;
+  });
+
+  const currentQuickSesi = sesiList.find(s => s.id === selectedQuickSesiId) || sesiList[0];
 
   const todayAttendance = (presensiGuru || []).find(r => 
     (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
     r.date === todayIsoDate && 
-    (r.sesiId === sesiUtama.id || !r.sesiId)
+    (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
   );
 
   const sudahAbsenMasuk = !!todayAttendance?.jamMasuk;
@@ -9833,7 +9895,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     }
     const capture = new Date();
     const nowHHMMSS = capture.toTimeString().slice(0, 8);
-    const targetMin = (Number(sesiUtama.jamMasuk?.split(':')[0]) || 7) * 60 + (Number(sesiUtama.jamMasuk?.split(':')[1]) || 0) + (Number(sesiUtama.toleransiMenit) || 0);
+    const targetMin = (Number(currentQuickSesi.jamMasuk?.split(':')[0]) || 7) * 60 + (Number(currentQuickSesi.jamMasuk?.split(':')[1]) || 0) + (Number(currentQuickSesi.toleransiMenit) || 0);
     const actualMin = capture.getHours() * 60 + capture.getMinutes();
     const terlambatMenit = Math.max(0, actualMin - targetMin);
     const status = terlambatMenit > 0 ? 'Terlambat' : 'Hadir';
@@ -9842,15 +9904,15 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     const idx = updated.findIndex(r => 
       (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
       r.date === todayIsoDate && 
-      (r.sesiId === sesiUtama.id || !r.sesiId)
+      (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
     );
     const patch = {
       id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       teacherId: myData.id,
       teacherName: myData.name,
       date: todayIsoDate,
-      sesiId: sesiUtama.id,
-      sesiNama: sesiUtama.nama,
+      sesiId: currentQuickSesi.id,
+      sesiNama: currentQuickSesi.nama,
       jamMasuk: nowHHMMSS,
       jamPulang: null,
       status,
@@ -9869,7 +9931,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     }
     safeStorageSet('payedu_presensi_guru', updated);
     pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
-    alert(status === 'Terlambat' ? `Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
+    alert(status === 'Terlambat' ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
   };
 
   const handleQuickAbsenPulang = () => {
@@ -9883,7 +9945,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     const idx = updated.findIndex(r => 
       (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
       r.date === todayIsoDate && 
-      (r.sesiId === sesiUtama.id || !r.sesiId)
+      (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
     );
     if (idx >= 0) {
       updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString() };
@@ -9892,7 +9954,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       }
       safeStorageSet('payedu_presensi_guru', updated);
       pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
-      alert(`Absen Pulang (${sesiUtama.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
+      alert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
     }
   };
 
@@ -10450,19 +10512,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       )}
 
       {/* Header Banner Dinamis Berdasarkan Tab Aktif */}
-      {/* DIPERBARUI: Header "portal_dashboard" DIHAPUS sesuai permintaan, digabung ke dalam Card di bawah */}
-
-      {/* TAMBAHAN: Header Banner Portal Jadwal Mengajar */}
-      {activeSection === 'portal_presensi' && (
-        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-          {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><Fingerprint className="text-teal-100" size={32} /> Presensi Mandiri Pegawai</h1>
-            <p className="text-teal-50 text-sm md:text-base max-w-xl">Lakukan pencatatan absen masuk, absen pulang, pengajuan izin, serta pantau riwayat kedisiplinan kerja harian Anda.</p>
-          </div>
-          <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
-        </div>
-      )}
+      {/* DIPERBARUI: Header "portal_dashboard" & "portal_presensi" digabung ke dalam Card di bawahnya agar tidak ganda */}
 
       {activeSection === 'portal_jadwal' && (
         <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
@@ -10558,13 +10608,13 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                 {/* Avatar */}
                 <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/30 shadow-2xl bg-white/10 backdrop-blur-sm overflow-hidden shrink-0 relative z-10 transition-transform hover:scale-105 duration-300">
                    <img 
-                     src={myData.gender === 'P' 
-                       ? (settings?.avatarFemaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png')
-                       : (settings?.avatarMaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png')
-                     } 
-                     alt="Avatar" 
-                     className="w-full h-full object-cover scale-110"
-                   />
+                      src={myData.gender === 'P' 
+                        ? (settings?.avatarFemaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png')
+                        : (settings?.avatarMaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png')
+                      } 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover scale-110"
+                    />
                 </div>
 
                 {/* Info Text inside Banner */}
@@ -10583,25 +10633,50 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
              <div className="px-5 md:px-8 pb-8 pt-8 md:pb-10 relative">
                  
-                 {/* 🪄 WIDGET PRESENSI CEPAT GURU (ABSEN MASUK & PULANG) */}
+                 {/* 🪄 WIDGET PRESENSI CEPAT GURU (MENDUKUNG SESI PAGI & SORE / HALAQOH) */}
                  <div className="mb-6 bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-cyan-500/10 dark:from-teal-950/40 dark:via-slate-800/80 dark:to-emerald-950/40 border border-teal-200/80 dark:border-teal-800/60 rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden backdrop-blur-sm">
                     <div className="absolute top-0 right-0 w-48 h-48 bg-teal-400/10 rounded-full blur-3xl pointer-events-none"></div>
                     
-                    {/* Baris Header Widget: Judul, Sesi, dan Jam Digital */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-teal-200/60 dark:border-teal-800/40 relative z-10">
+                    {/* Baris Header Widget: Judul, Sesi Selector (Pagi & Sore), dan Jam Digital */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-teal-200/60 dark:border-teal-800/40 relative z-10">
                        <div className="flex items-center gap-3">
                           <div className="p-3 bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-2xl shadow-md shadow-teal-500/20 shrink-0">
                              <Clock3 size={24} />
                           </div>
                           <div>
-                             <div className="flex items-center gap-2">
+                             <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-extrabold text-slate-800 dark:text-white text-base md:text-lg">Presensi Guru Hari Ini</h3>
-                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700/50">
-                                   {sesiUtama.nama}
-                                </span>
+                                
+                                {/* 🪄 PILIHAN SESI LENGKAP: PAGI & SORE / HALAQOH */}
+                                <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-900/70 p-1 rounded-xl border border-teal-200/80 dark:border-teal-700/60 shadow-sm">
+                                  {sesiList.map(s => {
+                                    const isSel = s.id === currentQuickSesi.id;
+                                    const sRec = (presensiGuru || []).find(r => 
+                                      (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+                                      r.date === todayIsoDate && 
+                                      (r.sesiId === s.id || (!r.sesiId && s.id === sesiList[0]?.id))
+                                    );
+                                    const isDone = !!sRec?.jamMasuk;
+                                    return (
+                                      <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => setSelectedQuickSesiId(s.id)}
+                                        className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                                          isSel 
+                                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm' 
+                                            : 'text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/30'
+                                        }`}
+                                      >
+                                        <span>{s.nama.replace(/\(.*\)/, '').trim()}</span>
+                                        {isDone && <span className={`w-2 h-2 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : 'bg-emerald-300 animate-pulse'}`}></span>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                              </div>
-                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                                {liveDateStr} • Batas: {sesiUtama.jamMasuk || '07:00'} WIB (+{sesiUtama.toleransiMenit || 15}m)
+                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                                {liveDateStr} • Sesi {currentQuickSesi.nama} (Batas Masuk: {currentQuickSesi.jamMasuk || '07:00'} WIB, Pulang: {currentQuickSesi.jamPulang || '14:00'} WIB)
                              </p>
                           </div>
                        </div>
@@ -10615,25 +10690,25 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                           </div>
                           <div>
                              {sudahAbsenPulang ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800">
-                                   <CheckCircle size={14} className="text-indigo-600" /> Selesai Pulang
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800 shadow-sm">
+                                   <CheckCircle size={14} className="text-indigo-600 dark:text-indigo-400" /> Selesai Pulang
                                 </span>
                              ) : sudahAbsenMasuk ? (
                                 todayAttendance?.status === 'Terlambat' ? (
-                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-200 dark:border-amber-800">
-                                      <AlertCircle size={14} className="text-amber-600" /> Telat {todayAttendance.terlambatMenit} mnt
+                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-200 dark:border-amber-800 shadow-sm">
+                                      <AlertCircle size={14} className="text-amber-600 dark:text-amber-400" /> Telat {todayAttendance.terlambatMenit} mnt
                                    </span>
                                 ) : (
-                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800">
-                                      <CheckCircle size={14} className="text-emerald-600" /> Hadir Tepat Waktu
+                                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800 shadow-sm">
+                                      <CheckCircle size={14} className="text-emerald-600 dark:text-emerald-400" /> Hadir Tepat Waktu
                                    </span>
                                 )
                              ) : isIzinToday ? (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800">
-                                   <Info size={14} className="text-blue-600" /> {todayAttendance?.status}
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800 shadow-sm">
+                                   <Info size={14} className="text-blue-600 dark:text-blue-400" /> {todayAttendance?.status}
                                 </span>
                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-600 animate-pulse">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-600 animate-pulse shadow-sm">
                                    <span className="w-2 h-2 rounded-full bg-amber-500"></span> Belum Absen
                                 </span>
                              )}

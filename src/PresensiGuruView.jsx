@@ -384,15 +384,20 @@ export default function PresensiGuruView({
         </Modal>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
-            <Clock3 className="text-teal-500" size={26} /> Presensi Guru &amp; Staff
+      {/* HEADER BANNER TUNGGAL (ELEGAN & TERPADU) */}
+      <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="relative z-10">
+          <h1 className="text-2xl md:text-3xl font-black mb-2 flex items-center gap-3">
+            <Fingerprint className="text-teal-100" size={32} />
+            {isTeacher ? 'Presensi Mandiri Pegawai' : 'Presensi Guru & Staff'}
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-            Absensi digital terintegrasi — jam kedatangan &amp; keterlambatan dihitung otomatis.
+          <p className="text-teal-50 text-sm md:text-base max-w-xl font-medium">
+            {isTeacher 
+              ? 'Lakukan pencatatan absen masuk, absen pulang, pengajuan izin, serta pantau riwayat kedisiplinan kerja harian Anda.'
+              : 'Absensi digital terintegrasi — rekapitulasi kehadiran, jam kedatangan, dan keterlambatan pegawai sekolah.'}
           </p>
         </div>
+        <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
 
       {isTeacher ? (
