@@ -1923,6 +1923,15 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     setActiveTab('gaji');
   };
 
+  const [auditInitialCategory, setAuditInitialCategory] = useState('ALL');
+  const [pengaturanInitialTab, setPengaturanInitialTab] = useState('umum');
+
+  const handleOpenAuditLog = (category = 'ALL') => {
+    setPengaturanInitialTab('audit');
+    setAuditInitialCategory(category);
+    setActiveTab('pengaturan');
+  };
+
   const renderContent = () => {
     // 🪄 FIX NO 1: Mode Maintenance memblokir total akses Guru saat aktif
     if (settings?.maintenanceMode && !isManagementRole) {
@@ -1931,7 +1940,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
     switch (activeTab) {
       case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
-      case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} />;
+      case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} user={user} saveAuditLog={saveAuditLog} />;
       case 'presensiguru': 
         return (
           <PresensiGuruView 
@@ -1964,7 +1973,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
       case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
-      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} />;
+      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} onOpenAuditLog={handleOpenAuditLog} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
       case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
       case 'portal_dashboard': 
@@ -2014,6 +2023,8 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             saveAuditLog={saveAuditLog}
             presensiGuru={presensiGuru}
             setPresensiGuru={setPresensiGuru}
+            initialTab={pengaturanInitialTab}
+            initialAuditCategory={auditInitialCategory}
           />
         );
       default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
@@ -2999,7 +3010,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
   );
 }
 
-function DataGuruView({ teachers, setTeachers }) {
+function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: Filter Dropdown
   const [filterWorkStatus, setFilterWorkStatus] = useState('Aktif'); // 🪄 FITUR BARU: Filter Keaktifan (Aktif/Tidak Aktif/Resign)
@@ -3031,10 +3042,19 @@ function DataGuruView({ teachers, setTeachers }) {
   const handleDelete = async () => {
     if (!modal.data) return;
     const targetId = modal.data.id;
+    const targetName = modal.data.name;
     const updated = teachers.filter(t => t.id !== targetId);
     setTeachers(updated);
     safeStorageSet('payedu_teachers', updated);
     closeModal();
+
+    saveAuditLog?.(
+      user?.name || 'Administrator',
+      'Hapus Data Pegawai',
+      targetName,
+      `Menghapus data pegawai ${targetName} (ID: ${targetId}, NIPY: ${modal.data.nipy || '-'})`,
+      'pegawai'
+    );
 
     try {
       await pushToSupabase('SAVE_TEACHERS', updated);
@@ -3057,6 +3077,13 @@ function DataGuruView({ teachers, setTeachers }) {
     if (window.confirm(`Ditemukan ${countRemoved} data pegawai ganda di sistem.\n\nApakah Anda ingin menggabungkan dan membersihkan duplikasi tersebut secara permanen ke Cloud?`)) {
       setTeachers(cleanList);
       safeStorageSet('payedu_teachers', cleanList);
+      saveAuditLog?.(
+        user?.name || 'Administrator',
+        'Bersihkan Duplikat Pegawai',
+        'Data Master Guru',
+        `Membersihkan dan menggabungkan ${countRemoved} data ganda pegawai`,
+        'pegawai'
+      );
       try {
         await pushToSupabase('SAVE_TEACHERS', cleanList);
         alert(`✨ Alhamdulillah! Berhasil membersihkan ${countRemoved} data ganda dan tersimpan permanen ke Cloud Supabase.`);
@@ -3114,6 +3141,13 @@ function DataGuruView({ teachers, setTeachers }) {
              } 
            }];
         });
+        saveAuditLog?.(
+          user?.name || 'Administrator',
+          'Tambah Pegawai Baru',
+          newData.name,
+          `Menambahkan pegawai baru ${newData.name} (NIPY: ${newData.nipy || '-'}, Jabatan: ${newData.position || 'Guru'})`,
+          'pegawai'
+        );
       } else {
         setTeachers(prev => prev.map(t => {
            if (t.id === modal.data.id) {
@@ -3128,6 +3162,13 @@ function DataGuruView({ teachers, setTeachers }) {
            }
            return t;
         }));
+        saveAuditLog?.(
+          user?.name || 'Administrator',
+          'Perbarui Data Pegawai',
+          newData.name,
+          `Memperbarui profil kepegawaian ${newData.name} (Jabatan: ${newData.position || '-'}, Status: ${newData.status})`,
+          'pegawai'
+        );
       }
       setIsSaving(false); // Mematikan efek loading
       closeModal();
@@ -7337,10 +7378,9 @@ function SlipDocument({ teacher, bulan, settings }) {
 }
 
 // Rekap Gaji View
-function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog }) {
+function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog, onOpenAuditLog }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: State Filter Status Guru
-  const [searchAudit, setSearchAudit] = useState(''); // 🪄 TAMBAHAN: State Pencarian Audit Log
   const [selectedSlip, setSelectedSlip] = useState(null);
   const [isArchiving, setIsArchiving] = useState(false);
   
@@ -7355,9 +7395,6 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   // 🪄 FITUR BARU: Custom Data Pengarsipan Dinamis
   const [archiveDate, setArchiveDate] = useState('');
   const [archivePeriod, setArchivePeriod] = useState('');
-
-  // 🪄 FITUR BARU: State untuk Modal Audit Log
-  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
 
   // 🪄 FITUR BARU: State untuk Riwayat Gaji per Individu
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -8189,8 +8226,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               <button onClick={handleKirimNotifMassal} className="flex-1 sm:flex-none justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                  <BellRing size={16} /> <span className="hidden sm:inline">Notif Massal</span><span className="sm:hidden">Notif</span>
               </button>
-              <button onClick={() => setIsAuditModalOpen(true)} className="flex-1 sm:flex-none justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors items-center gap-2 cursor-pointer flex" title="Lihat daftar perubahan manual">
-                 <History size={16} /> <span className="hidden sm:inline">Riwayat Edit</span><span className="sm:hidden">Riwayat</span>
+              <button 
+                type="button"
+                onClick={() => {
+                  if (onOpenAuditLog) {
+                    onOpenAuditLog('finansial');
+                  }
+                }} 
+                className="flex-1 sm:flex-none justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors items-center gap-2 cursor-pointer flex" 
+                title="Buka Jejak Audit Finansial & Mutasi Gaji di Pengaturan"
+              >
+                 <History size={16} /> <span className="hidden sm:inline">Jejak Audit Gaji</span><span className="sm:hidden">Audit</span>
               </button>
               <button onClick={handleExportCSV} className="flex-1 sm:flex-none justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
                  <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Excel</span>
@@ -8202,147 +8248,6 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
             </div>
           </div>
         </div>
-
-        {/* MODAL RIWAYAT PERUBAHAN MANUAL (AUDIT LOG CLOUD) */}
-        {isAuditModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
-                <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                  <History className="text-amber-500" /> Riwayat Perbaikan (Audit Log Cloud)
-                </h3>
-                <button onClick={() => { setIsAuditModalOpen(false); setSearchAudit(''); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
-              </div>
-              <div className="overflow-y-auto p-4 md:p-6 flex-1 bg-slate-50/50 dark:bg-slate-900/20">
-                 
-                 {/* 🪄 FITUR BARU: Pencarian Audit Log */}
-                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
-                    <p className="text-sm text-slate-500 font-medium">Memantau riwayat perubahan manual komponen gaji.</p>
-                    <div className="relative w-full sm:w-72 shrink-0">
-                       <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-                       <input 
-                          type="text" 
-                          placeholder="Cari nama guru atau komponen..." 
-                          value={searchAudit}
-                          onChange={(e) => setSearchAudit(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-amber-500 outline-none dark:text-white shadow-sm"
-                       />
-                    </div>
-                 </div>
-
-                 {(() => {
-                    const rawLogs = settings?.auditLogs || [];
-                    const search = (searchAudit || '').toLowerCase().trim();
-                    const filtered = rawLogs.filter(log => {
-                       const teacherName = String(log?.teacher || log?.target || log?.actor || '').toLowerCase();
-                       const fieldName = String(log?.field || log?.action || '').toLowerCase();
-                       const detailStr = String(log?.detail || '').toLowerCase();
-                       return !search || teacherName.includes(search) || fieldName.includes(search) || detailStr.includes(search);
-                    });
-
-                    if (filtered.length === 0) {
-                       return (
-                          <div className="text-center py-10 text-slate-500 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-dashed">
-                             <History size={40} className="mx-auto mb-3 opacity-30 text-amber-500" />
-                             <p className="font-bold">
-                                {rawLogs.length === 0 ? "Belum ada riwayat perbaikan yang tercatat." : `Tidak ada riwayat perbaikan yang cocok dengan pencarian "${searchAudit}".`}
-                             </p>
-                          </div>
-                       );
-                    }
-
-                    const renderLogValue = (val) => {
-                       if (val === '' || val === null || val === undefined) return '-';
-                       if (isNaN(val) || typeof val === 'string') return String(val);
-                       return formatRp(val);
-                    };
-
-                    return (
-                       <div className="space-y-4">
-                          {filtered.map((log, idx) => {
-                             const teacherName = log?.teacher || log?.target || log?.actor || 'Pegawai / Sistem';
-                             const fieldName = log?.field || log?.action || 'Perubahan Data';
-                             const dateStr = log?.date || (log?.timestamp ? `${formatDateId(log.timestamp.split('T')[0])} ${new Date(log.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : '-');
-                             const hasOldNew = (log?.old !== undefined || log?.new !== undefined);
-                             const hasTotals = (log?.oldTotal !== undefined || log?.newTotal !== undefined);
-
-                             return (
-                               <div key={log?.id || `audit_${idx}`} className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm hover:border-amber-300 dark:hover:border-amber-600 transition-colors">
-                                  
-                                  <div className="flex justify-between items-center mb-3">
-                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-bold">
-                                           {typeof teacherName === 'string' && teacherName.length > 0 ? teacherName.charAt(0).toUpperCase() : 'G'}
-                                        </div>
-                                        <div>
-                                           <div className="font-bold text-slate-800 dark:text-slate-200 text-sm md:text-base">{teacherName}</div>
-                                           <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Clock size={10}/> {dateStr} {log?.actor ? `• oleh ${log.actor}` : ''}</div>
-                                        </div>
-                                     </div>
-                                     <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] sm:text-xs font-bold rounded-md border border-amber-200 dark:border-amber-800/50 flex items-center gap-1.5">
-                                        <Edit size={12}/> {fieldName}
-                                     </span>
-                                  </div>
-
-                                  {hasOldNew || hasTotals ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                                       
-                                       {/* Kolom Perubahan Nilai Komponen */}
-                                       <div className="flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 pb-3 md:pb-0 md:pr-4">
-                                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Nilai Komponen Yang Diubah</span>
-                                          <div className="flex items-center gap-2 justify-between">
-                                             <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
-                                                <span className="text-sm font-bold text-slate-500 line-through">{renderLogValue(log.old)}</span>
-                                             </div>
-                                             <div className="bg-slate-200 dark:bg-slate-700 p-1 rounded-full"><ChevronRight size={14} className="text-slate-500 dark:text-slate-400" /></div>
-                                             <div className="flex flex-col text-right">
-                                                <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
-                                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">{renderLogValue(log.new)}</span>
-                                             </div>
-                                          </div>
-                                       </div>
-
-                                       {/* Kolom Perubahan Total Gaji */}
-                                       <div className="flex flex-col md:pl-2">
-                                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-2">Dampak Pada Total Gaji (THP)</span>
-                                          <div className="flex items-center gap-2 justify-between">
-                                             <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-400 mb-0.5">Sebelumnya</span>
-                                                <span className="text-sm font-bold text-red-500 line-through">{log.oldTotal !== undefined ? formatRp(log.oldTotal) : '-'}</span>
-                                             </div>
-                                             <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1 rounded-full"><ChevronRight size={14} className="text-emerald-600 dark:text-emerald-400" /></div>
-                                             <div className="flex flex-col text-right">
-                                                <span className="text-[10px] text-slate-400 mb-0.5">Setelahnya</span>
-                                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{log.newTotal !== undefined ? formatRp(log.newTotal) : '-'}</span>
-                                             </div>
-                                          </div>
-                                       </div>
-
-                                    </div>
-                                  ) : (
-                                    <div className="mt-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50 text-xs text-slate-700 dark:text-slate-300 font-mono leading-relaxed">
-                                       {log?.detail || '-'}
-                                    </div>
-                                  )}
-                               </div>
-                             );
-                          })}
-                       </div>
-                    );
-                 })()}
-              </div>
-              <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
-                 <button onClick={() => setIsConfirmClearHistoryOpen(true)} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg text-xs font-bold transition-colors">
-                   Bersihkan Riwayat
-                 </button>
-                 <button onClick={() => { setIsAuditModalOpen(false); setSearchAudit(''); }} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg font-bold transition-colors text-sm shadow-sm">
-                   Tutup
-                 </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* FITUR BARU 3: Kontainer Rendering Cetak Slip Massal (Hanya muncul saat mem-print massal) */}
         {isMassPrinting && (
@@ -10788,7 +10693,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                           onClick={() => setActiveTab('portal_presensi')}
                           className="flex items-center gap-1 hover:underline hover:text-teal-800 dark:hover:text-teal-300 transition-colors cursor-pointer"
                        >
-                          <span>Buka Menu Presensi Lengkap & Ajukan Izin</span>
+                          <span>Buka Presensi Sesi {currentQuickSesi.nama.replace(/\(.*\)/, '').trim()} & Ajukan Izin</span>
                           <ChevronRight size={14} />
                        </button>
                     </div>
@@ -10982,6 +10887,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
               teachers={teachers} 
               presensiGuru={presensiGuru} 
               setPresensiGuru={setPresensiGuru} 
+              initialSesiId={selectedQuickSesiId}
               currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
               schoolProfile={{ 
                 nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
@@ -11579,7 +11485,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 }
 
 // --- PENGATURAN VIEW ---
-function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance, auditLogs = [], setAuditLogs, saveAuditLog, presensiGuru = [], setPresensiGuru }) {
+function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance, auditLogs = [], setAuditLogs, saveAuditLog, presensiGuru = [], setPresensiGuru, initialTab = 'umum', initialAuditCategory = 'ALL' }) {
   const fileInputRef = useRef(null);
 
   // TAMBAHAN: State Lokal khusus untuk Teks Portal agar kursor tidak melompat saat mengetik
@@ -11622,13 +11528,21 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     localStorage.setItem('payedu_accounts', JSON.stringify(accounts));
   }, [accounts]);
 
-  const [activeTabSetting, setActiveTabSetting] = useState('umum');
+  const [activeTabSetting, setActiveTabSetting] = useState(initialTab || 'umum');
   const [logSearch, setLogSearch] = useState('');
   const [logStatusFilter, setLogStatusFilter] = useState('ALL'); // ALL, SUCCESS, FAILED
   
   // 🛡️ State Log Audit Finansial & Sistem
   const [auditSearch, setAuditSearch] = useState('');
-  const [auditCategoryFilter, setAuditCategoryFilter] = useState('ALL'); // ALL, finansial, presensi_guru, pegawai, sistem
+  const [auditCategoryFilter, setAuditCategoryFilter] = useState(initialAuditCategory || 'ALL'); // ALL, finansial, presensi_guru, pegawai, sistem
+
+  useEffect(() => {
+    if (initialTab) setActiveTabSetting(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (initialAuditCategory) setAuditCategoryFilter(initialAuditCategory);
+  }, [initialAuditCategory]);
 
   const filteredAuditLogs = useMemo(() => {
     return (auditLogs || []).filter(log => {
@@ -11636,10 +11550,25 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       const action = (log.action || '').toLowerCase();
       const target = (log.target || '').toLowerCase();
       const detail = (log.detail || '').toLowerCase();
+      const cat = (log.category || '').toLowerCase();
       const s = auditSearch.toLowerCase().trim();
       const matchSearch = !s || actor.includes(s) || action.includes(s) || target.includes(s) || detail.includes(s);
       
-      const matchCategory = auditCategoryFilter === 'ALL' || log.category === auditCategoryFilter;
+      let matchCategory = true;
+      if (auditCategoryFilter === 'ALL') {
+        matchCategory = true;
+      } else if (auditCategoryFilter === 'finansial') {
+        matchCategory = cat === 'finansial' || cat === 'gaji' || action.includes('gaji') || action.includes('tunjangan') || action.includes('potongan') || action.includes('insentif') || action.includes('arsip') || action.includes('approval') || action.includes('pinjaman');
+      } else if (auditCategoryFilter === 'presensi_guru') {
+        matchCategory = cat === 'presensi_guru' || cat === 'presensi' || action.includes('presensi') || action.includes('absen') || action.includes('hadir') || action.includes('izin') || action.includes('sakit') || action.includes('terlambat') || action.includes('cuti');
+      } else if (auditCategoryFilter === 'pegawai') {
+        matchCategory = cat === 'pegawai' || cat === 'guru' || action.includes('pegawai') || action.includes('guru') || action.includes('biodata') || action.includes('duplikat') || action.includes('nipy');
+      } else if (auditCategoryFilter === 'sistem') {
+        matchCategory = cat === 'sistem' || cat === 'pengaturan' || !cat || action.includes('login') || action.includes('restore') || action.includes('reset') || action.includes('maintenance') || action.includes('profil') || action.includes('logo') || action.includes('akun') || action.includes('sistem');
+      } else {
+        matchCategory = cat === auditCategoryFilter.toLowerCase();
+      }
+
       return matchSearch && matchCategory;
     });
   }, [auditLogs, auditSearch, auditCategoryFilter]);

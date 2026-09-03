@@ -3,7 +3,7 @@ import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
-  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles
+  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { pushPresensiGuru } from './services/dbService';
@@ -186,19 +186,32 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth }) => {
   );
 };
 
-// Tiap kartu statistik punya warna gradien khasnya sendiri agar halaman
-// Presensi Guru & Staff terlihat lebih hidup dan mudah dibedakan sekilas mata.
-const StatCard = ({ icon: Icon, label, value, gradient, iconBg }) => (
-  <div className={`rounded-2xl shadow-sm p-4 flex items-center gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden`}>
-    <div className="absolute -right-4 -bottom-6 w-20 h-20 bg-white/10 rounded-full pointer-events-none" />
-    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10 ${iconBg}`}>
+// Tiap kartu statistik punya warna gradien khasnya sendiri dan dapat diklik
+// untuk memunculkan daftar nama guru yang sesuai kategori status tersebut.
+const StatCard = ({ icon: Icon, label, value, gradient, iconBg, onClick, isClickable = true }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`w-full text-left rounded-2xl shadow-sm p-4 flex items-center gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden transition-all group ${
+      isClickable ? 'cursor-pointer hover:scale-[1.03] hover:shadow-md active:scale-[0.98]' : ''
+    }`}
+  >
+    <div className="absolute -right-4 -bottom-6 w-20 h-20 bg-white/10 rounded-full pointer-events-none group-hover:scale-125 transition-transform" />
+    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10 ${iconBg} group-hover:rotate-6 transition-transform shadow-xs`}>
       <Icon size={20} strokeWidth={2.5} className="text-white" />
     </div>
-    <div className="min-w-0 relative z-10">
-      <p className="text-[10px] font-black text-white/70 uppercase tracking-widest truncate">{label}</p>
-      <p className="text-xl font-black text-white">{value}</p>
+    <div className="min-w-0 relative z-10 flex-1">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-black text-white/80 uppercase tracking-widest truncate">{label}</p>
+        {isClickable && (
+          <span className="text-[8px] bg-white/20 hover:bg-white/30 text-white font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs transition-colors hidden sm:inline-block">
+            Lihat Nama &rarr;
+          </span>
+        )}
+      </div>
+      <p className="text-xl font-black text-white mt-0.5">{value}</p>
     </div>
-  </div>
+  </button>
 );
 
 // ==========================================
@@ -208,6 +221,7 @@ export default function PresensiGuruView({
   teachers = [], presensiGuru = [], setPresensiGuru,
   currentUser, schoolProfile, setSchoolProfile,
   showCsvPreview, triggerPrint, addAuditLog,
+  initialSesiId,
 }) {
   // Toast & Confirm state
   const [toastMessage, setToastMessage] = useState(null);
@@ -411,6 +425,7 @@ export default function PresensiGuruView({
           addAuditLog={addAuditLog}
           currentUser={currentUser}
           schoolProfile={schoolProfile}
+          initialSesiId={initialSesiId}
         />
       ) : (
         <AdminRekapPanel
@@ -429,6 +444,7 @@ export default function PresensiGuruView({
           addAuditLog={addAuditLog}
           currentUser={currentUser}
           schoolProfile={schoolProfile}
+          initialSesiId={initialSesiId}
         />
       )}
     </div>
@@ -438,7 +454,7 @@ export default function PresensiGuruView({
 // ==========================================
 // SUB-VIEW: SELF SERVICE (PORTAL GURU)
 // ==========================================
-function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord, showToast, addAuditLog, currentUser, schoolProfile }) {
+function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord, showToast, addAuditLog, currentUser, schoolProfile, initialSesiId }) {
   const [showIzinModal, setShowIzinModal] = useState(false);
   const [izinStatus, setIzinStatus] = useState('Sakit');
   const [izinKeterangan, setIzinKeterangan] = useState('');
@@ -455,7 +471,15 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   );
   const sesiList = sesiTerjadwalHariIni;
   const multiSesi = sesiList.length > 1;
-  const [selectedSesiId, setSelectedSesiId] = useState(sesiSemua[0]?.id);
+  const [selectedSesiId, setSelectedSesiId] = useState(initialSesiId || sesiSemua[0]?.id);
+
+  // Sinkronkan sesi jika initialSesiId berubah dari luar (misal klik akses cepat di profil)
+  useEffect(() => {
+    if (initialSesiId) {
+      setSelectedSesiId(initialSesiId);
+    }
+  }, [initialSesiId]);
+
   const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0];
 
   const today = todayStr();
@@ -1042,6 +1066,62 @@ function AdminRekapPanel({
   const totalIzinSakit = todayRecords.filter(r => r && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(r.status)).length;
   const totalBelumAbsen = filteredTeachersHarian.length - todayRecords.filter(r => r).length;
 
+  // 🪄 DRILLDOWN POPUP: Daftar Guru Berdasarkan Status Kartu Presensi
+  const [statDrilldown, setStatDrilldown] = useState(null); // null | 'Hadir' | 'Terlambat' | 'IzinSakit' | 'BelumAbsen'
+  const [drilldownSearch, setDrilldownSearch] = useState('');
+
+  const drilldownTeachers = useMemo(() => {
+    if (!statDrilldown) return [];
+    let list = [];
+    if (statDrilldown === 'Hadir') {
+      list = filteredTeachersHarian.filter(t => getRecord(t.id)?.status === 'Hadir');
+    } else if (statDrilldown === 'Terlambat') {
+      list = filteredTeachersHarian.filter(t => getRecord(t.id)?.status === 'Terlambat');
+    } else if (statDrilldown === 'IzinSakit') {
+      list = filteredTeachersHarian.filter(t => {
+        const r = getRecord(t.id);
+        return r && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(r.status);
+      });
+    } else if (statDrilldown === 'BelumAbsen') {
+      list = filteredTeachersHarian.filter(t => {
+        const r = getRecord(t.id);
+        return !r || (!r.jamMasuk && !['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(r.status));
+      });
+    }
+
+    if (!drilldownSearch.trim()) return list;
+    const q = drilldownSearch.toLowerCase();
+    return list.filter(t => (t.name || '').toLowerCase().includes(q) || (t.nipy || t.nip || '').includes(q) || (t.position || '').toLowerCase().includes(q));
+  }, [statDrilldown, filteredTeachersHarian, presensiGuru, filterDate, filterSesiId, drilldownSearch]);
+
+  const copyDrilldownToWA = () => {
+    if (!statDrilldown || drilldownTeachers.length === 0) return;
+    const titleMap = {
+      Hadir: 'HADIR TEPAT WAKTU',
+      Terlambat: 'TERLAMBAT',
+      IzinSakit: 'SAKIT / IZIN / CUTI',
+      BelumAbsen: 'BELUM MELAKUKAN ABSEN'
+    };
+    let text = `*DAFTAR PEGAWAI ${titleMap[statDrilldown]}*\n`;
+    text += `📅 Tanggal: ${filterDate} (${hariIni})\n`;
+    text += `⏰ Sesi: ${sesiTerpilih.nama}\n`;
+    text += `👥 Total: ${drilldownTeachers.length} Orang\n\n`;
+    drilldownTeachers.forEach((t, i) => {
+      const rec = getRecord(t.id);
+      let detail = '';
+      if (statDrilldown === 'Hadir') detail = `(Masuk: ${formatJam(rec?.jamMasuk)})`;
+      else if (statDrilldown === 'Terlambat') detail = `(Masuk: ${formatJam(rec?.jamMasuk)}, telat ${rec?.terlambatMenit || 0}m)`;
+      else if (statDrilldown === 'IzinSakit') detail = `(${rec?.status || 'Izin'}${rec?.keterangan ? `: "${rec.keterangan}"` : ''})`;
+      else if (statDrilldown === 'BelumAbsen') detail = `(Belum Absen)`;
+      text += `${i + 1}. *${t.name}* - ${t.position || 'Guru'} ${detail}\n`;
+    });
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('📋 Daftar guru berhasil disalin! Silakan tempel (paste) ke WhatsApp.', 'success');
+    }).catch(() => {
+      showToast('Gagal menyalin teks ke clipboard.', 'error');
+    });
+  };
+
   const handleSaveSettings = () => {
     try {
       localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(settingsForm));
@@ -1273,13 +1353,184 @@ function AdminRekapPanel({
 
   return (
     <div className="space-y-6">
-      {/* STAT HARI INI */}
+      {/* STAT HARI INI (DAPAT DIKLIK UNTUK MELIHAT DAFTAR GURU) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard icon={CheckCircle2} label="Hadir Tepat Waktu" value={totalHadir} gradient="from-emerald-500 to-teal-600" iconBg="bg-white/20" />
-        <StatCard icon={AlertTriangle} label="Terlambat" value={totalTerlambat} gradient="from-amber-500 to-orange-600" iconBg="bg-white/20" />
-        <StatCard icon={CalendarClock} label="Sakit/Izin/Cuti" value={totalIzinSakit} gradient="from-violet-500 to-purple-600" iconBg="bg-white/20" />
-        <StatCard icon={AlertCircle} label="Belum Absen" value={Math.max(0, totalBelumAbsen)} gradient="from-rose-500 to-red-600" iconBg="bg-white/20" />
+        <StatCard 
+          icon={CheckCircle2} 
+          label="Hadir Tepat Waktu" 
+          value={totalHadir} 
+          gradient="from-emerald-500 to-teal-600" 
+          iconBg="bg-white/20" 
+          onClick={() => { setStatDrilldown('Hadir'); setDrilldownSearch(''); }}
+        />
+        <StatCard 
+          icon={AlertTriangle} 
+          label="Terlambat" 
+          value={totalTerlambat} 
+          gradient="from-amber-500 to-orange-600" 
+          iconBg="bg-white/20" 
+          onClick={() => { setStatDrilldown('Terlambat'); setDrilldownSearch(''); }}
+        />
+        <StatCard 
+          icon={CalendarClock} 
+          label="Sakit/Izin/Cuti" 
+          value={totalIzinSakit} 
+          gradient="from-violet-500 to-purple-600" 
+          iconBg="bg-white/20" 
+          onClick={() => { setStatDrilldown('IzinSakit'); setDrilldownSearch(''); }}
+        />
+        <StatCard 
+          icon={AlertCircle} 
+          label="Belum Absen" 
+          value={Math.max(0, totalBelumAbsen)} 
+          gradient="from-rose-500 to-red-600" 
+          iconBg="bg-white/20" 
+          onClick={() => { setStatDrilldown('BelumAbsen'); setDrilldownSearch(''); }}
+        />
       </div>
+
+      {/* MODAL DRILLDOWN: DAFTAR NAMA GURU SESUAI KARTU STATISTIK YANG DIKLIK */}
+      <Modal
+        isOpen={!!statDrilldown}
+        onClose={() => setStatDrilldown(null)}
+        title={
+          statDrilldown === 'Hadir' ? `Daftar Guru: Hadir Tepat Waktu (${drilldownTeachers.length})` :
+          statDrilldown === 'Terlambat' ? `Daftar Guru: Terlambat (${drilldownTeachers.length})` :
+          statDrilldown === 'IzinSakit' ? `Daftar Guru: Sakit / Izin / Cuti (${drilldownTeachers.length})` :
+          `Daftar Guru: Belum Absen (${drilldownTeachers.length})`
+        }
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          {/* Header Banner Ringkas */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={14} className="text-teal-600 dark:text-teal-400" />
+              <span>{hariIni}, {filterDate}</span>
+              <span className="text-slate-300 dark:text-slate-600">•</span>
+              <span className="text-teal-700 dark:text-teal-300 font-extrabold">Sesi {sesiTerpilih.nama}</span>
+            </div>
+            {drilldownTeachers.length > 0 && (
+              <button
+                type="button"
+                onClick={copyDrilldownToWA}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider shadow-xs transition-transform active:scale-95"
+                title="Salin daftar nama ke WhatsApp"
+              >
+                <Copy size={13} /> Salin ke WA
+              </button>
+            )}
+          </div>
+
+          {/* Search Bar Dalam Modal */}
+          <div className="relative">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cari nama guru atau NIP di daftar ini..."
+              value={drilldownSearch}
+              onChange={e => setDrilldownSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 text-xs dark:text-white"
+            />
+          </div>
+
+          {/* List Guru */}
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+            {drilldownTeachers.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <Users size={36} className="mx-auto mb-2 opacity-40" />
+                <p className="font-bold text-xs">Tidak ada data guru yang cocok.</p>
+              </div>
+            ) : (
+              drilldownTeachers.map((t, idx) => {
+                const rec = getRecord(t.id);
+                return (
+                  <div
+                    key={t.id}
+                    className="p-3 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-100 dark:border-slate-700/80 flex items-center justify-between gap-3 hover:border-teal-300 transition-colors shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-black text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700">
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-slate-800 dark:text-white truncate">{t.name}</p>
+                        <p className="text-[10px] font-medium text-slate-400 truncate">
+                          {t.position || 'Guru'} • NIPY: {t.nipy || t.nip || '-'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                      {statDrilldown === 'Hadir' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                            Masuk: {formatJam(rec?.jamMasuk)}
+                          </span>
+                          {rec?.jamPulang && (
+                            <span className="font-mono text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              Plg: {formatJam(rec.jamPulang)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {statDrilldown === 'Terlambat' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                            {formatJam(rec?.jamMasuk)} (+{rec?.terlambatMenit || 0}m)
+                          </span>
+                        </div>
+                      )}
+
+                      {statDrilldown === 'IzinSakit' && (
+                        <div className="flex flex-col items-end">
+                          <Badge colorClass={STATUS_BADGE[rec?.status || 'Izin']}>{rec?.status || 'Izin'}</Badge>
+                          {rec?.keterangan && (
+                            <span className="text-[10px] text-slate-500 italic max-w-[150px] truncate mt-0.5">"{rec.keterangan}"</span>
+                          )}
+                        </div>
+                      )}
+
+                      {statDrilldown === 'BelumAbsen' && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                            Belum Hadir
+                          </span>
+                          {!readOnly && (
+                            <div className="flex gap-1 ml-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleQuickStatus(t, 'Hadir');
+                                }}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-bold shadow-2xs"
+                                title="Tandai Hadir Manual"
+                              >
+                                Hadirkan
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setStatDrilldown(null)}
+              className="px-5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* TOGGLE MODE + TOOLBAR */}
       <div className={`${cx.card3xl} p-4 flex flex-col lg:flex-row justify-between gap-3 lg:items-center`}>
