@@ -3,7 +3,7 @@ import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
-  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff
+  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { pushPresensiGuru } from './services/dbService';
