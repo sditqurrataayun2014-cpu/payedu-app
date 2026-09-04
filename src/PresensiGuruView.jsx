@@ -157,25 +157,70 @@ const hitungJarakMeter = (lat1, lon1, lat2, lon2) => {
 
 // Menggabungkan lokasiList (baru) dengan lokasi tunggal (lama, fallback) agar data lama tetap jalan
 const getLokasiList = (settings) => {
-  const list = Array.isArray(settings?.lokasiList) ? settings.lokasiList.filter(l => l && l.latitude != null && l.longitude != null) : [];
+  const list = Array.isArray(settings?.lokasiList)
+    ? settings.lokasiList.filter(l => l && l.latitude != null && l.longitude != null && !isNaN(Number(l.latitude)) && !isNaN(Number(l.longitude)))
+    : [];
   if (list.length > 0) return list;
   if (settings?.lokasi?.latitude != null && settings?.lokasi?.longitude != null) {
-    return [{ id: 'legacy', nama: 'Lokasi Sekolah', latitude: settings.lokasi.latitude, longitude: settings.lokasi.longitude, radiusMeter: settings.lokasi.radiusMeter || 150 }];
+    const lat = Number(settings.lokasi.latitude);
+    const lon = Number(settings.lokasi.longitude);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      return [{
+        id: 'legacy',
+        nama: settings.lokasi.nama || 'Lokasi Sekolah',
+        latitude: lat,
+        longitude: lon,
+        radiusMeter: Number(settings.lokasi.radiusMeter) || 150
+      }];
+    }
   }
   return [];
 };
 
-// Mencari lokasi (dari beberapa lokasi terdaftar) yang PALING DEKAT dengan posisi guru saat ini
+// Mencari lokasi (dari beberapa lokasi terdaftar) yang PALING DEKAT atau VALID dengan posisi guru saat ini
 const cariLokasiTerdekat = (lat, lon, lokasiList) => {
-  let terbaik = null;
+  if (!Array.isArray(lokasiList) || lokasiList.length === 0) return null;
+  let terbaikDalamRadius = null;
+  let terdekatMutlak = null;
+
   for (const lok of lokasiList) {
-    const jarak = hitungJarakMeter(lat, lon, Number(lok.latitude), Number(lok.longitude));
-    if (jarak === null) continue;
-    if (!terbaik || jarak < terbaik.jarakMeter) {
-      terbaik = { ...lok, jarakMeter: jarak, diDalamRadius: jarak <= Number(lok.radiusMeter || 150) };
+    if (!lok) continue;
+    const latNum = Number(lok.latitude);
+    const lonNum = Number(lok.longitude);
+    if (isNaN(latNum) || isNaN(lonNum)) continue;
+
+    const jarak = hitungJarakMeter(lat, lon, latNum, lonNum);
+    if (jarak === null || isNaN(jarak)) continue;
+
+    const radius = Number(lok.radiusMeter) || 150;
+    const dalamRadius = jarak <= radius;
+
+    const item = {
+      ...lok,
+      latitude: latNum,
+      longitude: lonNum,
+      radiusMeter: radius,
+      jarakMeter: jarak,
+      jarak: jarak, // Kompatibilitas ganda
+      dalamRadius: dalamRadius,
+      diDalamRadius: dalamRadius // Kompatibilitas ganda
+    };
+
+    // Rekam yang terdekat mutlak (untuk pesan error jika di luar seluruh lokasi)
+    if (!terdekatMutlak || jarak < (terdekatMutlak.jarakMeter ?? Infinity)) {
+      terdekatMutlak = item;
+    }
+
+    // Jika guru berada di dalam radius salah satu titik lokasi (misal Kampus 2 / Masjid / Titik Rapat),
+    // prioritaskan titik yang VALID ini agar tidak ditolak secara keliru!
+    if (dalamRadius) {
+      if (!terbaikDalamRadius || jarak < (terbaikDalamRadius.jarakMeter ?? Infinity)) {
+        terbaikDalamRadius = item;
+      }
     }
   }
-  return terbaik;
+
+  return terbaikDalamRadius || terdekatMutlak;
 };
 
 // Cek apakah perangkat HP guru mendukung Geolocation API
@@ -641,7 +686,8 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
         : `Absen masuk (${sesiAktif.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Tepat waktu! 🎉`,
       status === 'Terlambat' ? 'error' : 'success'
     );
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${verifikasi.lokasi.jarakMeter}m` : '';
+    const jarakMasuk = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakMasuk}m` : '';
     const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
     addAuditLog?.(currentUser?.name, 'Absen Masuk', teacher.name, `Sesi ${sesiAktif.nama}, Pukul ${formatJam(nowToHHMMSS(capture))} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''}${lokasiKet}${qrKet})`, 'presensi_guru');
   };
@@ -655,7 +701,8 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
     upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, patch);
     showToast(`Absen pulang (${sesiAktif.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))}. Sampai jumpa besok!`, 'success');
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${verifikasi.lokasi.jarakMeter}m` : '';
+    const jarakPulang = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakPulang}m` : '';
     const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
     addAuditLog?.(currentUser?.name, 'Absen Pulang', teacher.name, `Sesi ${sesiAktif.nama}, Pukul ${formatJam(nowToHHMMSS(capture))}${lokasiKet}${qrKet}`, 'presensi_guru');
   };
@@ -866,9 +913,13 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
 // langkah terkait dilewati otomatis (tidak mem-block absen lama).
 // ==========================================
 function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClose, onVerified }) {
-  const lokasiAktif = isLokasiAktif(settings);
-  const qrAktif = isQrAktif(settings);
-  const lokasiList = getLokasiList(settings);
+  const combinedSettings = {
+    ...(settings || {}),
+    ...(schoolProfile?.presensiGuruSettings || {})
+  };
+  const lokasiAktif = isLokasiAktif(combinedSettings);
+  const qrAktif = isQrAktif(combinedSettings);
+  const lokasiList = getLokasiList(combinedSettings);
 
   const [gpsStatus, setGpsStatus] = useState('idle'); // idle | checking | ok | fail
   const [gpsInfo, setGpsInfo] = useState(null);
@@ -902,12 +953,25 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         const terdekat = cariLokasiTerdekat(latitude, longitude, lokasiList);
-        setGpsInfo(terdekat ? { latitude, longitude, jarakMeter: terdekat.jarak, akurasi: Math.round(accuracy || 0), namaLokasi: terdekat.nama } : null);
-        setGpsStatus(terdekat?.dalamRadius ? 'ok' : 'fail');
-        if (!terdekat?.dalamRadius) {
+        const jarak = terdekat ? (terdekat.jarakMeter ?? terdekat.jarak ?? 0) : null;
+        const dalamRadius = terdekat ? (terdekat.dalamRadius ?? terdekat.diDalamRadius ?? false) : false;
+
+        setGpsInfo(terdekat ? {
+          latitude,
+          longitude,
+          jarakMeter: jarak,
+          jarak: jarak,
+          akurasi: Math.round(accuracy || 0),
+          namaLokasi: terdekat.nama || 'Lokasi Sekolah',
+          radiusMeter: terdekat.radiusMeter || 150,
+          dalamRadius
+        } : null);
+
+        setGpsStatus(dalamRadius ? 'ok' : 'fail');
+        if (!dalamRadius) {
           setGpsError(terdekat
-            ? `Posisi GPS Anda terdeteksi berjarak ±${terdekat.jarak}m dari "${terdekat.nama}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m). Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
-            : 'Titik koordinat sekolah belum dapat diverifikasi. Hubungi Admin Sekolah.');
+            ? `Posisi GPS Anda terdeteksi berjarak ±${jarak}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m). Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
+            : 'Titik koordinat lokasi sekolah belum dapat diverifikasi atau belum didaftarkan di pengaturan. Hubungi Admin Sekolah.');
         }
       },
       (err) => {
@@ -932,7 +996,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if (code) {
-        const expectedSuffix = `|${settings.qrToken}`;
+        const expectedSuffix = `|${combinedSettings.qrToken}`;
         if (code.data.startsWith(QR_PREFIX) && code.data.endsWith(expectedSuffix)) {
           setQrStatus('ok');
           setCameraError('');
@@ -943,7 +1007,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       }
     }
     rafRef.current = requestAnimationFrame(tick);
-  }, [settings.qrToken, stopScan]);
+  }, [combinedSettings.qrToken, stopScan]);
 
   const startScan = useCallback(async () => {
     if (lokasiAktif && gpsStatus !== 'ok') {
@@ -986,8 +1050,15 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   const handleConfirm = () => {
     if (!canConfirm) return;
     stopScan();
+    const jarak = gpsInfo?.jarakMeter ?? gpsInfo?.jarak ?? 0;
     onVerified({
-      lokasi: lokasiAktif && gpsInfo ? { latitude: gpsInfo.latitude, longitude: gpsInfo.longitude, jarakMeter: gpsInfo.jarakMeter, nama: gpsInfo.namaLokasi } : undefined,
+      lokasi: lokasiAktif && gpsInfo ? {
+        latitude: gpsInfo.latitude,
+        longitude: gpsInfo.longitude,
+        jarakMeter: jarak,
+        jarak: jarak,
+        nama: gpsInfo.namaLokasi || 'Lokasi Sekolah'
+      } : undefined,
       qrValid: qrAktif ? true : undefined,
     });
   };

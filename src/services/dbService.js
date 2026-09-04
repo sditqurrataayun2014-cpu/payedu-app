@@ -40,7 +40,7 @@ const safeStorageSet = (key, value) => {
 export const pushPresensiGuru = async (presensiArray) => {
   if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
 
-  // 1. Simpan ke LocalStorage seketika (sumber kebenaran offline)
+  // 1. Simpan ke LocalStorage seketika (sumber kebenaran offline perangkat)
   safeStorageSet('payedu_presensi_guru', presensiArray);
 
   // 2. Simpan ke Supabase sebagai baris terpisah di tabel settings
@@ -49,19 +49,43 @@ export const pushPresensiGuru = async (presensiArray) => {
   }
 
   try {
+    // 🛡️ ANTI OVERWRITE / CONCURRENCY SAFE:
+    // Sebelum menyimpan ke Supabase, ambil data presensi server terkini dan gabungkan (merge).
+    // Hal ini krusial saat banyak guru absen serentak pada titik/jam yang sama (misal Rapat/Kajian),
+    // sehingga absensi guru lain yang masuk di detik yang sama TIDAK AKAN tertimpa atau hilang!
+    let dataToPush = presensiArray;
+    try {
+      const { data: serverRow } = await supabase
+        .from('settings')
+        .select('data')
+        .eq('id', 'presensi_guru')
+        .single();
+
+      if (serverRow?.data) {
+        const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
+        if (Array.isArray(serverData) && serverData.length > 0) {
+          dataToPush = mergePresensiArrays(serverData, presensiArray);
+          safeStorageSet('payedu_presensi_guru', dataToPush);
+        }
+      }
+    } catch (fetchErr) {
+      console.warn('Peringatan pembacaan data presensi cloud sebelum push:', fetchErr);
+    }
+
     const now = new Date().toISOString();
     const { error } = await supabase
       .from('settings')
       .upsert({ 
         id: 'presensi_guru', 
-        data: presensiArray, 
+        data: dataToPush, 
         updated_at: now 
       });
+
     if (error) {
       console.error('Supabase presensi_guru upsert error:', error);
       return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud: ' + error.message };
     }
-    return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud' };
+    return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud', data: dataToPush };
   } catch (error) {
     console.error('Error saat menyimpan presensi ke Supabase:', error);
     return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud' };
@@ -140,27 +164,46 @@ export const fetchPresensiGuru = async () => {
 };
 
 /**
- * Merge dua array presensi: server menang untuk record yang sama (by id), 
- * record unik dari keduanya dipertahankan.
+ * Merge dua array presensi: menggabungkan absensi lokal dan server secara cerdas.
+ * Memastikan tidak ada absensi guru yang tertimpa atau hilang saat absen bersamaan.
  */
-function mergePresensiArrays(serverArr, localArr) {
+export function mergePresensiArrays(serverArr, localArr) {
   const map = new Map();
-  // Masukkan lokal dulu
-  for (const r of localArr) {
-    if (r && r.id) map.set(r.id, r);
-    else if (r && r.teacherId && r.date) {
-      const key = `${r.teacherId}_${r.date}_${r.sesiId || 'default'}`;
+  const allRecords = [...(Array.isArray(serverArr) ? serverArr : []), ...(Array.isArray(localArr) ? localArr : [])];
+
+  for (const r of allRecords) {
+    if (!r) continue;
+    // Composite key unik presensi: teacherId + date + sesiId
+    const key = r.teacherId && r.date
+      ? `${String(r.teacherId).trim()}_${String(r.date).trim()}_${String(r.sesiId || 'default').trim()}`
+      : String(r.id || Math.random());
+
+    const existing = map.get(key);
+    if (!existing) {
       map.set(key, r);
+    } else {
+      const existingTime = new Date(existing.updatedAt || existing.date || 0).getTime();
+      const newTime = new Date(r.updatedAt || r.date || 0).getTime();
+
+      // Gabungkan field sehingga jika existing ada jamMasuk dan r ada jamPulang, keduanya utuh
+      const merged = {
+        ...existing,
+        ...r,
+        id: existing.id || r.id,
+        jamMasuk: r.jamMasuk || existing.jamMasuk || null,
+        jamPulang: r.jamPulang || existing.jamPulang || null,
+        status: (r.jamPulang && existing.status) ? existing.status : (r.status || existing.status || 'Hadir'),
+        terlambatMenit: r.jamMasuk ? (r.terlambatMenit ?? existing.terlambatMenit ?? 0) : (existing.terlambatMenit ?? r.terlambatMenit ?? 0),
+        lokasiMasuk: existing.lokasiMasuk || r.lokasiMasuk,
+        lokasiPulang: r.lokasiPulang || existing.lokasiPulang,
+        qrValidMasuk: existing.qrValidMasuk ?? r.qrValidMasuk,
+        qrValidPulang: r.qrValidPulang ?? existing.qrValidPulang,
+        updatedAt: newTime >= existingTime ? (r.updatedAt || existing.updatedAt) : (existing.updatedAt || r.updatedAt)
+      };
+      map.set(key, merged);
     }
   }
-  // Server menimpa (lebih prioritas)
-  for (const r of serverArr) {
-    if (r && r.id) map.set(r.id, r);
-    else if (r && r.teacherId && r.date) {
-      const key = `${r.teacherId}_${r.date}_${r.sesiId || 'default'}`;
-      map.set(key, r);
-    }
-  }
+
   return Array.from(map.values());
 }
 
@@ -236,9 +279,14 @@ export const subscribePresensiGuru = (onUpdate) => {
     return () => {}; // noop unsubscribe
   }
   const channel = supabase
-    .channel('public:presensi_guru')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'presensi_guru' }, async () => {
-      // Saat ada perubahan di tabel presensi_guru, re-fetch data presensi terbaru
+    .channel('public:settings:presensi_guru')
+    .on('postgres_changes', { 
+      event: '*', 
+      schema: 'public', 
+      table: 'settings', 
+      filter: 'id=eq.presensi_guru' 
+    }, async () => {
+      // Saat ada perubahan di baris presensi_guru pada tabel settings, re-fetch data presensi terbaru
       try {
         const res = await fetchPresensiGuru();
         if (res.status === 'success' && Array.isArray(res.data)) {
