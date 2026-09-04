@@ -68,78 +68,78 @@ const formatTanggalPanjang = (d) => d.toLocaleDateString('id-ID', { weekday: 'lo
 export const getSesiTheme = (sesi) => {
   const name = String(sesi?.nama || sesi?.id || sesi || '').toLowerCase();
   
-  // Sesi Sore / Halaqoh (Nuansa Malam/Ungu/Indigo/Quran yang Tenang)
+  // Sesi Sore / Halaqoh (Nuansa Malam/Ungu/Indigo/Quran yang Tenang & Elegan)
   if (name.includes('sore') || name.includes('halaqoh') || name.includes('malam') || name.includes('maghrib') || name.includes('isya')) {
     return {
       type: 'sore',
       namaSingkat: 'Sore (Halaqoh)',
       iconEmoji: '🌙',
-      bgActive: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white shadow-lg shadow-indigo-500/25 ring-2 ring-indigo-400/40 border border-indigo-400/50',
-      bgInactive: 'bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60',
-      tabBorder: 'border-indigo-300 dark:border-indigo-700',
-      badge: 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
-      badgeText: 'text-indigo-700 dark:text-indigo-300',
-      cardGradient: 'from-indigo-700 via-purple-700 to-violet-900',
-      dotColor: 'bg-purple-300',
-      dotPulse: 'bg-purple-300 animate-pulse',
-      ringColor: 'ring-indigo-500',
-      accentColor: 'indigo'
+      bgActive: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white shadow-md shadow-purple-500/30 ring-2 ring-purple-400 border border-purple-400',
+      bgInactive: 'bg-purple-50 text-purple-800 hover:bg-purple-100 hover:text-purple-900 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/80 border border-purple-300 dark:border-purple-700 font-bold',
+      tabBorder: 'border-purple-300 dark:border-purple-700',
+      badge: 'bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800',
+      badgeText: 'text-purple-700 dark:text-purple-300',
+      cardGradient: 'from-indigo-800 via-purple-800 to-violet-950',
+      dotColor: 'bg-purple-400',
+      dotPulse: 'bg-purple-400 animate-pulse',
+      ringColor: 'ring-purple-500',
+      accentColor: 'purple'
     };
   }
   
-  // Sesi Rapat / Kajian (Nuansa Rose / Magenta / Pink yang Tegas & Fokus)
+  // Sesi Rapat / Kajian (Nuansa Rose / Ruby / Pink yang Elegan & Tegas)
   if (name.includes('rapat') || name.includes('kajian') || name.includes('musyawarah') || name.includes('evaluasi') || name.includes('workshop') || name.includes('briefing') || name.includes('khusus')) {
     return {
       type: 'rapat',
       namaSingkat: 'Rapat / Kajian',
       iconEmoji: '👥',
-      bgActive: 'bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 text-white shadow-lg shadow-rose-500/25 ring-2 ring-rose-400/40 border border-rose-400/50',
-      bgInactive: 'bg-rose-50/70 hover:bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60',
+      bgActive: 'bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 text-white shadow-md shadow-rose-500/30 ring-2 ring-rose-400 border border-rose-400',
+      bgInactive: 'bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-900 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/80 border border-rose-300 dark:border-rose-700 font-bold',
       tabBorder: 'border-rose-300 dark:border-rose-700',
       badge: 'bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800',
       badgeText: 'text-rose-700 dark:text-rose-300',
-      cardGradient: 'from-rose-700 via-pink-700 to-red-800',
-      dotColor: 'bg-pink-300',
-      dotPulse: 'bg-pink-300 animate-pulse',
+      cardGradient: 'from-rose-800 via-pink-800 to-red-950',
+      dotColor: 'bg-rose-400',
+      dotPulse: 'bg-rose-400 animate-pulse',
       ringColor: 'ring-rose-500',
       accentColor: 'rose'
     };
   }
 
-  // Sesi Siang / Dzuhur (Nuansa Amber / Kuning Surya Cerah)
+  // Sesi Siang / Dzuhur (Nuansa Amber / Oranye Surya Cerah)
   if (name.includes('siang') || name.includes('dzuhur')) {
     return {
       type: 'siang',
       namaSingkat: 'Siang',
       iconEmoji: '☀️',
-      bgActive: 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400/40 border border-amber-400/50',
-      bgInactive: 'bg-amber-50/70 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60',
+      bgActive: 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md shadow-amber-500/30 ring-2 ring-amber-400 border border-amber-400',
+      bgInactive: 'bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/80 border border-amber-300 dark:border-amber-700 font-bold',
       tabBorder: 'border-amber-300 dark:border-amber-700',
       badge: 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
       badgeText: 'text-amber-700 dark:text-amber-300',
-      cardGradient: 'from-amber-600 via-orange-600 to-amber-800',
-      dotColor: 'bg-orange-300',
-      dotPulse: 'bg-orange-300 animate-pulse',
+      cardGradient: 'from-amber-700 via-orange-700 to-amber-950',
+      dotColor: 'bg-orange-400',
+      dotPulse: 'bg-orange-400 animate-pulse',
       ringColor: 'ring-amber-500',
       accentColor: 'amber'
     };
   }
 
-  // Default: Sesi Pagi (KBM) (Nuansa Teal / Emerald / Hijau Toska Segar)
+  // Default: Sesi Pagi (KBM) (Nuansa Hijau Emerald / Toska Segar)
   return {
     type: 'pagi',
     namaSingkat: 'Pagi (KBM)',
     iconEmoji: '🌅',
-    bgActive: 'bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 text-white shadow-lg shadow-teal-500/25 ring-2 ring-emerald-400/40 border border-teal-400/50',
-    bgInactive: 'bg-teal-50/70 hover:bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/60',
-    tabBorder: 'border-teal-300 dark:border-teal-700',
-    badge: 'bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800',
-    badgeText: 'text-teal-700 dark:text-teal-300',
-    cardGradient: 'from-teal-600 via-teal-600 to-emerald-700',
-    dotColor: 'bg-emerald-300',
-    dotPulse: 'bg-emerald-300 animate-pulse',
-    ringColor: 'ring-teal-500',
-    accentColor: 'teal'
+    bgActive: 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400 border border-emerald-400',
+    bgInactive: 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/80 border border-emerald-300 dark:border-emerald-700 font-bold',
+    tabBorder: 'border-emerald-300 dark:border-emerald-700',
+    badge: 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+    badgeText: 'text-emerald-700 dark:text-emerald-300',
+    cardGradient: 'from-emerald-800 via-teal-800 to-cyan-950',
+    dotColor: 'bg-emerald-400',
+    dotPulse: 'bg-emerald-400 animate-pulse',
+    ringColor: 'ring-emerald-500',
+    accentColor: 'emerald'
   };
 };
 
@@ -169,14 +169,38 @@ const getLokasiList = (settings) => {
 const cariLokasiTerdekat = (lat, lon, lokasiList) => {
   let terbaik = null;
   for (const lok of lokasiList) {
-    const jarak = hitungJarakMeter(lat, lon, lok.latitude, lok.longitude);
+    const jarak = hitungJarakMeter(lat, lon, Number(lok.latitude), Number(lok.longitude));
     if (jarak === null) continue;
-    if (!terbaik || jarak < terbaik.jarak) terbaik = { ...lok, jarak, dalamRadius: jarak <= (lok.radiusMeter || 150) };
+    if (!terbaik || jarak < terbaik.jarakMeter) {
+      terbaik = { ...lok, jarakMeter: jarak, diDalamRadius: jarak <= Number(lok.radiusMeter || 150) };
+    }
   }
   return terbaik;
 };
 
-const generateLokasiId = () => 'lok_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// Cek apakah perangkat HP guru mendukung Geolocation API
+const isGeoSupported = () => typeof navigator !== 'undefined' && !!navigator.geolocation;
+
+// Ambil koordinat GPS perangkat guru
+const ambilPosisiSekarang = () =>
+  new Promise((resolve, reject) => {
+    if (!isGeoSupported()) {
+      reject(new Error('Perangkat / browser Anda tidak mendukung fitur lokasi GPS.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      (err) => {
+        let msg = 'Gagal membaca koordinat GPS.';
+        if (err.code === 1) msg = 'Izin akses lokasi (GPS) ditolak. Mohon izinkan akses lokasi pada browser HP Anda.';
+        else if (err.code === 2) msg = 'Sinyal GPS tidak terdeteksi. Pastikan GPS HP aktif.';
+        else if (err.code === 3) msg = 'Waktu permintaan GPS habis (timeout). Coba lagi di tempat terbuka.';
+        reject(new Error(msg));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+
 const generateSesiId = () => 'sesi_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // Buat token QR presensi baru (acak, unik tiap kali admin generate ulang)
@@ -190,10 +214,11 @@ const buildQrImageUrl = (payload) => `https://api.qrserver.com/v1/create-qr-code
 const isLokasiAktif = (settings) => getLokasiList(settings).length > 0;
 const isQrAktif = (settings) => !!settings?.qrToken;
 
-// Daftar sesi efektif (selalu minimal 1 sesi, migrasi otomatis dari jamMasuk/jamPulang lama)
+// Daftar sesi efektif (selalu minimal 3 sesi default: Pagi, Sore/Halaqoh, Rapat/Kajian jika belum dikustomisasi)
 const getSesiList = (settings) => {
-  if (Array.isArray(settings?.sesiList) && settings.sesiList.length > 0) return settings.sesiList;
-  return [{ id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: settings?.jamMasuk || '07:00', toleransiMenit: settings?.toleransiMenit ?? 15, jamPulang: settings?.jamPulang || '14:00' }];
+  if (Array.isArray(settings?.sesiList) && settings.sesiList.length > 1) return settings.sesiList;
+  if (Array.isArray(settings?.sesiList) && settings.sesiList.length === 1 && settings.sesiList[0].id !== 'pagi') return settings.sesiList;
+  return DEFAULT_SETTINGS.sesiList;
 };
 
 // ==========================================
@@ -543,17 +568,20 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   const [izinKeterangan, setIzinKeterangan] = useState('');
   const [verifikasiMode, setVerifikasiMode] = useState(null); // null | 'masuk' | 'pulang'
 
-  const sesiSemua = settings.sesiList;
+  const sesiSemua = getSesiList(settings);
   const sesiUtamaId = sesiSemua[0]?.id;
   const hariIni = getHariIni(now instanceof Date ? now : new Date());
-  // PERBAIKAN: hanya sesi yang dijadwalkan Admin untuk guru ini pada hari ini
-  // yang ditampilkan — mendukung jam kerja berbeda per guru per hari.
+  // Sesi yang dijadwalkan Admin untuk guru ini pada hari ini
+  // jika jadwal belum diatur/tidak spesifik, tampilkan seluruh sesi yang tersedia (Pagi, Sore, Rapat)
   const sesiTerjadwalHariIni = useMemo(
-    () => sesiSemua.filter(s => isGuruTerjadwal(settings, hariIni, s.id, teacher?.id)),
-    [settings, hariIni, teacher?.id]
+    () => {
+      const filtered = sesiSemua.filter(s => isGuruTerjadwal(settings, hariIni, s.id, teacher?.id));
+      return filtered.length > 0 ? filtered : sesiSemua;
+    },
+    [settings, hariIni, teacher?.id, sesiSemua]
   );
-  const sesiList = sesiTerjadwalHariIni;
-  const multiSesi = sesiList.length > 1;
+  const sesiList = sesiTerjadwalHariIni.length > 0 ? sesiTerjadwalHariIni : sesiSemua;
+  const multiSesi = sesiList.length > 0;
   const [selectedSesiId, setSelectedSesiId] = useState(initialSesiId || sesiSemua[0]?.id);
 
   // Sinkronkan sesi jika initialSesiId berubah dari luar (misal klik akses cepat di profil)
@@ -563,7 +591,7 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     }
   }, [initialSesiId]);
 
-  const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0];
+  const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0] || sesiSemua[0];
 
   const today = todayStr();
   const record = teacher && sesiAktif ? presensiGuru.find(r => r.teacherId === teacher.id && r.date === today && (r.sesiId || sesiUtamaId) === sesiAktif.id) : null;
@@ -1124,9 +1152,9 @@ function AdminRekapPanel({
     return teachers.find(t => t.id === selectedTeacherId) || teachers[0];
   }, [teachers, selectedTeacherId]);
 
-  const sesiList = settings.sesiList;
+  const sesiList = getSesiList(settings);
   const sesiUtamaId = sesiList[0]?.id;
-  const multiSesi = sesiList.length > 1;
+  const multiSesi = sesiList.length > 0;
   const [filterSesiId, setFilterSesiId] = useState(sesiUtamaId);
   const sesiTerpilih = sesiList.find(s => s.id === filterSesiId) || sesiList[0];
 
