@@ -25,7 +25,7 @@ import {
   deduplicateTeachers
 } from './services/dbService';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import PresensiGuruView from './PresensiGuruView';
+import PresensiGuruView, { getSesiTheme } from './PresensiGuruView';
 
 // 🪄 HELPER UNIVERSAL: Mengecek status keaktifan pegawai (Mencegah pegawai Non-Aktif / Resign muncul di operasional gaji & presensi)
 export const isTeacherActive = (t) => {
@@ -9756,16 +9756,17 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
   const presensiSettings = settings?.presensiGuruSettings || {};
   const defaultSesiList = [
-    { id: 'pagi', nama: 'Sesi Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' },
-    { id: 'sore', nama: 'Sesi Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' }
+    { id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' },
+    { id: 'sore', nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' },
+    { id: 'rapat', nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' }
   ];
   const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
     ? presensiSettings.sesiList 
     : defaultSesiList;
 
-  // Pastikan jika hanya ada 1 sesi default di settings, kita sediakan opsi sesi Sore juga agar Guru Halaqoh/Sore bisa presensi
+  // Pastikan opsi multi-sesi lengkap tersedia agar guru bisa memilih sesi Pagi, Sore, maupun Rapat
   const sesiList = rawSesiList.length === 1 && rawSesiList[0].id === 'pagi'
-    ? [...rawSesiList, { id: 'sore', nama: 'Sesi Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' }]
+    ? defaultSesiList
     : rawSesiList;
 
   const [selectedQuickSesiId, setSelectedQuickSesiId] = useState(() => {
@@ -10552,10 +10553,11 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                              <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-extrabold text-slate-800 dark:text-white text-base md:text-lg">Presensi Guru Hari Ini</h3>
                                 
-                                {/* 🪄 PILIHAN SESI LENGKAP: PAGI & SORE / HALAQOH */}
-                                <div className="flex items-center gap-1 bg-white/80 dark:bg-slate-900/70 p-1 rounded-xl border border-teal-200/80 dark:border-teal-700/60 shadow-sm">
+                                {/* 🪄 PILIHAN SESI LENGKAP: PAGI, SORE (HALAQOH), RAPAT/KAJIAN DENGAN WARNA BERBEDA */}
+                                <div className="flex flex-wrap items-center gap-1.5 bg-white/90 dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
                                   {sesiList.map(s => {
                                     const isSel = s.id === currentQuickSesi.id;
+                                    const theme = getSesiTheme(s);
                                     const sRec = (presensiGuru || []).find(r => 
                                       (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
                                       r.date === todayIsoDate && 
@@ -10567,14 +10569,15 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                                         key={s.id}
                                         type="button"
                                         onClick={() => setSelectedQuickSesiId(s.id)}
-                                        className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
                                           isSel 
-                                            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm' 
-                                            : 'text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-900/30'
+                                            ? `${theme.bgActive} scale-105 shadow-sm` 
+                                            : `${theme.bgInactive}`
                                         }`}
                                       >
+                                        <span>{theme.iconEmoji}</span>
                                         <span>{s.nama.replace(/\(.*\)/, '').trim()}</span>
-                                        {isDone && <span className={`w-2 h-2 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : 'bg-emerald-300 animate-pulse'}`}></span>}
+                                        {isDone && <span className={`w-2 h-2 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : `${theme.dotPulse}`}`}></span>}
                                       </button>
                                     );
                                   })}
@@ -10691,8 +10694,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                        <button 
                           type="button"
                           onClick={() => setActiveTab('portal_presensi')}
-                          className="flex items-center gap-1 hover:underline hover:text-teal-800 dark:hover:text-teal-300 transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 hover:underline hover:text-teal-800 dark:hover:text-teal-300 transition-colors cursor-pointer"
                        >
+                          <span>{getSesiTheme(currentQuickSesi).iconEmoji}</span>
                           <span>Buka Presensi Sesi {currentQuickSesi.nama.replace(/\(.*\)/, '').trim()} & Ajukan Izin</span>
                           <ChevronRight size={14} />
                        </button>

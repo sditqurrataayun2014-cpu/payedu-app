@@ -37,10 +37,12 @@ const DEFAULT_SETTINGS = {
   lokasi: { latitude: null, longitude: null, radiusMeter: 150 },
   lokasiList: [],
   qrToken: '',
-  // FITUR BARU: multi-sesi (CRUD) — mendukung sesi Pagi (KBM) & Sore (Halaqoh Al-Qur'an),
+  // FITUR BARU: multi-sesi (CRUD) — mendukung sesi Pagi (KBM), Sore (Halaqoh), Rapat/Kajian,
   // atau sesi lain yang diatur bebas oleh Admin. Sesi pertama = sesi utama/legacy.
   sesiList: [
     { id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: '07:00', toleransiMenit: 15, jamPulang: '14:00' },
+    { id: 'sore', nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' },
+    { id: 'rapat', nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' },
   ],
 };
 const STATUS_OPTIONS = ['Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Cuti', 'Dinas Luar'];
@@ -59,6 +61,87 @@ const toMinutes = (hhmm) => {
 const nowToHHMMSS = (d) => d.toTimeString().slice(0, 8);
 const formatJam = (hhmmss) => hhmmss ? hhmmss.slice(0, 5) : '--:--';
 const formatTanggalPanjang = (d) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+// ==========================================
+// TEMA WARNA & IKON DISTINKTIF TIAP SESI (PAGI, SORE/HALAQOH, RAPAT/KAJIAN)
+// ==========================================
+export const getSesiTheme = (sesi) => {
+  const name = String(sesi?.nama || sesi?.id || sesi || '').toLowerCase();
+  
+  // Sesi Sore / Halaqoh (Nuansa Malam/Ungu/Indigo/Quran yang Tenang)
+  if (name.includes('sore') || name.includes('halaqoh') || name.includes('malam') || name.includes('maghrib') || name.includes('isya')) {
+    return {
+      type: 'sore',
+      namaSingkat: 'Sore (Halaqoh)',
+      iconEmoji: '🌙',
+      bgActive: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white shadow-lg shadow-indigo-500/25 ring-2 ring-indigo-400/40 border border-indigo-400/50',
+      bgInactive: 'bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60',
+      tabBorder: 'border-indigo-300 dark:border-indigo-700',
+      badge: 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+      badgeText: 'text-indigo-700 dark:text-indigo-300',
+      cardGradient: 'from-indigo-700 via-purple-700 to-violet-900',
+      dotColor: 'bg-purple-300',
+      dotPulse: 'bg-purple-300 animate-pulse',
+      ringColor: 'ring-indigo-500',
+      accentColor: 'indigo'
+    };
+  }
+  
+  // Sesi Rapat / Kajian (Nuansa Rose / Magenta / Pink yang Tegas & Fokus)
+  if (name.includes('rapat') || name.includes('kajian') || name.includes('musyawarah') || name.includes('evaluasi') || name.includes('workshop') || name.includes('briefing') || name.includes('khusus')) {
+    return {
+      type: 'rapat',
+      namaSingkat: 'Rapat / Kajian',
+      iconEmoji: '👥',
+      bgActive: 'bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 text-white shadow-lg shadow-rose-500/25 ring-2 ring-rose-400/40 border border-rose-400/50',
+      bgInactive: 'bg-rose-50/70 hover:bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60',
+      tabBorder: 'border-rose-300 dark:border-rose-700',
+      badge: 'bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800',
+      badgeText: 'text-rose-700 dark:text-rose-300',
+      cardGradient: 'from-rose-700 via-pink-700 to-red-800',
+      dotColor: 'bg-pink-300',
+      dotPulse: 'bg-pink-300 animate-pulse',
+      ringColor: 'ring-rose-500',
+      accentColor: 'rose'
+    };
+  }
+
+  // Sesi Siang / Dzuhur (Nuansa Amber / Kuning Surya Cerah)
+  if (name.includes('siang') || name.includes('dzuhur')) {
+    return {
+      type: 'siang',
+      namaSingkat: 'Siang',
+      iconEmoji: '☀️',
+      bgActive: 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400/40 border border-amber-400/50',
+      bgInactive: 'bg-amber-50/70 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60',
+      tabBorder: 'border-amber-300 dark:border-amber-700',
+      badge: 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+      badgeText: 'text-amber-700 dark:text-amber-300',
+      cardGradient: 'from-amber-600 via-orange-600 to-amber-800',
+      dotColor: 'bg-orange-300',
+      dotPulse: 'bg-orange-300 animate-pulse',
+      ringColor: 'ring-amber-500',
+      accentColor: 'amber'
+    };
+  }
+
+  // Default: Sesi Pagi (KBM) (Nuansa Teal / Emerald / Hijau Toska Segar)
+  return {
+    type: 'pagi',
+    namaSingkat: 'Pagi (KBM)',
+    iconEmoji: '🌅',
+    bgActive: 'bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 text-white shadow-lg shadow-teal-500/25 ring-2 ring-emerald-400/40 border border-teal-400/50',
+    bgInactive: 'bg-teal-50/70 hover:bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/60',
+    tabBorder: 'border-teal-300 dark:border-teal-700',
+    badge: 'bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800',
+    badgeText: 'text-teal-700 dark:text-teal-300',
+    cardGradient: 'from-teal-600 via-teal-600 to-emerald-700',
+    dotColor: 'bg-emerald-300',
+    dotPulse: 'bg-emerald-300 animate-pulse',
+    ringColor: 'ring-teal-500',
+    accentColor: 'teal'
+  };
+};
 
 // Jarak antar 2 koordinat GPS (rumus Haversine), hasil dalam meter
 const hitungJarakMeter = (lat1, lon1, lat2, lon2) => {
@@ -577,72 +660,87 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
 
   return (
     <div className="space-y-6">
-      {/* PEMILIH SESI (hanya tampil jika Admin mengatur lebih dari 1 sesi, mis. Pagi/KBM & Sore/Halaqoh) */}
+      {/* PEMILIH SESI (Pagi, Sore/Halaqoh, Rapat/Kajian) DENGAN WARNA BERBEDA */}
       {multiSesi && (
-        <div className="flex bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-1.5 gap-1.5 shadow-sm w-fit">
-          {sesiList.map(s => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSelectedSesiId(s.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${sesiAktif.id === s.id ? 'bg-teal-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              {s.nama}
-            </button>
-          ))}
+        <div className="flex flex-wrap bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1.5 gap-2 shadow-sm w-fit">
+          {sesiList.map(s => {
+            const theme = getSesiTheme(s);
+            const isSel = sesiAktif.id === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSelectedSesiId(s.id)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                  isSel
+                    ? `${theme.bgActive} scale-105 shadow-md`
+                    : `${theme.bgInactive}`
+                }`}
+              >
+                <span className="text-base leading-none">{theme.iconEmoji}</span>
+                <span>{s.nama}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* KARTU JAM & AKSI ABSEN */}
-      <div className="bg-gradient-to-br from-teal-600 via-teal-600 to-emerald-700 rounded-[2rem] shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
-        <div className="absolute -right-10 -top-10 w-52 h-52 bg-white/10 rounded-full" />
-        <div className="absolute -right-4 bottom-[-40px] w-32 h-32 bg-white/10 rounded-full" />
+      {/* KARTU JAM & AKSI ABSEN DENGAN GRADASI SESUAI WARNA TEMA SESI AKTIF */}
+      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-[2rem] shadow-xl p-6 sm:p-8 text-white relative overflow-hidden transition-all duration-500`}>
+        <div className="absolute -right-10 -top-10 w-52 h-52 bg-white/10 rounded-full blur-sm" />
+        <div className="absolute -right-4 bottom-[-40px] w-32 h-32 bg-white/10 rounded-full blur-sm" />
         <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-6">
           <div>
-            <p className="text-teal-100 text-xs font-black uppercase tracking-widest">{formatTanggalPanjang(now)}</p>
-            <p className="text-5xl sm:text-6xl font-black tracking-tight mt-1 font-mono">{now.toTimeString().slice(0, 8)}</p>
-            <p className="mt-3 text-teal-100 text-sm font-bold">
-              Assalamu'alaikum, <span className="text-white">{teacher.name}</span> — {teacher.position || 'Guru'}
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 border border-white/20 shadow-xs">
+                <span>{getSesiTheme(sesiAktif).iconEmoji}</span>
+                <span>Sesi {sesiAktif.nama}</span>
+              </span>
+              <span className="text-white/80 text-xs font-black uppercase tracking-widest">{formatTanggalPanjang(now)}</span>
+            </div>
+            <p className="text-5xl sm:text-6xl font-black tracking-tight mt-1 font-mono drop-shadow-sm">{now.toTimeString().slice(0, 8)}</p>
+            <p className="mt-3 text-white/90 text-sm font-bold">
+              Assalamu'alaikum, <span className="text-white font-black underline decoration-white/40">{teacher.name}</span> — {teacher.position || 'Guru'}
             </p>
-            <p className="text-teal-100/80 text-xs mt-1 flex items-center gap-1">
-              <MapPin size={12} /> Sesi {sesiAktif.nama}: jam masuk standar {formatJam(sesiAktif.jamMasuk + ':00')} (toleransi {sesiAktif.toleransiMenit} menit)
+            <p className="text-white/80 text-xs mt-1 flex items-center gap-1">
+              <MapPin size={12} /> Jam masuk: <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')}</b> (toleransi {sesiAktif.toleransiMenit} mnt) • Pulang: <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')}</b>
             </p>
           </div>
           <div className="flex flex-col gap-3 min-w-[220px]">
             <div className="bg-white/15 backdrop-blur rounded-2xl p-4 border border-white/20">
-              <p className="text-[10px] font-black uppercase tracking-widest text-teal-100">Status Hari Ini</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-white/80">Status Hari Ini ({sesiAktif.nama})</p>
               <p className="text-lg font-black mt-1">
                 {record?.status && (record.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(record.status)) ? record.status : 'Belum Absen'}
                 {record?.status === 'Terlambat' && <span className="text-amber-200 font-bold text-sm"> ({record.terlambatMenit} menit)</span>}
               </p>
-              {record?.jamMasuk && <p className="text-xs text-teal-100 mt-1">Masuk: {formatJam(record.jamMasuk)} {record?.jamPulang && `• Pulang: ${formatJam(record.jamPulang)}`}</p>}
-              {record?.keterangan && <p className="text-xs text-teal-100 mt-1 italic">"{record.keterangan}"</p>}
+              {record?.jamMasuk && <p className="text-xs text-white/90 mt-1">Masuk: {formatJam(record.jamMasuk)} {record?.jamPulang && `• Pulang: ${formatJam(record.jamPulang)}`}</p>}
+              {record?.keterangan && <p className="text-xs text-white/90 mt-1 italic">"{record.keterangan}"</p>}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 disabled={sudahMasuk || isIzinLike}
                 onClick={() => setVerifikasiMode('masuk')}
-                className="flex items-center justify-center gap-1.5 bg-white text-teal-700 font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-teal-50 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="flex items-center justify-center gap-1.5 bg-white text-slate-800 font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
               >
-                <LogIn size={16} strokeWidth={2.5} /> Absen Masuk
+                <LogIn size={16} strokeWidth={2.5} className="text-emerald-600" /> Absen Masuk
               </button>
               <button
                 type="button"
                 disabled={!sudahMasuk || sudahPulang}
                 onClick={() => setVerifikasiMode('pulang')}
-                className="flex items-center justify-center gap-1.5 bg-slate-900/80 text-white font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="flex items-center justify-center gap-1.5 bg-slate-900/80 text-white font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
               >
-                <LogOut size={16} strokeWidth={2.5} /> Absen Pulang
+                <LogOut size={16} strokeWidth={2.5} className="text-indigo-400" /> Absen Pulang
               </button>
             </div>
             {perluVerifikasi && (
-              <p className="text-[10px] text-teal-100/80 flex items-center gap-1 justify-center">
+              <p className="text-[10px] text-white/80 flex items-center gap-1 justify-center">
                 <ShieldCheck size={12} /> Absen memerlukan verifikasi {lokasiAktif && qrAktif ? 'lokasi GPS & QR sekolah' : lokasiAktif ? 'lokasi GPS' : 'QR sekolah'}
               </p>
             )}
             {!sudahMasuk && !isIzinLike && (
-              <button type="button" onClick={() => setShowIzinModal(true)} className="text-xs font-bold text-teal-100 underline underline-offset-2 hover:text-white text-center">
+              <button type="button" onClick={() => setShowIzinModal(true)} className="text-xs font-bold text-white/90 underline underline-offset-2 hover:text-white text-center cursor-pointer">
                 Tidak masuk hari ini? Ajukan Sakit / Izin
               </button>
             )}
@@ -1573,9 +1671,27 @@ function AdminRekapPanel({
             </>
           )}
           {multiSesi && (
-            <select value={filterSesiId} onChange={e => setFilterSesiId(e.target.value)} className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold dark:text-white cursor-pointer">
-              {sesiList.map(s => <option key={s.id} value={s.id}>Sesi {s.nama}</option>)}
-            </select>
+            <div className="flex flex-wrap items-center bg-slate-100/90 dark:bg-slate-900/80 p-1 rounded-xl gap-1 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              {sesiList.map(s => {
+                const theme = getSesiTheme(s);
+                const isSel = filterSesiId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setFilterSesiId(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSel
+                        ? `${theme.bgActive} shadow-xs`
+                        : `${theme.bgInactive}`
+                    }`}
+                  >
+                    <span>{theme.iconEmoji}</span>
+                    <span>{s.nama}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
           {viewMode === 'harian' && (
             <>
@@ -2072,29 +2188,41 @@ function SesiSettingField({ settingsForm, setSettingsForm, showConfirm }) {
   };
 
   return (
-    <div className="space-y-2">
-      {list.map((sesi, i) => (
-        <div key={sesi.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-              <Clock3 size={12} className="text-teal-500" /> {sesi.nama} {i === 0 && <span className="text-[9px] font-bold text-slate-400 uppercase">(Utama)</span>}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">Masuk {sesi.jamMasuk} (toleransi {sesi.toleransiMenit}m) • Pulang {sesi.jamPulang}</p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <button type="button" onClick={() => bukaEdit(sesi)} className="p-2 bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-slate-100 transition-colors"><Edit size={13} /></button>
-            {list.length > 1 && (
-              <button type="button" onClick={() => hapusSesi(sesi)} className="p-2 bg-slate-50 dark:bg-slate-800 text-rose-500 rounded-lg hover:bg-rose-50 transition-colors"><Trash2 size={13} /></button>
-            )}
-          </div>
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {list.map((sesi, i) => {
+          const theme = getSesiTheme(sesi);
+          return (
+            <div key={sesi.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 flex items-center justify-between gap-3 shadow-xs">
+              <div className="min-w-0 flex items-center gap-2.5">
+                <span className="text-xl shrink-0">{theme.iconEmoji}</span>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs font-black text-slate-800 dark:text-slate-100">{sesi.nama}</p>
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${theme.badge}`}>
+                      {theme.namaSingkat}
+                    </span>
+                    {i === 0 && <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">(Utama)</span>}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Masuk {sesi.jamMasuk} (toleransi {sesi.toleransiMenit}m) • Pulang {sesi.jamPulang}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" onClick={() => bukaEdit(sesi)} className="p-2 bg-slate-50 dark:bg-slate-800 text-slate-500 rounded-lg hover:bg-slate-100 transition-colors" title="Edit Sesi"><Edit size={13} /></button>
+                {list.length > 1 && (
+                  <button type="button" onClick={() => hapusSesi(sesi)} className="p-2 bg-slate-50 dark:bg-slate-800 text-rose-500 rounded-lg hover:bg-rose-50 transition-colors" title="Hapus Sesi"><Trash2 size={13} /></button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       {form ? (
-        <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10 p-3 space-y-3">
+        <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10 p-4 space-y-3">
           <div>
             <label className={cx.label}>Nama Sesi</label>
-            <input type="text" className={cx.inputFocus} placeholder="Contoh: Sore (Halaqoh Al-Qur'an)" value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} />
+            <input type="text" className={cx.inputFocus} placeholder="Contoh: Pagi (KBM) / Sore (Halaqoh) / Rapat / Kajian" value={form.nama} onChange={e => setForm({ ...form, nama: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -2120,9 +2248,35 @@ function SesiSettingField({ settingsForm, setSettingsForm, showConfirm }) {
           </div>
         </div>
       ) : (
-        <button type="button" onClick={bukaTambah} className="w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
-          <Clock3 size={14} /> Tambah Sesi
-        </button>
+        <div className="space-y-2">
+          <button type="button" onClick={bukaTambah} className="w-full flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-black py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+            <Clock3 size={14} /> + Tambah Sesi Kustom
+          </button>
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider w-full">Tambah Cepat Preset:</span>
+            <button
+              type="button"
+              onClick={() => setForm({ id: null, nama: 'Pagi (KBM)', jamMasuk: '07:00', toleransiMenit: 15, jamPulang: '14:00' })}
+              className="px-2.5 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-lg text-[10px] font-black flex items-center gap-1 hover:bg-teal-100 cursor-pointer"
+            >
+              <span>🌅</span> + Pagi (KBM)
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ id: null, nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' })}
+              className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[10px] font-black flex items-center gap-1 hover:bg-indigo-100 cursor-pointer"
+            >
+              <span>🌙</span> + Sore (Halaqoh)
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ id: null, nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' })}
+              className="px-2.5 py-1 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg text-[10px] font-black flex items-center gap-1 hover:bg-rose-100 cursor-pointer"
+            >
+              <span>👥</span> + Rapat / Kajian
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2194,13 +2348,18 @@ function JadwalGuruSettingField({ settingsForm, setSettingsForm, teachers, showC
 
       {/* Tab Sesi (hanya tampil jika lebih dari 1 sesi) */}
       {sesiList.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {sesiList.map(s => (
-            <button key={s.id} type="button" onClick={() => setSelectedSesiId(s.id)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border ${sesiAktifId === s.id ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 border-teal-300 dark:border-teal-700' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'}`}>
-              Sesi {s.nama}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl w-fit">
+          {sesiList.map(s => {
+            const theme = getSesiTheme(s);
+            const isSel = sesiAktifId === s.id;
+            return (
+              <button key={s.id} type="button" onClick={() => setSelectedSesiId(s.id)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${isSel ? `${theme.bgActive} shadow-xs` : `${theme.bgInactive}`}`}>
+                <span>{theme.iconEmoji}</span>
+                <span>Sesi {s.nama}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
