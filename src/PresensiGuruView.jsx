@@ -6,7 +6,7 @@ import {
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users
 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { pushPresensiGuru } from './services/dbService';
+import { pushPresensiGuru, fetchPresensiGuru } from './services/dbService';
 
 // ==========================================
 // KONSTANTA & HELPER LOKAL
@@ -155,22 +155,45 @@ const hitungJarakMeter = (lat1, lon1, lat2, lon2) => {
   return Math.round(R * c);
 };
 
-// Menggabungkan lokasiList (baru) dengan lokasi tunggal (lama, fallback) agar data lama tetap jalan
+// Menggabungkan lokasiList (baru) dengan lokasi tunggal (lama, fallback) agar data lama tetap jalan & kebal berbagai format properti
 const getLokasiList = (settings) => {
   const list = Array.isArray(settings?.lokasiList)
-    ? settings.lokasiList.filter(l => l && l.latitude != null && l.longitude != null && !isNaN(Number(l.latitude)) && !isNaN(Number(l.longitude)))
+    ? settings.lokasiList
+        .filter(l => l && (l.latitude != null || l.lat != null) && (l.longitude != null || l.lng != null || l.long != null))
+        .map(l => {
+          const rawLat = l.latitude ?? l.lat;
+          const rawLon = l.longitude ?? l.lng ?? l.long;
+          const lat = Number(rawLat);
+          const lon = Number(rawLon);
+          const radius = Number(l.radiusMeter ?? l.radius) || 150;
+          return {
+            ...l,
+            id: l.id || 'loc_' + Math.random().toString(36).slice(2, 7),
+            nama: l.nama || 'Lokasi Presensi',
+            latitude: lat,
+            longitude: lon,
+            radiusMeter: radius,
+            radius: radius
+          };
+        })
+        .filter(l => !isNaN(l.latitude) && !isNaN(l.longitude))
     : [];
   if (list.length > 0) return list;
-  if (settings?.lokasi?.latitude != null && settings?.lokasi?.longitude != null) {
-    const lat = Number(settings.lokasi.latitude);
-    const lon = Number(settings.lokasi.longitude);
+
+  const rawLegacyLat = settings?.lokasi?.latitude ?? settings?.lokasi?.lat;
+  const rawLegacyLon = settings?.lokasi?.longitude ?? settings?.lokasi?.lng ?? settings?.lokasi?.long;
+  if (rawLegacyLat != null && rawLegacyLon != null) {
+    const lat = Number(rawLegacyLat);
+    const lon = Number(rawLegacyLon);
+    const radius = Number(settings.lokasi.radiusMeter ?? settings.lokasi.radius) || 150;
     if (!isNaN(lat) && !isNaN(lon)) {
       return [{
         id: 'legacy',
         nama: settings.lokasi.nama || 'Lokasi Sekolah',
         latitude: lat,
         longitude: lon,
-        radiusMeter: Number(settings.lokasi.radiusMeter) || 150
+        radiusMeter: radius,
+        radius: radius
       }];
     }
   }
@@ -185,14 +208,15 @@ const cariLokasiTerdekat = (lat, lon, lokasiList) => {
 
   for (const lok of lokasiList) {
     if (!lok) continue;
-    const latNum = Number(lok.latitude);
-    const lonNum = Number(lok.longitude);
+    const latNum = Number(lok.latitude ?? lok.lat);
+    const lonNum = Number(lok.longitude ?? lok.lng ?? lok.long);
     if (isNaN(latNum) || isNaN(lonNum)) continue;
 
-    const jarak = hitungJarakMeter(lat, lon, latNum, lonNum);
-    if (jarak === null || isNaN(jarak)) continue;
+    const rawJarak = hitungJarakMeter(lat, lon, latNum, lonNum);
+    if (rawJarak === null || isNaN(rawJarak)) continue;
+    const jarak = Math.max(0, Math.round(rawJarak));
 
-    const radius = Number(lok.radiusMeter) || 150;
+    const radius = Number(lok.radiusMeter ?? lok.radius) || 150;
     const dalamRadius = jarak <= radius;
 
     const item = {
@@ -200,6 +224,7 @@ const cariLokasiTerdekat = (lat, lon, lokasiList) => {
       latitude: latNum,
       longitude: lonNum,
       radiusMeter: radius,
+      radius: radius,
       jarakMeter: jarak,
       jarak: jarak, // Kompatibilitas ganda
       dalamRadius: dalamRadius,
@@ -497,14 +522,50 @@ export default function PresensiGuruView({
     pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Push warning:', e));
   };
 
-  // Identifikasi profil guru yang sedang aktif/login
-  const matchedTeacher = (
-    activeTeachers.find(t => t.linkedUsername && t.linkedUsername === currentUser?.username)
-    || activeTeachers.find(t => t.id === currentUser?.id)
-    || activeTeachers.find(t => (t.name || '').trim().toLowerCase() === (currentUser?.name || '').trim().toLowerCase())
-    || (currentUser?.username ? activeTeachers.find(t => (t.name || '').toLowerCase().replace(/[^a-z]/g, '').includes((currentUser.username || '').toLowerCase())) : null)
-    || (activeTeachers.length > 0 && !isAdmin ? activeTeachers[0] : null)
-  );
+  // Identifikasi profil guru yang sedang aktif/login secara akurat & aman
+  const matchedTeacher = useMemo(() => {
+    if (!currentUser) return null;
+    const curId = currentUser.id || currentUser.teacherId;
+    const curUser = (currentUser.username || '').trim().toLowerCase();
+    const curName = (currentUser.name || '').trim().toLowerCase();
+    const cleanCurName = curName.replace(/[^a-z0-9]/g, '');
+
+    // 1. Cocokkan ID
+    if (curId) {
+      const byId = activeTeachers.find(t => String(t.id).trim() === String(curId).trim());
+      if (byId) return byId;
+    }
+
+    // 2. Cocokkan Linked Username
+    if (curUser) {
+      const byLinked = activeTeachers.find(t => t.linkedUsername && String(t.linkedUsername).trim().toLowerCase() === curUser);
+      if (byLinked) return byLinked;
+    }
+
+    // 3. Cocokkan NIPY
+    if (curUser) {
+      const byNipy = activeTeachers.find(t => t.nipy && String(t.nipy).trim().toLowerCase() === curUser);
+      if (byNipy) return byNipy;
+    }
+
+    // 4. Cocokkan Nama Lengkap
+    if (curName) {
+      const byName = activeTeachers.find(t => (t.name || '').trim().toLowerCase() === curName);
+      if (byName) return byName;
+    }
+
+    // 5. Cocokkan Nama Bersih (tanpa gelar/tanda baca)
+    if (cleanCurName) {
+      const byClean = activeTeachers.find(t => {
+        const cleanT = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return cleanT && (cleanT === cleanCurName || cleanT.includes(cleanCurName) || cleanCurName.includes(cleanT));
+      });
+      if (byClean) return byClean;
+    }
+
+    // Jangan pernah fallback acak ke guru urutan pertama (mencegah salah sasaran absensi)
+    return null;
+  }, [activeTeachers, currentUser]);
 
   return (
     <div className={cx.pageWrapper}>
@@ -568,18 +629,28 @@ export default function PresensiGuruView({
       </div>
 
       {isTeacher ? (
-        <TeacherSelfService
-          now={now}
-          settings={settings}
-          teacher={matchedTeacher}
-          presensiGuru={presensiGuru}
-          upsertRecord={upsertRecord}
-          showToast={showToast}
-          addAuditLog={addAuditLog}
-          currentUser={currentUser}
-          schoolProfile={schoolProfile}
-          initialSesiId={initialSesiId}
-        />
+        matchedTeacher ? (
+          <TeacherSelfService
+            now={now}
+            settings={settings}
+            teacher={matchedTeacher}
+            presensiGuru={presensiGuru}
+            upsertRecord={upsertRecord}
+            showToast={showToast}
+            addAuditLog={addAuditLog}
+            currentUser={currentUser}
+            schoolProfile={schoolProfile}
+            initialSesiId={initialSesiId}
+          />
+        ) : (
+          <div className={`${cx.card3xl} p-10 text-center space-y-3`}>
+            <AlertCircle className="mx-auto text-amber-500" size={48} />
+            <h3 className="text-lg font-black text-slate-800 dark:text-white">Profil Guru Belum Terhubung</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+              Akun login Anda (<strong>{currentUser?.name || currentUser?.username || 'Guru'}</strong>) belum terhubung dengan data profil guru di sistem. Hubungi Administrator / Tata Usaha Sekolah untuk memeriksa data kepegawaian Anda.
+            </p>
+          </div>
+        )
       ) : (
         <AdminRekapPanel
           settings={settings}
@@ -953,14 +1024,14 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         const terdekat = cariLokasiTerdekat(latitude, longitude, lokasiList);
-        const jarak = terdekat ? (terdekat.jarakMeter ?? terdekat.jarak ?? 0) : null;
+        const jarak = terdekat ? (Number.isFinite(terdekat.jarakMeter) ? terdekat.jarakMeter : (Number.isFinite(terdekat.jarak) ? terdekat.jarak : 0)) : null;
         const dalamRadius = terdekat ? (terdekat.dalamRadius ?? terdekat.diDalamRadius ?? false) : false;
 
         setGpsInfo(terdekat ? {
           latitude,
           longitude,
-          jarakMeter: jarak,
-          jarak: jarak,
+          jarakMeter: jarak ?? 0,
+          jarak: jarak ?? 0,
           akurasi: Math.round(accuracy || 0),
           namaLokasi: terdekat.nama || 'Lokasi Sekolah',
           radiusMeter: terdekat.radiusMeter || 150,
@@ -970,7 +1041,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
         setGpsStatus(dalamRadius ? 'ok' : 'fail');
         if (!dalamRadius) {
           setGpsError(terdekat
-            ? `Posisi GPS Anda terdeteksi berjarak ±${jarak}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m). Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
+            ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m). Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
             : 'Titik koordinat lokasi sekolah belum dapat diverifikasi atau belum didaftarkan di pengaturan. Hubungi Admin Sekolah.');
         }
       },
@@ -1242,26 +1313,95 @@ function AdminRekapPanel({
   }, [filterDate]);
   const hariIni = getHariIni(selectedDateObj);
 
-  const getRecord = (teacherId) => presensiGuru.find(r => r.teacherId === teacherId && r.date === filterDate && (r.sesiId || sesiUtamaId) === filterSesiId);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [showAllTeachersHarian, setShowAllTeachersHarian] = useState(false);
+
+  const handleSyncCloud = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await fetchPresensiGuru();
+      if (res.status === 'success' && Array.isArray(res.data)) {
+        if (typeof setPresensiGuru === 'function') {
+          setPresensiGuru(res.data);
+        }
+        showToast(`Sinkronisasi sukses! ${res.data.length} catatan presensi termutakhir dimuat dari Cloud.`, 'success');
+      } else {
+        showToast('Sinkronisasi selesai (data lokal mutakhir).', 'info');
+      }
+    } catch (err) {
+      console.warn('Gagal sync presensi:', err);
+      showToast('Gagal terhubung ke Cloud. Menggunakan data lokal.', 'error');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  const getRecord = useCallback((target) => {
+    if (!target) return undefined;
+    const targetId = typeof target === 'object' ? String(target.id ?? '').trim() : String(target).trim();
+    const targetName = typeof target === 'object' ? (target.name || '').trim().toLowerCase() : '';
+    const cleanTargetName = targetName ? targetName.replace(/[^a-z0-9]/g, '') : '';
+    const targetLinked = typeof target === 'object' ? (target.linkedUsername || '').trim().toLowerCase() : '';
+    const targetNipy = typeof target === 'object' ? (target.nipy || target.nip || '').trim().toLowerCase() : '';
+
+    return (presensiGuru || []).find(r => {
+      if (!r || r.date !== filterDate) return false;
+
+      // Pencocokan sesi: jika filterSesiId diset, cocokkan id atau nama sesi
+      const rSesi = r.sesiId || sesiUtamaId;
+      const isSesiMatch = rSesi === filterSesiId || 
+        (!filterSesiId && rSesi === sesiUtamaId) ||
+        (r.sesiNama && sesiTerpilih?.nama && r.sesiNama.trim().toLowerCase() === sesiTerpilih.nama.trim().toLowerCase());
+      
+      if (!isSesiMatch) return false;
+
+      // 1. Cocokkan ID
+      const rId = String(r.teacherId || '').trim();
+      if (rId && targetId && rId === targetId) return true;
+
+      // 2. Cocokkan Nama Lengkap atau Nama Bersih
+      if (targetName && r.teacherName) {
+        const rName = String(r.teacherName).trim().toLowerCase();
+        if (rName === targetName) return true;
+        const cleanRName = rName.replace(/[^a-z0-9]/g, '');
+        if (cleanRName && cleanTargetName && (cleanRName === cleanTargetName || cleanRName.includes(cleanTargetName) || cleanTargetName.includes(cleanRName))) {
+          return true;
+        }
+      }
+
+      // 3. Cocokkan via NIPY / Username jika ID tersimpan sebagai NIPY/Username
+      if (rId && ((targetNipy && rId === targetNipy) || (targetLinked && rId === targetLinked))) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [presensiGuru, filterDate, filterSesiId, sesiUtamaId, sesiTerpilih]);
 
   const filteredTeachers = teachers.filter(t =>
     (t.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (t.nipy || t.nip || '').includes(searchQuery)
   );
 
-  // PERBAIKAN: untuk tampilan Harian, hanya guru yang DIJADWALKAN Admin pada
-  // kombinasi hari+sesi ini yang ditampilkan/dihitung (mendukung jam kerja
-  // berbeda tiap guru). Rekap bulanan tetap menampilkan semua guru (historis).
-  const filteredTeachersHarian = useMemo(
-    () => filteredTeachers.filter(t => isGuruTerjadwal(settings, hariIni, filterSesiId, t.id)),
-    [filteredTeachers, settings, hariIni, filterSesiId]
-  );
+  // Guru yang ditampilkan pada Tampilan Harian:
+  // - Guru yang memiliki catatan presensi (sudah absen masuk/izin/sakit) SELALU DITAMPILKAN (tidak boleh hilang/tersembunyi)
+  // - Jika filter 'Semua Pegawai' aktif, tampilkan seluruh guru
+  // - Jika filter jadwal aktif, tampilkan guru yang terjadwal
+  const filteredTeachersHarian = useMemo(() => {
+    return filteredTeachers.filter(t => {
+      const rec = getRecord(t);
+      const hasRecord = !!rec && (!!rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(rec.status));
+      if (hasRecord) return true; // SELALU tampilkan jika sudah ada presensi!
+      if (showAllTeachersHarian) return true;
+      return isGuruTerjadwal(settings, hariIni, filterSesiId, t.id);
+    });
+  }, [filteredTeachers, settings, hariIni, filterSesiId, getRecord, showAllTeachersHarian]);
 
   // ---- STATISTIK HARIAN SESUAI TANGGAL TERPILIH ----
-  const todayRecords = filteredTeachersHarian.map(t => getRecord(t.id));
+  const todayRecords = filteredTeachersHarian.map(t => getRecord(t));
   const totalHadir = todayRecords.filter(r => r?.status === 'Hadir').length;
   const totalTerlambat = todayRecords.filter(r => r?.status === 'Terlambat').length;
   const totalIzinSakit = todayRecords.filter(r => r && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(r.status)).length;
-  const totalBelumAbsen = filteredTeachersHarian.length - todayRecords.filter(r => r).length;
+  const totalBelumAbsen = Math.max(0, filteredTeachersHarian.length - todayRecords.filter(r => r && (r.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(r.status))).length);
 
   // 🪄 DRILLDOWN POPUP: Daftar Guru Berdasarkan Status Kartu Presensi
   const [statDrilldown, setStatDrilldown] = useState(null); // null | 'Hadir' | 'Terlambat' | 'IzinSakit' | 'BelumAbsen'
@@ -1271,25 +1411,25 @@ function AdminRekapPanel({
     if (!statDrilldown) return [];
     let list = [];
     if (statDrilldown === 'Hadir') {
-      list = filteredTeachersHarian.filter(t => getRecord(t.id)?.status === 'Hadir');
+      list = filteredTeachersHarian.filter(t => getRecord(t)?.status === 'Hadir');
     } else if (statDrilldown === 'Terlambat') {
-      list = filteredTeachersHarian.filter(t => getRecord(t.id)?.status === 'Terlambat');
+      list = filteredTeachersHarian.filter(t => getRecord(t)?.status === 'Terlambat');
     } else if (statDrilldown === 'IzinSakit') {
       list = filteredTeachersHarian.filter(t => {
-        const r = getRecord(t.id);
-        return r && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(r.status);
+        const r = getRecord(t);
+        return r && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(r.status);
       });
     } else if (statDrilldown === 'BelumAbsen') {
       list = filteredTeachersHarian.filter(t => {
-        const r = getRecord(t.id);
-        return !r || (!r.jamMasuk && !['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(r.status));
+        const r = getRecord(t);
+        return !r || (!r.jamMasuk && !['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(r.status));
       });
     }
 
     if (!drilldownSearch.trim()) return list;
     const q = drilldownSearch.toLowerCase();
     return list.filter(t => (t.name || '').toLowerCase().includes(q) || (t.nipy || t.nip || '').includes(q) || (t.position || '').toLowerCase().includes(q));
-  }, [statDrilldown, filteredTeachersHarian, presensiGuru, filterDate, filterSesiId, drilldownSearch]);
+  }, [statDrilldown, filteredTeachersHarian, presensiGuru, filterDate, filterSesiId, drilldownSearch, getRecord]);
 
   const copyDrilldownToWA = () => {
     if (!statDrilldown || drilldownTeachers.length === 0) return;
@@ -1304,7 +1444,7 @@ function AdminRekapPanel({
     text += `⏰ Sesi: ${sesiTerpilih.nama}\n`;
     text += `👥 Total: ${drilldownTeachers.length} Orang\n\n`;
     drilldownTeachers.forEach((t, i) => {
-      const rec = getRecord(t.id);
+      const rec = getRecord(t);
       let detail = '';
       if (statDrilldown === 'Hadir') detail = `(Masuk: ${formatJam(rec?.jamMasuk)})`;
       else if (statDrilldown === 'Terlambat') detail = `(Masuk: ${formatJam(rec?.jamMasuk)}, telat ${rec?.terlambatMenit || 0}m)`;
@@ -1331,7 +1471,7 @@ function AdminRekapPanel({
   };
 
   const openEdit = (teacher) => {
-    const rec = getRecord(teacher.id);
+    const rec = getRecord(teacher);
     setEditRow(teacher);
     setEditForm({
       jamMasuk: rec?.jamMasuk ? rec.jamMasuk.slice(0, 5) : '',
@@ -1371,7 +1511,7 @@ function AdminRekapPanel({
   };
 
   const handleDeleteRecord = (teacher) => {
-    const rec = getRecord(teacher.id);
+    const rec = getRecord(teacher);
     if (!rec) return;
     showConfirm(`Hapus catatan presensi ${teacher.name} pada tanggal ${filterDate}? Tindakan ini tidak bisa dibatalkan.`, () => {
       const updated = presensiGuru.filter(r => r.id !== rec.id);
@@ -1388,7 +1528,7 @@ function AdminRekapPanel({
   const handleExportHarianCSV = () => {
     const headers = ['No', 'Nama Guru / Staff', 'NIP / NIPY', 'Jabatan', 'Sesi', 'Jam Masuk', 'Jam Pulang', 'Status Kehadiran', 'Keterlambatan (Menit)', 'Verifikasi Masuk', 'Verifikasi Pulang', 'Keterangan'];
     const rows = filteredTeachersHarian.map((t, idx) => {
-      const rec = getRecord(t.id);
+      const rec = getRecord(t);
       const status = rec?.status && (rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(rec.status)) ? rec.status : 'Belum Absen';
       const verifMasuk = `${rec?.lokasiMasuk ? 'GPS' : ''}${rec?.qrValidMasuk ? ' QR' : ''}`.trim() || (rec?.jamMasuk ? 'Manual' : '-');
       const verifPulang = `${rec?.lokasiPulang ? 'GPS' : ''}${rec?.qrValidPulang ? ' QR' : ''}`.trim() || (rec?.jamPulang ? 'Manual' : '-');
@@ -1438,7 +1578,7 @@ function AdminRekapPanel({
     const sesiSore = sesiList.find(s => s.id === 'sore' || (s.nama || '').toLowerCase().includes('sore') || (s.nama || '').toLowerCase().includes('halaqoh'));
 
     return filteredTeachers.map(t => {
-      const recs = presensiGuru.filter(r => r.teacherId === t.id && r.date.startsWith(prefix) && (r.sesiId || sesiUtamaId) === filterSesiId);
+      const recs = presensiGuru.filter(r => (String(r.teacherId) === String(t.id) || (r.teacherName && t.name && r.teacherName.trim().toLowerCase() === t.name.trim().toLowerCase())) && r.date.startsWith(prefix) && (r.sesiId || sesiUtamaId) === filterSesiId);
       const hadir = recs.filter(r => r.status === 'Hadir').length;
       const terlambat = recs.filter(r => r.status === 'Terlambat').length; // jumlah KALI terlambat
       const sakit = recs.filter(r => r.status === 'Sakit').length;
@@ -1488,7 +1628,7 @@ function AdminRekapPanel({
   const detailGuruData = useMemo(() => {
     if (!targetTeacher) return null;
     const prefix = `${filterYear}-${String(filterMonth).padStart(2, '0')}`;
-    const logs = presensiGuru.filter(r => (r.teacherId === targetTeacher.id || (r.teacherName && targetTeacher.name && r.teacherName.trim().toLowerCase() === targetTeacher.name.trim().toLowerCase())) && r.date.startsWith(prefix) && (r.sesiId || sesiUtamaId) === filterSesiId)
+    const logs = presensiGuru.filter(r => (String(r.teacherId) === String(targetTeacher.id) || (r.teacherName && targetTeacher.name && r.teacherName.trim().toLowerCase() === targetTeacher.name.trim().toLowerCase())) && r.date.startsWith(prefix) && (r.sesiId || sesiUtamaId) === filterSesiId)
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const hadir = logs.filter(r => r.status === 'Hadir').length;
@@ -1767,6 +1907,19 @@ function AdminRekapPanel({
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder="Cari nama / NIP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 text-sm dark:text-white" />
               </div>
+              <button
+                type="button"
+                onClick={() => setShowAllTeachersHarian(!showAllTeachersHarian)}
+                className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                  showAllTeachersHarian
+                    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+                title={showAllTeachersHarian ? 'Klik untuk membatasi hanya guru yang dijadwalkan' : 'Klik untuk menampilkan semua guru'}
+              >
+                <Users size={14} />
+                <span>{showAllTeachersHarian ? `Semua Pegawai (${filteredTeachers.length})` : 'Hanya Terjadwal'}</span>
+              </button>
             </>
           )}
           {multiSesi && (
@@ -1813,6 +1966,16 @@ function AdminRekapPanel({
           {isAdmin && (
             <button type="button" onClick={() => { setSettingsForm(settings); setShowSettings(true); }} className="flex items-center gap-1.5 px-3 py-2 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-teal-100 transition-colors"><Settings size={14} /> Pengaturan</button>
           )}
+          <button 
+            type="button" 
+            onClick={handleSyncCloud} 
+            disabled={isSyncingCloud}
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+            title="Sinkronkan data presensi dari Cloud Supabase sekarang"
+          >
+            <RefreshCw size={14} className={isSyncingCloud ? 'animate-spin' : ''} />
+            <span>{isSyncingCloud ? 'Menyinkronkan...' : 'Sinkron Cloud'}</span>
+          </button>
         </div>
       </div>
 
@@ -1840,18 +2003,26 @@ function AdminRekapPanel({
                 {filteredTeachersHarian.length === 0 ? (
                   <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
                 ) : filteredTeachersHarian.map(t => {
-                  const rec = getRecord(t.id);
+                  const rec = getRecord(t);
+                  const isScheduled = isGuruTerjadwal(settings, hariIni, filterSesiId, t.id);
                   const status = rec?.status && (rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(rec.status)) ? rec.status : 'Belum Absen';
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors print:border-b print:border-black">
                       <td className="p-3 pl-6 print:border print:border-black">
-                        <p className="font-bold text-slate-800 dark:text-white print:text-black">{t.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-slate-800 dark:text-white print:text-black">{t.name}</p>
+                          {!isScheduled && (
+                            <span className="text-[9px] font-extrabold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800 no-print">
+                              Di Luar Jadwal
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] font-bold text-slate-400 print:text-black uppercase tracking-wider">{t.position || 'Guru'} • NIP: {t.nipy || t.nip || '-'}</p>
                       </td>
                       <td className="p-3 text-center font-mono font-bold print:border print:border-black">
                         <div className="flex items-center justify-center gap-1">
                           {formatJam(rec?.jamMasuk)}
-                          {rec?.lokasiMasuk && <MapPin size={11} className="text-emerald-500 no-print" title={`Terverifikasi GPS, jarak ±${rec.lokasiMasuk.jarakMeter}m`} />}
+                          {rec?.lokasiMasuk && <MapPin size={11} className="text-emerald-500 no-print" title={`Terverifikasi GPS, jarak ±${rec.lokasiMasuk.jarakMeter ?? rec.lokasiMasuk.jarak ?? 0}m`} />}
                           {rec?.qrValidMasuk && <ScanLine size={11} className="text-emerald-500 no-print" title="Terverifikasi QR" />}
                         </div>
                       </td>

@@ -43,6 +43,11 @@ export const pushPresensiGuru = async (presensiArray) => {
   // 1. Simpan ke LocalStorage seketika (sumber kebenaran offline perangkat)
   safeStorageSet('payedu_presensi_guru', presensiArray);
 
+  // Jangan pernah menimpa cloud jika data presensi lokal masih kosong melompong (Mencegah wipeout saat login awal)
+  if (presensiArray.length === 0) {
+    return { status: 'success', message: 'Array presensi lokal kosong, skip sync ke cloud' };
+  }
+
   // 2. Simpan ke Supabase sebagai baris terpisah di tabel settings
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline)' };
@@ -173,9 +178,15 @@ export function mergePresensiArrays(serverArr, localArr) {
 
   for (const r of allRecords) {
     if (!r) continue;
-    // Composite key unik presensi: teacherId + date + sesiId
-    const key = r.teacherId && r.date
-      ? `${String(r.teacherId).trim()}_${String(r.date).trim()}_${String(r.sesiId || 'default').trim()}`
+    // Composite key unik presensi: (teacherId atau teacherName) + date + sesiId
+    const tId = r.teacherId ? String(r.teacherId).trim() : '';
+    const tName = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const personKey = tId || tName || 'anon';
+    const dateKey = String(r.date || '').trim();
+    const sesiKey = String(r.sesiId || 'default').trim().toLowerCase();
+
+    const key = (personKey !== 'anon' && dateKey)
+      ? `${personKey}_${dateKey}_${sesiKey}`
       : String(r.id || Math.random());
 
     const existing = map.get(key);
@@ -185,14 +196,27 @@ export function mergePresensiArrays(serverArr, localArr) {
       const existingTime = new Date(existing.updatedAt || existing.date || 0).getTime();
       const newTime = new Date(r.updatedAt || r.date || 0).getTime();
 
-      // Gabungkan field sehingga jika existing ada jamMasuk dan r ada jamPulang, keduanya utuh
+      // Jangan timpa status kehadiran sah (Hadir/Terlambat/Sakit/Izin) dengan status default 'Alpa' atau 'Belum Absen'
+      const isMeaningfulStatus = (s) => s && !['Alpa', 'Belum Absen'].includes(s);
+      let statusMerged = existing.status;
+      if (isMeaningfulStatus(r.status)) {
+        statusMerged = r.status;
+      } else if (isMeaningfulStatus(existing.status)) {
+        statusMerged = existing.status;
+      } else {
+        statusMerged = r.status || existing.status || 'Hadir';
+      }
+
+      // Gabungkan field sehingga jamMasuk, jamPulang, dan verifikasi keduanya utuh
       const merged = {
         ...existing,
         ...r,
         id: existing.id || r.id,
+        teacherId: existing.teacherId || r.teacherId,
+        teacherName: existing.teacherName || r.teacherName,
         jamMasuk: r.jamMasuk || existing.jamMasuk || null,
         jamPulang: r.jamPulang || existing.jamPulang || null,
-        status: (r.jamPulang && existing.status) ? existing.status : (r.status || existing.status || 'Hadir'),
+        status: statusMerged,
         terlambatMenit: r.jamMasuk ? (r.terlambatMenit ?? existing.terlambatMenit ?? 0) : (existing.terlambatMenit ?? r.terlambatMenit ?? 0),
         lokasiMasuk: existing.lokasiMasuk || r.lokasiMasuk,
         lokasiPulang: r.lokasiPulang || existing.lokasiPulang,

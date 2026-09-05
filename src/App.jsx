@@ -476,14 +476,99 @@ const exportToPDF = (elementId, filename) => {
   });
 };
 
-// Fungsi Helper untuk memformat string YYYY-MM ke format teks lokal
+// Kamus nama bulan bahasa Indonesia & Inggris untuk normalisasi tanggal kebal eror
+const MONTH_NAMES_ID = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+const MONTH_INDEX_MAP = {
+  januari: 0, jan: 0, january: 0,
+  februari: 1, feb: 1, february: 1,
+  maret: 2, mar: 2, march: 2,
+  april: 3, apr: 3,
+  mei: 4, may: 4,
+  juni: 5, jun: 5, june: 5,
+  juli: 6, jul: 6, july: 6,
+  agustus: 7, agu: 7, agt: 7, august: 7, aug: 7,
+  september: 8, sep: 8, sept: 8,
+  oktober: 9, okt: 9, oct: 9, october: 9,
+  november: 10, nov: 10,
+  desember: 11, des: 11, dec: 11, december: 11
+};
+
+// Helper untuk mengurai berbagai format string periode menjadi Date object valid (Mencegah "Invalid Date")
+const parsePeriodToDate = (periodStr) => {
+  if (!periodStr) return new Date();
+  if (periodStr instanceof Date && !isNaN(periodStr.getTime())) return periodStr;
+
+  const str = String(periodStr).trim();
+
+  // 1. Cek format nama bulan + tahun, contoh: "Agustus 2026", "Juli 2026", "Des 2025"
+  const textMatch = str.match(/^([a-zA-Z]+)\s+(\d{4})$/);
+  if (textMatch) {
+    const monthName = textMatch[1].toLowerCase();
+    const year = parseInt(textMatch[2], 10);
+    if (MONTH_INDEX_MAP[monthName] !== undefined && !isNaN(year)) {
+      return new Date(year, MONTH_INDEX_MAP[monthName], 1);
+    }
+  }
+
+  // 2. Cek format YYYY-MM atau YYYY/MM (contoh: "2026-08")
+  const yyyyMmMatch = str.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yyyyMmMatch) {
+    const year = parseInt(yyyyMmMatch[1], 10);
+    const month = parseInt(yyyyMmMatch[2], 10) - 1;
+    if (!isNaN(year) && !isNaN(month) && month >= 0 && month <= 11) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  // 3. Cek format MM-YYYY atau MM/YYYY (contoh: "08-2026")
+  const mmYyyyMatch = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (mmYyyyMatch) {
+    const month = parseInt(mmYyyyMatch[1], 10) - 1;
+    const year = parseInt(mmYyyyMatch[2], 10);
+    if (!isNaN(year) && !isNaN(month) && month >= 0 && month <= 11) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  // 4. Standar Date parse (ISO string dsb)
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return new Date();
+};
+
+// Fungsi Helper untuk memformat string periode ke format teks lokal "Bulan YYYY" (Anti "Invalid Date")
 const getFormattedPeriod = (periodStr) => {
   if (!periodStr) {
     const d = new Date();
     return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
   }
-  const [year, month] = periodStr.split('-');
-  const d = new Date(year, month - 1, 1);
+
+  const str = String(periodStr).trim();
+
+  // Jika string SUDAH berformat "Bulan YYYY" (misal "Agustus 2026", "Juli 2026"), langsung rapikan dan kembalikan
+  const textMatch = str.match(/^([a-zA-Z]+)\s+(\d{4})$/);
+  if (textMatch) {
+    const monthLower = textMatch[1].toLowerCase();
+    const year = textMatch[2];
+    if (MONTH_INDEX_MAP[monthLower] !== undefined) {
+      const properMonth = MONTH_NAMES_ID[MONTH_INDEX_MAP[monthLower]];
+      return `${properMonth} ${year}`;
+    }
+  }
+
+  // Jika berupa YYYY-MM atau format lainnya, urai via parsePeriodToDate
+  const d = parsePeriodToDate(str);
+  if (isNaN(d.getTime())) {
+    return str; // Jangan pernah return "Invalid Date", fallback ke string aslinya
+  }
+
   return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 };
 
@@ -1381,7 +1466,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
          // Jika akun ada di storage, password HARUS cocok dengan hash yang tersimpan (Mencegah Bypass)
          if (accInStorage.password === hashedInputPassword) {
             recordLogin(accInStorage.name, accInStorage.role, 'Sukses');
-            authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username };
+            authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username, username: username.trim() };
          }
       } 
       // 2. Jika akun Guru (Bisa login via ID Pegawai, NIPY, Linked Username, atau Nama)
@@ -1406,7 +1491,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
 
          if (isPasswordCorrect) {
             recordLogin(teacherData.name, 'Guru', 'Sukses');
-            authUser = { role: 'guru', id: teacherData.id, name: teacherData.name };
+            authUser = { role: 'guru', id: teacherData.id, name: teacherData.name, username: username.trim(), nipy: teacherData.nipy };
          }
       }
       // 3. Fallback Hardcoded (Jika storage benar-benar hilang/kosong)
@@ -1947,7 +2032,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             teachers={teachers} 
             presensiGuru={presensiGuru} 
             setPresensiGuru={setPresensiGuru} 
-            currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Admin' }} 
+            currentUser={{ id: user.id, name: user.name, username: user.username, role: user.role, portal: 'Admin' }} 
             schoolProfile={{ 
               nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
               npsn: settings.schoolNpsn || '10404040', 
@@ -2489,10 +2574,13 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         }]; 
      }
 
+     // Urutkan arsip secara kronologis kalender (Mencegah salah urut abjad dan Invalid Date)
      const sortedArchives = [...archives].sort((a, b) => {
         const pA = a.periode || a.period || '';
         const pB = b.periode || b.period || '';
-        return pA.localeCompare(pB);
+        const timeA = parsePeriodToDate(pA).getTime();
+        const timeB = parsePeriodToDate(pB).getTime();
+        return timeA - timeB;
      });
 
      const historyData = sortedArchives.map(arc => {
@@ -2508,7 +2596,11 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
      });
 
      const currentPeriodCode = settings?.payrollPeriod || '';
-     const hasCurrentInArchive = sortedArchives.some(a => (a.periode || a.period || '').includes(currentPeriodCode));
+     const currentFormatted = getFormattedPeriod(currentPeriodCode);
+     const hasCurrentInArchive = sortedArchives.some(a => {
+        const arcBulan = getFormattedPeriod(a?.periode || a?.period || '');
+        return arcBulan === currentFormatted || (currentPeriodCode && (a?.periode || a?.period || '').includes(currentPeriodCode));
+     });
 
      if (!hasCurrentInArchive) {
         historyData.push({
@@ -2978,7 +3070,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
           {chartData.map((entry, index) => {
             const maxTotal = Math.max(...chartData.map(d => d.total), 1);
             const percentage = (entry.total / maxTotal) * 100;
-            const isCurrentMonth = index === chartData.length - 1;
+            const isCurrentMonth = entry.isCurrent || (index === chartData.length - 1 && !chartData.some(d => d.isCurrent));
             
             return (
               <div key={index} className="flex flex-col gap-1.5 group">
@@ -10927,7 +11019,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
               presensiGuru={presensiGuru} 
               setPresensiGuru={setPresensiGuru} 
               initialSesiId={selectedQuickSesiId}
-              currentUser={{ name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
+              currentUser={{ id: user.id, teacherId: user.id, name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
               schoolProfile={{ 
                 nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
                 npsn: settings.schoolNpsn || '10404040', 
