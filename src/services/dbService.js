@@ -37,14 +37,14 @@ const safeStorageSet = (key, value) => {
  * Menyimpan data presensi guru ke LocalStorage dan Supabase (baris terpisah).
  * Fungsi ini dipanggil langsung setiap kali ada perubahan presensi.
  */
-export const pushPresensiGuru = async (presensiArray) => {
+export const pushPresensiGuru = async (presensiArray, options = {}) => {
   if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
 
   // 1. Simpan ke LocalStorage seketika (sumber kebenaran offline perangkat)
   safeStorageSet('payedu_presensi_guru', presensiArray);
 
   // Jangan pernah menimpa cloud jika data presensi lokal masih kosong melompong (Mencegah wipeout saat login awal)
-  if (presensiArray.length === 0) {
+  if (presensiArray.length === 0 && !options.allowEmpty) {
     return { status: 'success', message: 'Array presensi lokal kosong, skip sync ke cloud' };
   }
 
@@ -54,27 +54,28 @@ export const pushPresensiGuru = async (presensiArray) => {
   }
 
   try {
+    let dataToPush = presensiArray;
     // 🛡️ ANTI OVERWRITE / CONCURRENCY SAFE:
     // Sebelum menyimpan ke Supabase, ambil data presensi server terkini dan gabungkan (merge).
-    // Hal ini krusial saat banyak guru absen serentak pada titik/jam yang sama (misal Rapat/Kajian),
-    // sehingga absensi guru lain yang masuk di detik yang sama TIDAK AKAN tertimpa atau hilang!
-    let dataToPush = presensiArray;
-    try {
-      const { data: serverRow } = await supabase
-        .from('settings')
-        .select('data')
-        .eq('id', 'presensi_guru')
-        .single();
+    // KECUALI jika options.overwrite === true (misal saat Admin menghapus rekaman secara eksplisit).
+    if (!options.overwrite) {
+      try {
+        const { data: serverRow } = await supabase
+          .from('settings')
+          .select('data')
+          .eq('id', 'presensi_guru')
+          .single();
 
-      if (serverRow?.data) {
-        const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
-        if (Array.isArray(serverData) && serverData.length > 0) {
-          dataToPush = mergePresensiArrays(serverData, presensiArray);
-          safeStorageSet('payedu_presensi_guru', dataToPush);
+        if (serverRow?.data) {
+          const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
+          if (Array.isArray(serverData) && serverData.length > 0) {
+            dataToPush = mergePresensiArrays(serverData, presensiArray);
+            safeStorageSet('payedu_presensi_guru', dataToPush);
+          }
         }
+      } catch (fetchErr) {
+        console.warn('Peringatan pembacaan data presensi cloud sebelum push:', fetchErr);
       }
-    } catch (fetchErr) {
-      console.warn('Peringatan pembacaan data presensi cloud sebelum push:', fetchErr);
     }
 
     const now = new Date().toISOString();
@@ -169,66 +170,154 @@ export const fetchPresensiGuru = async () => {
 };
 
 /**
- * Merge dua array presensi: menggabungkan absensi lokal dan server secara cerdas.
- * Memastikan tidak ada absensi guru yang tertimpa atau hilang saat absen bersamaan.
+ * Merge dua array presensi: rekonsiliasi cerdas berbasis timestamp.
+ * Memastikan edit manual Admin tidak tertimpa oleh data lama di HP guru,
+ * dan absensi masuk/pulang/verifikasi GPS & QR tetap terjaga utuh.
  */
 export function mergePresensiArrays(serverArr, localArr) {
-  const map = new Map();
-  const allRecords = [...(Array.isArray(serverArr) ? serverArr : []), ...(Array.isArray(localArr) ? localArr : [])];
+  const cleanServer = Array.isArray(serverArr) ? serverArr.filter(Boolean) : [];
+  const cleanLocal = Array.isArray(localArr) ? localArr.filter(Boolean) : [];
+
+  const normStr = (v) => String(v || '').trim().toLowerCase();
+  const cleanStr = (v) => normStr(v).replace(/[^a-z0-9]/g, '');
+
+  const getRecordTime = (rec) => {
+    if (!rec) return 0;
+    if (rec.updatedAt) {
+      const t = new Date(rec.updatedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (rec.date) {
+      const d = new Date(rec.date).getTime();
+      if (!isNaN(d) && d > 0) return d;
+    }
+    return 0;
+  };
+
+  const isMatchingRecord = (a, b) => {
+    if (!a || !b) return false;
+    // Tanggal wajib sama
+    if (normStr(a.date) !== normStr(b.date)) return false;
+
+    // Sesi wajib sama (default sesiId adalah 'default' atau 'pagi')
+    const sesiA = normStr(a.sesiId || 'default');
+    const sesiB = normStr(b.sesiId || 'default');
+    if (sesiA !== sesiB) {
+      const namaA = normStr(a.sesiNama);
+      const namaB = normStr(b.sesiNama);
+      if (!namaA || !namaB || namaA !== namaB) return false;
+    }
+
+    // 1. Cocokkan ID (string vs number safe)
+    const idA = a.teacherId != null ? normStr(a.teacherId) : '';
+    const idB = b.teacherId != null ? normStr(b.teacherId) : '';
+    if (idA && idB && idA === idB) return true;
+
+    // 2. Cocokkan Nama Lengkap / Bersih
+    const nameA = cleanStr(a.teacherName);
+    const nameB = cleanStr(b.teacherName);
+    if (nameA && nameB && nameA === nameB) return true;
+
+    // 3. Cocokkan jika salah satu ID cocok dengan nama lengkap atau sebaliknya
+    if (idA && nameB && idA === nameB) return true;
+    if (idB && nameA && idB === nameA) return true;
+
+    return false;
+  };
+
+  const mergeTwo = (existing, r) => {
+    const existingTime = getRecordTime(existing);
+    const newTime = getRecordTime(r);
+    // Data yang memiliki timestamp updatedAt lebih baru menang
+    const isRNewer = newTime >= existingTime;
+
+    const newer = isRNewer ? r : existing;
+    const older = isRNewer ? existing : r;
+
+    // Rekonsiliasi Status
+    const isMeaningfulStatus = (s) => s && !['Alpa', 'Belum Absen'].includes(s);
+    let finalStatus = newer.status;
+    if (!isMeaningfulStatus(newer.status) && isMeaningfulStatus(older.status) && newTime === existingTime) {
+      finalStatus = older.status;
+    } else if (!finalStatus) {
+      finalStatus = older.status || 'Alpa';
+    }
+
+    // Rekonsiliasi Jam Masuk:
+    // Utamakan data yang lebih baru jika diisi.
+    // Jika data yang lebih baru tidak ada jamMasuk (misal hanya absen pulang), gunakan jamMasuk data lama.
+    let finalJamMasuk = newer.jamMasuk;
+    if (!finalJamMasuk && older.jamMasuk && !['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(newer.status)) {
+      finalJamMasuk = older.jamMasuk;
+    }
+
+    // Rekonsiliasi Jam Pulang:
+    let finalJamPulang = newer.jamPulang;
+    if (!finalJamPulang && older.jamPulang) {
+      finalJamPulang = older.jamPulang;
+    }
+
+    // Terlambat Menit
+    let finalTerlambat = newer.terlambatMenit;
+    if (finalTerlambat === undefined || finalTerlambat === null) {
+      finalTerlambat = older.terlambatMenit ?? 0;
+    }
+
+    // Keterangan
+    const finalKeterangan = newer.keterangan !== undefined && newer.keterangan !== ''
+      ? newer.keterangan
+      : (older.keterangan || '');
+
+    return {
+      ...older,
+      ...newer,
+      id: newer.id || older.id,
+      teacherId: newer.teacherId != null ? newer.teacherId : older.teacherId,
+      teacherName: newer.teacherName || older.teacherName,
+      date: newer.date || older.date,
+      sesiId: newer.sesiId || older.sesiId,
+      sesiNama: newer.sesiNama || older.sesiNama,
+      jamMasuk: finalJamMasuk || null,
+      jamPulang: finalJamPulang || null,
+      status: finalStatus,
+      terlambatMenit: finalTerlambat,
+      keterangan: finalKeterangan,
+      // Bukti verifikasi GPS dan QR dipertahankan jika record yang baru tidak menyertakannya (misal hasil edit manual Admin)
+      lokasiMasuk: newer.lokasiMasuk || older.lokasiMasuk || null,
+      lokasiPulang: newer.lokasiPulang || older.lokasiPulang || null,
+      qrValidMasuk: newer.qrValidMasuk !== undefined ? newer.qrValidMasuk : (older.qrValidMasuk ?? null),
+      qrValidPulang: newer.qrValidPulang !== undefined ? newer.qrValidPulang : (older.qrValidPulang ?? null),
+      updatedAt: new Date(Math.max(existingTime, newTime, Date.now() - 365 * 86400000)).toISOString(),
+      updatedBy: newer.updatedBy || older.updatedBy || 'Sistem'
+    };
+  };
+
+  // Gunakan bucket Map berdasarkan tanggal & sesi untuk efisiensi O(N)
+  const bucketMap = new Map();
+  const allRecords = [...cleanServer, ...cleanLocal];
 
   for (const r of allRecords) {
     if (!r) continue;
-    // Composite key unik presensi: (teacherId atau teacherName) + date + sesiId
-    const tId = r.teacherId ? String(r.teacherId).trim() : '';
-    const tName = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-    const personKey = tId || tName || 'anon';
-    const dateKey = String(r.date || '').trim();
-    const sesiKey = String(r.sesiId || 'default').trim().toLowerCase();
+    const bucketKey = `${normStr(r.date)}_${normStr(r.sesiId || 'default')}`;
+    let bucket = bucketMap.get(bucketKey);
+    if (!bucket) {
+      bucket = [];
+      bucketMap.set(bucketKey, bucket);
+    }
 
-    const key = (personKey !== 'anon' && dateKey)
-      ? `${personKey}_${dateKey}_${sesiKey}`
-      : String(r.id || Math.random());
-
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, r);
+    const matchIdx = bucket.findIndex(existing => isMatchingRecord(existing, r));
+    if (matchIdx >= 0) {
+      bucket[matchIdx] = mergeTwo(bucket[matchIdx], r);
     } else {
-      const existingTime = new Date(existing.updatedAt || existing.date || 0).getTime();
-      const newTime = new Date(r.updatedAt || r.date || 0).getTime();
-
-      // Jangan timpa status kehadiran sah (Hadir/Terlambat/Sakit/Izin) dengan status default 'Alpa' atau 'Belum Absen'
-      const isMeaningfulStatus = (s) => s && !['Alpa', 'Belum Absen'].includes(s);
-      let statusMerged = existing.status;
-      if (isMeaningfulStatus(r.status)) {
-        statusMerged = r.status;
-      } else if (isMeaningfulStatus(existing.status)) {
-        statusMerged = existing.status;
-      } else {
-        statusMerged = r.status || existing.status || 'Hadir';
-      }
-
-      // Gabungkan field sehingga jamMasuk, jamPulang, dan verifikasi keduanya utuh
-      const merged = {
-        ...existing,
-        ...r,
-        id: existing.id || r.id,
-        teacherId: existing.teacherId || r.teacherId,
-        teacherName: existing.teacherName || r.teacherName,
-        jamMasuk: r.jamMasuk || existing.jamMasuk || null,
-        jamPulang: r.jamPulang || existing.jamPulang || null,
-        status: statusMerged,
-        terlambatMenit: r.jamMasuk ? (r.terlambatMenit ?? existing.terlambatMenit ?? 0) : (existing.terlambatMenit ?? r.terlambatMenit ?? 0),
-        lokasiMasuk: existing.lokasiMasuk || r.lokasiMasuk,
-        lokasiPulang: r.lokasiPulang || existing.lokasiPulang,
-        qrValidMasuk: existing.qrValidMasuk ?? r.qrValidMasuk,
-        qrValidPulang: r.qrValidPulang ?? existing.qrValidPulang,
-        updatedAt: newTime >= existingTime ? (r.updatedAt || existing.updatedAt) : (existing.updatedAt || r.updatedAt)
-      };
-      map.set(key, merged);
+      bucket.push(r);
     }
   }
 
-  return Array.from(map.values());
+  const result = [];
+  for (const b of bucketMap.values()) {
+    result.push(...b);
+  }
+  return result;
 }
 
 /**

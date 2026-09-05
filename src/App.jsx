@@ -1142,16 +1142,17 @@ export default function App() {
     pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
   }, [loginHistory, isDataLoaded, hasConflict]);
 
-  // Auto-Save Presensi Guru (Independen dari settings conflict & langsung push ke Supabase)
+  // Auto-Save Presensi Guru (Hanya untuk Admin / Kepala Sekolah)
+  // HP Guru tidak melakukan auto-save pasif di background agar tidak menimpa edit manual Admin
   useEffect(() => {
-    if (!isDataLoaded) return;
+    if (!isDataLoaded || !user || user.role === 'guru') return;
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
     lastSavedPresensiRef.current = currentStr;
     safeStorageSet('payedu_presensi_guru', presensiGuru);
     pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
-  }, [presensiGuru, isDataLoaded]);
+  }, [presensiGuru, isDataLoaded, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -9873,7 +9874,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   const currentQuickSesi = sesiList.find(s => s.id === selectedQuickSesiId) || sesiList[0];
 
   const todayAttendance = (presensiGuru || []).find(r => 
-    (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+    (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
     r.date === todayIsoDate && 
     (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
   );
@@ -9900,22 +9901,23 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
     const updated = [...(presensiGuru || [])];
     const idx = updated.findIndex(r => 
-      (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+      (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
       r.date === todayIsoDate && 
       (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
     );
+    const existingRec = idx >= 0 ? updated[idx] : null;
     const patch = {
-      id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      id: existingRec?.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
       teacherId: myData.id,
       teacherName: myData.name,
       date: todayIsoDate,
       sesiId: currentQuickSesi.id,
       sesiNama: currentQuickSesi.nama,
       jamMasuk: nowHHMMSS,
-      jamPulang: null,
+      jamPulang: existingRec?.jamPulang || null,
       status,
       terlambatMenit,
-      keterangan: '',
+      keterangan: existingRec?.keterangan || '',
       updatedAt: new Date().toISOString(),
       updatedBy: myData.name || 'Guru'
     };
@@ -9941,12 +9943,12 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     const nowHHMMSS = capture.toTimeString().slice(0, 8);
     const updated = [...(presensiGuru || [])];
     const idx = updated.findIndex(r => 
-      (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
+      (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
       r.date === todayIsoDate && 
       (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
     );
     if (idx >= 0) {
-      updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString() };
+      updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString(), updatedBy: myData.name || 'Guru' };
       if (typeof setPresensiGuru === 'function') {
         setPresensiGuru(updated);
       }

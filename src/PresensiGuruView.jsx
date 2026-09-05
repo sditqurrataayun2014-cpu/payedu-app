@@ -495,10 +495,31 @@ export default function PresensiGuruView({
 
   const upsertRecord = (teacherId, teacherName, date, sesiId, patch) => {
     let updated = [];
-    const idx = (presensiGuru || []).findIndex(r => r.teacherId === teacherId && r.date === date && sesiRecord(r, sesiId));
+    const targetTId = teacherId != null ? String(teacherId).trim() : '';
+    const normTName = teacherName ? String(teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+    const idx = (presensiGuru || []).findIndex(r => {
+      if (!r || r.date !== date || !sesiRecord(r, sesiId)) return false;
+      const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+      if (rId && targetTId && rId === targetTId) return true;
+      if (normTName && r.teacherName) {
+        const rNormName = String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (rNormName && (rNormName === normTName || rNormName.includes(normTName) || normTName.includes(rNormName))) return true;
+      }
+      return false;
+    });
+
     if (idx >= 0) {
       updated = [...presensiGuru];
-      updated[idx] = { ...updated[idx], ...patch, sesiId, updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || 'Sistem' };
+      updated[idx] = {
+        ...updated[idx],
+        ...patch,
+        teacherId: teacherId != null ? teacherId : updated[idx].teacherId,
+        teacherName: teacherName || updated[idx].teacherName,
+        sesiId,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'Sistem'
+      };
     } else {
       updated = [
         ...(presensiGuru || []),
@@ -710,7 +731,31 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0] || sesiSemua[0];
 
   const today = todayStr();
-  const record = teacher && sesiAktif ? presensiGuru.find(r => r.teacherId === teacher.id && r.date === today && (r.sesiId || sesiUtamaId) === sesiAktif.id) : null;
+
+  // Helper pencocokan cerdas profil guru ke rekaman presensi (string-safe & nama-safe)
+  const isTeacherRecordMatch = useCallback((r, targetDate, targetSesiId) => {
+    if (!r || !teacher) return false;
+    if (targetDate && r.date !== targetDate) return false;
+    if (targetSesiId && (r.sesiId || sesiUtamaId) !== targetSesiId) return false;
+
+    // 1. ID matching (string vs number safe)
+    const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+    const tId = teacher.id != null ? String(teacher.id).trim() : '';
+    if (rId && tId && rId === tId) return true;
+
+    // 2. Name matching (clean without punctuation/spaces)
+    const tName = String(teacher.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rName = String(r.teacherName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (tName && rName && (tName === rName || tName.includes(rName) || rName.includes(tName))) return true;
+
+    // 3. Linked username or NIPY matching
+    if (teacher.linkedUsername && rId && rId.toLowerCase() === String(teacher.linkedUsername).trim().toLowerCase()) return true;
+    if (teacher.nipy && rId && rId.toLowerCase() === String(teacher.nipy).trim().toLowerCase()) return true;
+
+    return false;
+  }, [teacher, sesiUtamaId]);
+
+  const record = teacher && sesiAktif ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, sesiAktif.id)) : null;
 
   if (!teacher) {
     return (
@@ -792,13 +837,13 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   };
 
   // Rekap ringkas 30 hari terakhir milik guru ybs (sesi yang sedang dipilih)
-  const myHistory = presensiGuru
-    .filter(r => r.teacherId === teacher.id && (r.sesiId || sesiUtamaId) === sesiAktif.id)
-    .sort((a, b) => b.date.localeCompare(a.date))
+  const myHistory = (presensiGuru || [])
+    .filter(r => isTeacherRecordMatch(r, null, sesiAktif.id))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 30);
 
   const thisMonthKey = today.slice(0, 7);
-  const monthRecords = presensiGuru.filter(r => r.teacherId === teacher.id && r.date.startsWith(thisMonthKey) && (r.sesiId || sesiUtamaId) === sesiAktif.id);
+  const monthRecords = (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, sesiAktif.id) && r.date?.startsWith(thisMonthKey));
   const monthHadir = monthRecords.filter(r => r.status === 'Hadir').length;
   const monthTerlambat = monthRecords.filter(r => r.status === 'Terlambat').length;
   const monthSakitIzin = monthRecords.filter(r => ['Sakit', 'Izin', 'Cuti'].includes(r.status)).length;
@@ -1519,7 +1564,7 @@ function AdminRekapPanel({
       try {
         localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
       } catch (e) {}
-      pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Delete sync warning:', e));
+      pushPresensiGuru(updated, { overwrite: true }).catch(e => console.warn('[Presensi] Delete sync warning:', e));
       showToast('Catatan presensi berhasil dihapus.', 'success');
     });
   };
@@ -1594,7 +1639,7 @@ function AdminRekapPanel({
         : null;
 
       // Hitung Khusus Rata-rata Masuk Pagi & Masuk Sore
-      const allMonthRecs = presensiGuru.filter(r => (r.teacherId === t.id || (r.teacherName && t.name && r.teacherName.trim().toLowerCase() === t.name.trim().toLowerCase())) && r.date.startsWith(prefix));
+      const allMonthRecs = presensiGuru.filter(r => (String(r.teacherId) === String(t.id) || (r.teacherName && t.name && r.teacherName.trim().toLowerCase() === t.name.trim().toLowerCase())) && r.date.startsWith(prefix));
       
       const pagiRecs = allMonthRecs.filter(r => (r.sesiId === sesiPagi?.id || (!r.sesiId && sesiUtamaId === sesiPagi?.id) || (r.sesiNama || '').toLowerCase().includes('pagi')) && r.jamMasuk);
       const avgPagiMin = pagiRecs.length > 0
