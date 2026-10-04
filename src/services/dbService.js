@@ -711,14 +711,26 @@ export const fetchCloudData = async () => {
       };
     }) : null;
 
-    const finalSettings = serverSettings || localSettings || {};
-    const finalTeachers = deduplicateTeachers(serverTeachers || localTeachers || []);
-    const finalArchives = deduplicateArchives(serverArchives || localArchives || []);
+    const serverTime = Number(serverSettings?.lastModified) || 0;
+    const localTime = Number(localSettings?.lastModified) || 0;
+    const isLocalNewer = localTime > serverTime && localSettings && Object.keys(localSettings).length > 0;
+
+    let finalSettings = isLocalNewer ? { ...serverSettings, ...localSettings } : (serverSettings || localSettings || {});
+    let finalTeachers = deduplicateTeachers(
+      (isLocalNewer && localTeachers && localTeachers.length > 0)
+        ? localTeachers 
+        : (serverTeachers || localTeachers || [])
+    );
+    let finalArchives = deduplicateArchives(
+      (isLocalNewer && localArchives && localArchives.length > 0)
+        ? localArchives
+        : (serverArchives || localArchives || [])
+    );
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;
 
-    if (!serverTeachers && localTeachers.length > 0) {
-      console.log('Database Cloud Supabase masih kosong. Melakukan auto-push data lokal ke Supabase...');
+    if ((!serverTeachers || isLocalNewer) && localTeachers.length > 0) {
+      console.log('Database Cloud Supabase perlu pembaruan (data lokal lebih baru / cloud kosong). Melakukan auto-push data ke Supabase...');
       pushCloudData('SYNC_ALL', {
         settings: finalSettings,
         teachers: finalTeachers,

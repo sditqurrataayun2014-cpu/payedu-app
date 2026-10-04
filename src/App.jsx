@@ -701,51 +701,29 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 
 export default function App() {
   const [teachers, setTeachers] = useState(() => {
-    const saved = localStorage.getItem('payedu_teachers');
-    try {
-      const parsed = saved ? JSON.parse(saved) : initialTeachers;
-      return sanitizeTeacherList(parsed);
-    } catch (e) {
-      return initialTeachers;
-    }
+    return sanitizeTeacherList(safeStorageGet('payedu_teachers', initialTeachers));
   });
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    return safeStorageGet('payedu_session', null);
+  });
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('payedu_theme') === 'dark');
   const [generalSettings, setGeneralSettings] = useState(() => {
-    const saved = localStorage.getItem('payedu_settings');
-    return saved ? JSON.parse(saved) : defaultGeneralSettings;
+    return safeStorageGet('payedu_settings', defaultGeneralSettings);
   });
   const [feedbacks, setFeedbacks] = useState(() => {
-    const saved = localStorage.getItem('payedu_feedbacks');
-    return saved ? JSON.parse(saved) : [];
+    return safeStorageGet('payedu_feedbacks', []);
   });
   const [loginHistory, setLoginHistory] = useState(() => {
-    const saved = localStorage.getItem('payedu_loginHistory');
-    try {
-      return saved ? sortLoginLogs(JSON.parse(saved)) : [];
-    } catch (e) {
-      return [];
-    }
+    return sortLoginLogs(safeStorageGet('payedu_loginHistory', []));
   });
   const [archives, setArchives] = useState(() => {
-    const saved = localStorage.getItem('payedu_archives');
-    return saved ? JSON.parse(saved) : [];
+    return safeStorageGet('payedu_archives', []);
   });
   const [presensiGuru, setPresensiGuru] = useState(() => {
-    const saved = localStorage.getItem('payedu_presensi_guru');
-    try {
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    return safeStorageGet('payedu_presensi_guru', []);
   });
   const [auditLogs, setAuditLogs] = useState(() => {
-    const saved = localStorage.getItem('payedu_audit_logs');
-    try {
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    return safeStorageGet('payedu_audit_logs', []);
   });
 
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -941,20 +919,57 @@ export default function App() {
             }
           }
         } else {
-          const cleanTeachers = sanitizeTeacherList(serverTeachers);
-          const cleanArchives = deduplicateArchives(serverArchives);
-          lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
+          // 🛡️ ANTI-WIPEOUT & TIMESTAMP COMPARISON PADA REFRESH / INITIAL LOAD:
+          const localSettings = safeStorageGet('payedu_settings', null);
+          const localTeachers = safeStorageGet('payedu_teachers', []);
+          const localArchives = safeStorageGet('payedu_archives', []);
+
+          const serverTime = Number(serverSettings?.lastModified) || 0;
+          const localTime = Number(localSettings?.lastModified) || 0;
+
+          // 1. Cek apakah data lokal lebih baru daripada data di cloud
+          const isLocalNewer = localTime > serverTime && localSettings && Object.keys(localSettings).length > 0;
+          // 2. Cek apakah server kosong padahal lokal memiliki data guru
+          const isServerTeachersEmpty = (!serverTeachers || serverTeachers.length === 0) && (localTeachers && localTeachers.length > 0);
+
+          let finalSettings = serverSettings;
+          let finalTeachers = serverTeachers;
+          let finalArchives = serverArchives;
+
+          if (isLocalNewer || isServerTeachersEmpty) {
+            console.log("🛡️ Proteksi Sinkronisasi: Mempertahankan data lokal Admin yang lebih baru & auto-push ke Supabase Cloud");
+            if (isLocalNewer && localSettings) {
+              finalSettings = { ...serverSettings, ...localSettings };
+            }
+            if (isServerTeachersEmpty || (isLocalNewer && localTeachers && localTeachers.length > 0)) {
+              finalTeachers = localTeachers;
+            }
+            if (isLocalNewer && localArchives && localArchives.length > 0) {
+              finalArchives = localArchives;
+            }
+
+            // Segera dorong data lokal terbaru ke Supabase agar tersimpan permanen di cloud
+            pushToSupabase('SYNC_ALL', {
+              settings: finalSettings,
+              teachers: finalTeachers,
+              archives: finalArchives
+            }).catch(e => console.warn("Auto-sync initial cloud push:", e));
+          }
+
+          const cleanTeachers = sanitizeTeacherList(finalTeachers);
+          const cleanArchives = deduplicateArchives(finalArchives);
+          lastSavedSettingsRef.current = JSON.stringify({ ...finalSettings, lastModified: 0 });
           lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
           lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
 
-          setGeneralSettings(serverSettings);
+          setGeneralSettings(finalSettings);
           setTeachers(cleanTeachers); 
           setArchives(cleanArchives);
           setFeedbacks(serverFeedbacks);
           const sortedServerLogs = sortLoginLogs(serverLogs);
           setLoginHistory(sortedServerLogs);
           
-          safeStorageSet('payedu_settings', serverSettings);
+          safeStorageSet('payedu_settings', finalSettings);
           safeStorageSet('payedu_teachers', cleanTeachers);
           safeStorageSet('payedu_archives', cleanArchives);
           safeStorageSet('payedu_feedbacks', serverFeedbacks);
@@ -1024,7 +1039,7 @@ export default function App() {
     isPushingDataRef.current = true;
 
     setGeneralSettings(updatedSettings);
-    safeStorageSet('payedu_settings', JSON.stringify(updatedSettings));
+    safeStorageSet('payedu_settings', updatedSettings);
 
     try {
        await pushToSupabase('SAVE_SETTINGS', updatedSettings);
@@ -1042,7 +1057,11 @@ export default function App() {
     }
   };
 
-  // 🪄 PERBAIKAN MUTLAK 1: Auto-Save Pengaturan (Hanya untuk Admin/Kepsek)
+  // 🪄 PERBAIKAN PERMANEN 1: Auto-Save Pengaturan (Hanya untuk Admin/Kepsek)
+  // PERBAIKAN KRITIKAL: Jangan panggil setGeneralSettings di dalam body effect!
+  // Memanggil setGeneralSettings memicu re-render → cleanup (clearTimeout) → push ke Supabase DIBATALKAN!
+  // Akibatnya data hanya tersimpan di localStorage tapi TIDAK PERNAH sampai ke Supabase Cloud.
+  // Saat refresh, app mengambil data lama dari Supabase → perubahan Admin hilang.
   useEffect(() => {
     if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
 
@@ -1050,17 +1069,24 @@ export default function App() {
     if (lastSavedSettingsRef.current === currentDataStr) return;
     lastSavedSettingsRef.current = currentDataStr;
 
-    safeStorageSet('payedu_settings', JSON.stringify(generalSettings));
+    // Set isPushing SEGERA agar polling background tidak menimpa perubahan Admin
+    isPushingDataRef.current = true;
+
+    safeStorageSet('payedu_settings', generalSettings);
     setSyncStatus('syncing');
 
+    // Siapkan payload dengan timestamp terbaru TANPA mengubah state React
     const payloadWithTime = { ...generalSettings, lastModified: Date.now() };
-    setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
-
-    isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
       pushToSupabase('SAVE_SETTINGS', payloadWithTime)
-      .then(() => setSyncStatus('synced'))
+      .then(() => {
+         setSyncStatus('synced');
+         // Update lastModified di state SETELAH push berhasil
+         // Pre-update ref agar effect tidak re-trigger secara sia-sia
+         lastSavedSettingsRef.current = JSON.stringify({ ...payloadWithTime, lastModified: 0 });
+         setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
+      })
       .catch(err => {
          console.warn("Info Sync:", err.message);
          setSyncStatus('error');
@@ -1072,7 +1098,9 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [generalSettings, isDataLoaded, hasConflict, user]);
 
-  // 🪄 PERBAIKAN MUTLAK 2: Auto-Save Pegawai (Hanya untuk Admin/Kepsek)
+  // 🪄 PERBAIKAN PERMANEN 2: Auto-Save Pegawai (Hanya untuk Admin/Kepsek)
+  // PERBAIKAN KRITIKAL: Jangan panggil setGeneralSettings sebelum push!
+  // Update lastModified dilakukan SETELAH push ke Supabase berhasil.
   useEffect(() => {
     // GEMBOK KEAMANAN: Cegah Tamu (Belum Login) dan Guru merusak data server!
     if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
@@ -1081,22 +1109,26 @@ export default function App() {
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
     lastSavedTeachersRef.current = currentTeachersStr;
 
-    safeStorageSet('payedu_teachers', currentTeachersStr);
+    // Set isPushing SEGERA agar polling tidak menimpa
+    isPushingDataRef.current = true;
+
+    safeStorageSet('payedu_teachers', teachers);
     setSyncStatus('syncing');
-
-    const newTimestamp = Date.now();
-    
-    setGeneralSettings(prev => {
-       const newSettings = { ...prev, lastModified: newTimestamp };
-       safeStorageSet('payedu_settings', JSON.stringify(newSettings));
-       return newSettings;
-    });
-
-    isPushingDataRef.current = true; 
 
     const timeoutId = setTimeout(() => {
       pushToSupabase('SAVE_TEACHERS', teachers)
-      .then(() => setSyncStatus('synced'))
+      .then(() => {
+         setSyncStatus('synced');
+         // Update lastModified SETELAH push berhasil
+         const newTimestamp = Date.now();
+         setGeneralSettings(prev => {
+           const updated = { ...prev, lastModified: newTimestamp };
+           // Pre-update ref agar settings auto-save tidak re-trigger
+           lastSavedSettingsRef.current = JSON.stringify({ ...updated, lastModified: 0 });
+           safeStorageSet('payedu_settings', updated);
+           return updated;
+         });
+      })
       .catch(err => {
          console.warn("Info Sync:", err.message);
          setSyncStatus('error');
@@ -1108,7 +1140,7 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict, user]);
 
-  // 🪄 PERBAIKAN MUTLAK 3: Auto-Save Arsip dan Feedback
+  // 🪄 PERBAIKAN PERMANEN 3: Auto-Save Arsip dan Feedback
   useEffect(() => {
     // Hanya Admin yang boleh memanipulasi Arsip secara global
     if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
@@ -1116,7 +1148,7 @@ export default function App() {
     if (lastSavedArchivesRef.current === currentStr) return;
     lastSavedArchivesRef.current = currentStr;
 
-    safeStorageSet('payedu_archives', currentStr);
+    safeStorageSet('payedu_archives', archives);
     pushToSupabase('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
   }, [archives, isDataLoaded, hasConflict, user]);
 
@@ -1127,7 +1159,7 @@ export default function App() {
     if (lastSavedFeedbacksRef.current === currentStr) return;
     lastSavedFeedbacksRef.current = currentStr;
 
-    safeStorageSet('payedu_feedbacks', currentStr);
+    safeStorageSet('payedu_feedbacks', feedbacks);
     pushToSupabase('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
   }, [feedbacks, isDataLoaded, hasConflict, user]);
 
@@ -1138,7 +1170,7 @@ export default function App() {
     if (lastSavedLogsRef.current === currentStr) return;
 
     lastSavedLogsRef.current = currentStr;
-    safeStorageSet('payedu_loginHistory', currentStr);
+    safeStorageSet('payedu_loginHistory', loginHistory);
     pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
   }, [loginHistory, isDataLoaded, hasConflict]);
 
@@ -1153,6 +1185,19 @@ export default function App() {
     safeStorageSet('payedu_presensi_guru', presensiGuru);
     pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
   }, [presensiGuru, isDataLoaded, user]);
+
+  // 🛡️ PROTEKSI PERMANEN: Flush data sebelum reload / tutup browser
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (generalSettings) safeStorageSet('payedu_settings', generalSettings);
+      if (teachers && teachers.length > 0) safeStorageSet('payedu_teachers', teachers);
+      if (archives && archives.length > 0) safeStorageSet('payedu_archives', archives);
+      if (presensiGuru && presensiGuru.length > 0) safeStorageSet('payedu_presensi_guru', presensiGuru);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [generalSettings, teachers, archives, presensiGuru]);
 
   useEffect(() => {
     if (!user) return;
@@ -1388,11 +1433,19 @@ export default function App() {
       )}
 
       {!user ? (
-        <LoginView onLogin={setUser} isDarkMode={isDarkMode} toggleTheme={() => setIsDarkMode(!isDarkMode)} settings={generalSettings} recordLogin={recordLogin} teachers={teachers} setTeachers={setTeachers} />
+        <LoginView 
+          onLogin={(u) => { setUser(u); safeStorageSet('payedu_session', u); }} 
+          isDarkMode={isDarkMode} 
+          toggleTheme={() => setIsDarkMode(!isDarkMode)} 
+          settings={generalSettings} 
+          recordLogin={recordLogin} 
+          teachers={teachers} 
+          setTeachers={setTeachers} 
+        />
       ) : (
         <MainLayout 
           user={user} 
-          onLogout={() => setUser(null)} 
+          onLogout={() => { setUser(null); localStorage.removeItem('payedu_session'); }} 
           isDarkMode={isDarkMode} 
           toggleTheme={() => setIsDarkMode(!isDarkMode)}
           teachers={teachers}
@@ -1452,8 +1505,13 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
 
     // Simulasi proses loading validasi sesaat (UX)
     setTimeout(() => {
-      // 1. Cek dari LocalStorage (jika akun dibuat via Pengaturan)
-      const savedAccounts = JSON.parse(localStorage.getItem('payedu_accounts')) || [];
+      // 1. Cek dari LocalStorage (termasuk payedu_admin_accounts jika dibuat via Pengaturan)
+      const rawAccounts = safeStorageGet('payedu_accounts', []);
+      const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
+      const savedAccounts = [
+        ...(Array.isArray(rawAccounts) ? rawAccounts : []),
+        ...(Array.isArray(rawAdminAccounts) ? rawAdminAccounts : [])
+      ];
       
       // Hash inputan user sebelum membandingkan dengan database
       const hashedInputPassword = simpleHash(password);
@@ -1577,7 +1635,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
 
     // 1. Simpan ke state & local storage
     setTeachers(updatedTeachers);
-    safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+    safeStorageSet('payedu_teachers', updatedTeachers);
 
     // 2. Tembak langsung ke Supabase Cloud (Real-time)
     try {
@@ -2042,15 +2100,14 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
               presensiGuruSettings: settings.presensiGuruSettings 
             }} 
             setSchoolProfile={(updater) => { 
-              setSettings(prev => { 
-                const rawUpdated = typeof updater === 'function' ? updater(prev?.presensiGuruSettings ? { presensiGuruSettings: prev.presensiGuruSettings } : prev) : updater; 
-                const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
-                const newSettings = { ...prev, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
-                safeStorageSet('payedu_settings', JSON.stringify(newSettings)); 
-                try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
-                pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
-                return newSettings; 
-              }); 
+              const currentSettings = settings || {};
+              const rawUpdated = typeof updater === 'function' ? updater(currentSettings?.presensiGuruSettings ? { presensiGuruSettings: currentSettings.presensiGuruSettings } : currentSettings) : updater; 
+              const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
+              const newSettings = { ...currentSettings, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
+              setSettings(newSettings);
+              safeStorageSet('payedu_settings', newSettings); 
+              try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
+              pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
             }} 
             addAuditLog={saveAuditLog} 
           />
@@ -2355,7 +2412,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                  } else {
                    const updated = { ...settings, maintenanceMode: false, lastModified: Date.now() };
                    setSettings(updated);
-                   safeStorageSet('payedu_settings', JSON.stringify(updated));
+                   safeStorageSet('payedu_settings', updated);
                    pushToSupabase('SAVE_SETTINGS', updated);
                  }
                }}
@@ -2627,7 +2684,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
     // PERBAIKAN: Paksa simpan langsung ke Local Storage dan Server agar permanen tanpa jeda
     const newSettings = { ...settings, payrollStatus: 'Approved', lastModified: Date.now() };
     setSettings(newSettings);
-    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+    safeStorageSet('payedu_settings', newSettings);
     postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan approval ke server:", e));
     
     setNotification({ isOpen: true, type: 'success', message: 'Berhasil! Rincian gaji bulan ini telah disahkan secara permanen.' });
@@ -3211,61 +3268,65 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
       }
     };
 
-    // Simulasi delay jaringan (bisa dihapus nanti, hanya untuk visual UX)
-    setTimeout(() => {
-      if (modal.type === 'add') {
-        setTeachers(prev => {
-           const newId = generateTeacherId(prev);
-           return [...prev, { 
-             ...newData, 
-             id: newId, 
-             payroll: {
-                tahunMasaKerja: new Date().getFullYear(),
-                tunjanganMasaKerjaManual: '',
-                jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
-                pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
-                kompetensi: [],
-                disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
-                insentifTambahan: [],
-                potonganLainnya: [],
-                jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
-                isNotified: false,
-                isConfirmed: false
-             } 
-           }];
-        });
-        saveAuditLog?.(
-          user?.name || 'Administrator',
-          'Tambah Pegawai Baru',
-          newData.name,
-          `Menambahkan pegawai baru ${newData.name} (NIPY: ${newData.nipy || '-'}, Jabatan: ${newData.position || 'Guru'})`,
-          'pegawai'
-        );
-      } else {
-        setTeachers(prev => prev.map(t => {
-           if (t.id === modal.data.id) {
-             return {
-               ...t,
-               ...newData,
-               family: {
-                 ...(t.family || {}),
-                 ...newData.family
-               }
-             };
-           }
-           return t;
-        }));
-        saveAuditLog?.(
-          user?.name || 'Administrator',
-          'Perbarui Data Pegawai',
-          newData.name,
-          `Memperbarui profil kepegawaian ${newData.name} (Jabatan: ${newData.position || '-'}, Status: ${newData.status})`,
-          'pegawai'
-        );
-      }
-      setIsSaving(false); // Mematikan efek loading
-      closeModal();
-    }, 600);
+    let updatedTeachers = [];
+    if (modal.type === 'add') {
+      const newId = generateTeacherId(teachers);
+      const newTeacher = { 
+        ...newData, 
+        id: newId, 
+        payroll: {
+           tahunMasaKerja: new Date().getFullYear(),
+           tunjanganMasaKerjaManual: '',
+           jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
+           pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
+           kompetensi: [],
+           disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
+           insentifTambahan: [],
+           potonganLainnya: [],
+           jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
+           isNotified: false,
+           isConfirmed: false
+        } 
+      };
+      updatedTeachers = [...teachers, newTeacher];
+      saveAuditLog?.(
+        user?.name || 'Administrator',
+        'Tambah Pegawai Baru',
+        newData.name,
+        `Menambahkan pegawai baru ${newData.name} (NIPY: ${newData.nipy || '-'}, Jabatan: ${newData.position || 'Guru'})`,
+        'pegawai'
+      );
+    } else {
+      updatedTeachers = teachers.map(t => {
+         if (t.id === modal.data.id) {
+           return {
+             ...t,
+             ...newData,
+             family: {
+               ...(t.family || {}),
+               ...newData.family
+             }
+           };
+         }
+         return t;
+      });
+      saveAuditLog?.(
+        user?.name || 'Administrator',
+        'Perbarui Data Pegawai',
+        newData.name,
+        `Memperbarui profil kepegawaian ${newData.name} (Jabatan: ${newData.position || '-'}, Status: ${newData.status})`,
+        'pegawai'
+      );
+    }
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+    pushToSupabase('SAVE_TEACHERS', updatedTeachers).catch(err => {
+      console.warn("Gagal simpan langsung guru ke cloud:", err);
+    });
+
+    setIsSaving(false);
+    closeModal();
   };
 
   const handleExportCSV = () => {
@@ -5771,7 +5832,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
      });
 
      setTeachers(updatedTeachers);
-     safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+     safeStorageSet('payedu_teachers', updatedTeachers);
 
      try {
         await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
@@ -7585,7 +7646,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
 
     try {
         // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga
-        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        safeStorageSet('payedu_teachers', updatedTeachers);
         await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
         setNotification({ isOpen: true, type: 'success', message: 'Notifikasi transfer gaji berhasil dikirim ke portal guru.' });
     } catch (e) {
@@ -7618,7 +7679,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
 
     try {
         // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga secara Massal
-        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        safeStorageSet('payedu_teachers', updatedTeachers);
         await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
         
         setIsConfirmNotifMassalOpen(false);
@@ -7643,7 +7704,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
      // PERBAIKAN: Paksa simpan langsung ke Local Storage dan Server agar permanen tanpa jeda (bypass debounce)
      const newSettings = { ...settings, payrollStatus: 'Pending', lastModified: Date.now() };
      setSettings(newSettings);
-     safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+     safeStorageSet('payedu_settings', newSettings);
      
      try {
          await postToGoogleSheets('SAVE_SETTINGS', newSettings);
@@ -7726,7 +7787,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       if (result.status === 'success') {
         // --- TERAPKAN KE STATE LOKAL SECARA PERMANEN ---
         if (setArchives) setArchives(updatedArchivesArray);
-        safeStorageSet('payedu_archives', JSON.stringify(updatedArchivesArray));
+        safeStorageSet('payedu_archives', updatedArchivesArray);
 
         // 🪄 Reset Absensi dan Sisa Hutang untuk Bulan Baru
         setTeachers(prev => prev.map(t => {
@@ -7774,7 +7835,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         // PERBAIKAN: Paksa simpan perubahan periode dan status kembali ke Draft secara permanen
         const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
         setSettings(newSettings);
-        safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+        safeStorageSet('payedu_settings', newSettings);
         postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.warn("Sinkronisasi tertunda:", e));
         
         setNotification({ isOpen: true, type: 'success', message: 'Tutup buku berhasil! Data telah diarsipkan secara permanen.' });
@@ -7897,12 +7958,11 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   };
 
   const executeClearHistory = () => {
-     setSettings(prev => {
-        const newState = { ...prev, auditLogs: [], lastModified: Date.now() };
-        safeStorageSet('payedu_settings', JSON.stringify(newState));
-        postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Gagal hapus log:", e));
-        return newState;
-     });
+     const current = settings || {};
+     const newState = { ...current, auditLogs: [], lastModified: Date.now() };
+     setSettings(newState);
+     safeStorageSet('payedu_settings', newState);
+     postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Gagal hapus log:", e));
      setIsConfirmClearHistoryOpen(false);
      setNotification({ isOpen: true, type: 'success', message: 'Seluruh riwayat perbaikan berhasil dibersihkan secara permanen.' });
   };
@@ -10007,7 +10067,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
      setTeachers(updatedTeachers);
 
      try {
-        safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+        safeStorageSet('payedu_teachers', updatedTeachers);
         await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
         alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
         setIsEditBiodataOpen(false);
@@ -10073,7 +10133,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     
     try {
        // Tembak langsung ke awan tanpa menunggu debounce App.jsx
-       safeStorageSet('payedu_feedbacks', JSON.stringify(updatedFeedbacks));
+       safeStorageSet('payedu_feedbacks', updatedFeedbacks);
        await postToGoogleSheets('SAVE_FEEDBACKS', updatedFeedbacks);
        
        alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
@@ -10098,7 +10158,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     
     try {
        // PAKSA TEMBAK KE SERVER (BYPASS DEBOUNCE 2 DETIK)
-       safeStorageSet('payedu_teachers', JSON.stringify(updatedTeachers));
+       safeStorageSet('payedu_teachers', updatedTeachers);
        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
 
        // Memicu selebrasi
@@ -11031,15 +11091,14 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
               }} 
               setSchoolProfile={(updater) => { 
                 if (typeof setSettings === 'function') {
-                  setSettings(prev => { 
-                    const rawUpdated = typeof updater === 'function' ? updater(prev?.presensiGuruSettings ? { presensiGuruSettings: prev.presensiGuruSettings } : prev) : updater; 
-                    const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
-                    const newSettings = { ...prev, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
-                    safeStorageSet('payedu_settings', JSON.stringify(newSettings)); 
-                    try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
-                    pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
-                    return newSettings; 
-                  });
+                  const currentSettings = settings || {};
+                  const rawUpdated = typeof updater === 'function' ? updater(currentSettings?.presensiGuruSettings ? { presensiGuruSettings: currentSettings.presensiGuruSettings } : currentSettings) : updater; 
+                  const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
+                  const newSettings = { ...currentSettings, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
+                  setSettings(newSettings);
+                  safeStorageSet('payedu_settings', newSettings); 
+                  try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
+                  pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
                 } 
               }} 
               addAuditLog={saveAuditLog} 
@@ -11864,7 +11923,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     
     const newSettings = { ...settings, lastModified: Date.now() };
     setSettings(newSettings);
-    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+    safeStorageSet('payedu_settings', newSettings);
     
     // PAKSA SIMPAN LANGSUNG KE SERVER (Bypass Auto-save)
     postToGoogleSheets('SAVE_SETTINGS', newSettings)
@@ -11947,7 +12006,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 
     const newSettings = { ...settings, masterRates: newMasterRates, lastModified: Date.now() };
     setSettings(newSettings);
-    safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+    safeStorageSet('payedu_settings', newSettings);
     
     postToGoogleSheets('SAVE_SETTINGS', newSettings)
     .then(() => {
@@ -12694,7 +12753,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      
                      const newSettings = {...settings, payrollInfoText: localPortalText, lastModified: Date.now()};
                      setSettings(newSettings);
-                     safeStorageSet('payedu_settings', JSON.stringify(newSettings));
+                     safeStorageSet('payedu_settings', newSettings);
                      
                      // PAKSA SIMPAN LANGSUNG KE SERVER (Mutlak Tersimpan)
                      postToGoogleSheets('SAVE_SETTINGS', newSettings)
@@ -13140,7 +13199,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                              } else {
                                const updated = { ...settings, maintenanceMode: isChecked, lastModified: Date.now() };
                                setSettings(updated);
-                               safeStorageSet('payedu_settings', JSON.stringify(updated));
+                               safeStorageSet('payedu_settings', updated);
                                
                                try {
                                  await postToGoogleSheets('SAVE_SETTINGS', updated);
@@ -13368,7 +13427,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                           setLoginHistory([]);
                           localStorage.removeItem('payedu_loginHistory');
                           localStorage.removeItem('payedu_login_history');
-                          safeStorageSet('payedu_loginHistory', JSON.stringify([]));
+                          safeStorageSet('payedu_loginHistory', []);
                           try {
                              await postToGoogleSheets('SAVE_LOGS', []);
                           } catch (err) {
