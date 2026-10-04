@@ -12,7 +12,7 @@ import {
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
   Info, MessageSquare, ChevronDown, ChevronUp, Send, History, Bell, BellRing,
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
-  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3,
+  Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3, Check,
   WifiOff, FileSpreadsheet, Filter
 } from 'lucide-react';
 import { 
@@ -2112,7 +2112,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             addAuditLog={saveAuditLog} 
           />
         );
-      case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} />;
+      case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} presensiGuru={presensiGuru} saveAuditLog={saveAuditLog} user={user} />;
       case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
@@ -4654,7 +4654,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
 }
 
 // --- VIEW: REKAP ABSENSI (KOMPONEN BARU) ---
-function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFilter, settings }) {
+function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFilter, settings, presensiGuru = [], saveAuditLog, user }) {
   const [search, setSearch] = useState('');
   const fileInputRef = useRef(null);
   const mesinInputRef = useRef(null); // TAMBAHAN: Ref khusus untuk mesin absen
@@ -4671,14 +4671,167 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
   // TAMBAHAN: Modal Konfirmasi Reset (Pengganti window.confirm)
   const [confirmReset, setConfirmReset] = useState(false);
 
+  // 🪄 FITUR BARU: Sinkronisasi Keterlambatan dari Presensi Guru & Staff
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [syncMethod, setSyncMethod] = useState('sesi'); // 'sesi' = per sesi keterlambatan | 'hari' = per hari unik
+  const [syncFilterTab, setSyncFilterTab] = useState('all'); // 'all' | 'diff' | 'late'
+  const [syncModalSearch, setSyncModalSearch] = useState('');
+  const [selectedSyncIds, setSelectedSyncIds] = useState([]);
+  const [syncToast, setSyncToast] = useState(null);
+
+  // Periode bulan aktif format 'YYYY-MM'
+  const currentPeriod = settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+
+  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive), [teachers]);
+
+  // Mapping data keterlambatan dari presensiGuru untuk setiap guru pada periode aktif
+  const teacherPresensiMap = useMemo(() => {
+    const map = {};
+    if (!Array.isArray(presensiGuru) || presensiGuru.length === 0) return map;
+    
+    activeTeachers.forEach(t => {
+      const tIdStr = String(t.id).trim();
+      const tNameClean = (t.name || '').trim().toLowerCase();
+
+      const matched = presensiGuru.filter(r => {
+        if (!r) return false;
+        const rDate = String(r.date || r.tanggal || '');
+        if (!rDate.startsWith(currentPeriod)) return false;
+
+        const rIdStr = String(r.teacherId || '').trim();
+        const rNameClean = String(r.teacherName || '').trim().toLowerCase();
+
+        return (rIdStr && rIdStr === tIdStr) ||
+          (tNameClean && rNameClean && (rNameClean === tNameClean || rNameClean.replace(/[^a-z0-9]/g, '') === tNameClean.replace(/[^a-z0-9]/g, '')));
+      });
+
+      const lateRecords = matched.filter(r => r.status === 'Terlambat' || (Number(r.terlambatMenit) || 0) > 0);
+      const totalSessionsLate = lateRecords.length;
+      const uniqueDaysLate = new Set(lateRecords.map(r => r.date || r.tanggal)).size;
+      const totalMinutesLate = lateRecords.reduce((sum, r) => sum + (Number(r.terlambatMenit) || 0), 0);
+
+      const details = lateRecords.map(r => {
+        const rawDate = r.date || r.tanggal || '';
+        const tglNum = rawDate.split('-')[2] || rawDate;
+        const sesi = r.sesiNama || (r.sesiId === 'sore' ? 'Sesi Sore' : 'Sesi Pagi');
+        const jam = r.jamMasuk ? r.jamMasuk.slice(0, 5) : '-';
+        const menit = r.terlambatMenit ? `${r.terlambatMenit}m` : '';
+        return `Tgl ${tglNum} (${sesi}, ${jam}${menit ? `, +${menit}` : ''})`;
+      });
+
+      map[t.id] = {
+        matchedCount: matched.length,
+        totalSessionsLate,
+        uniqueDaysLate,
+        totalMinutesLate,
+        details,
+        lateRecords
+      };
+    });
+
+    return map;
+  }, [presensiGuru, activeTeachers, currentPeriod]);
+
+  // Total guru yang terlambat di Presensi Guru bulan ini
+  const totalGuruTelatPresensi = useMemo(() => {
+    return Object.values(teacherPresensiMap).filter(v => v.totalSessionsLate > 0).length;
+  }, [teacherPresensiMap]);
+
+  // Daftar komparasi antara Rekap Tabel vs Presensi Guru
+  const syncComparisonList = useMemo(() => {
+    return activeTeachers.map(t => {
+      const pInfo = teacherPresensiMap[t.id] || { totalSessionsLate: 0, uniqueDaysLate: 0, totalMinutesLate: 0, details: [] };
+      const presensiLate = syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate;
+      const tableLate = t.payroll?.disiplin?.telat !== undefined ? Number(t.payroll.disiplin.telat) : 0;
+      const isDiff = presensiLate !== tableLate;
+      return {
+        id: t.id,
+        name: t.name,
+        nipy: t.nipy || t.nip || '-',
+        position: t.position || 'Guru',
+        tableLate,
+        presensiLate,
+        isDiff,
+        details: pInfo.details,
+        totalMinutesLate: pInfo.totalMinutesLate
+      };
+    });
+  }, [activeTeachers, teacherPresensiMap, syncMethod]);
+
+  // Filter list per pencarian dan tab di dalam modal
+  const filteredSyncList = useMemo(() => {
+    return syncComparisonList.filter(item => {
+      const matchSearch = item.name.toLowerCase().includes(syncModalSearch.toLowerCase()) || item.nipy.toLowerCase().includes(syncModalSearch.toLowerCase());
+      if (!matchSearch) return false;
+      if (syncFilterTab === 'diff') return item.isDiff;
+      if (syncFilterTab === 'late') return item.presensiLate > 0;
+      return true;
+    });
+  }, [syncComparisonList, syncModalSearch, syncFilterTab]);
+
+  // Buka modal sinkronisasi dan pre-select guru yang berbeda / terlambat
+  const handleOpenSyncModal = () => {
+    const diffIds = syncComparisonList
+      .filter(item => item.isDiff || item.presensiLate > 0)
+      .map(item => item.id);
+    setSelectedSyncIds(diffIds.length > 0 ? diffIds : syncComparisonList.map(item => item.id));
+    setIsSyncModalOpen(true);
+  };
+
+  // Terapkan sinkronisasi massal dari Presensi Guru ke tabel Rekap Jam Mengajar
+  const handleApplySync = () => {
+    if (selectedSyncIds.length === 0) {
+      alert("Silakan pilih minimal 1 pegawai untuk disinkronkan.");
+      return;
+    }
+
+    setIsSaving(true);
+    const selectedSet = new Set(selectedSyncIds);
+
+    const updatedTeachers = teachers.map(t => {
+      if (selectedSet.has(t.id)) {
+        const pInfo = teacherPresensiMap[t.id];
+        const newLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
+        return {
+          ...t,
+          payroll: {
+            ...(t.payroll || {}),
+            disiplin: {
+              ...(t.payroll?.disiplin || {}),
+              telat: newLate
+            }
+          }
+        };
+      }
+      return t;
+    });
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+    pushToSupabase('SAVE_TEACHERS', updatedTeachers).catch(err => {
+      console.warn("Gagal simpan sync telat ke cloud:", err);
+    });
+
+    saveAuditLog?.(
+      user?.name || 'Administrator',
+      'Tarik Telat dari Presensi',
+      `${selectedSyncIds.length} Pegawai`,
+      `Sinkronisasi otomatis kolom Telat dari menu Presensi Guru & Staff periode ${bulan} (${syncMethod === 'hari' ? 'Metode Hari Unik' : 'Metode Sesi'})`,
+      'finansial'
+    );
+
+    setIsSaving(false);
+    setIsSyncModalOpen(false);
+    setSyncToast(`Berhasil! Data keterlambatan untuk ${selectedSyncIds.length} pegawai telah disinkronkan langsung ke tabel.`);
+    setTimeout(() => setSyncToast(null), 4000);
+  };
+
   useEffect(() => {
     if (externalFilter && externalFilter !== 'all') {
       setActiveFilter(externalFilter);
       if (setExternalFilter) setExternalFilter('all'); // Reset agar tidak tersangkut
     }
   }, [externalFilter, setExternalFilter]);
-
-  const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive), [teachers]);
 
   const filtered = activeTeachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
@@ -4974,7 +5127,8 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     setEditingData({
       id: t.id,
       name: t.name,
-      harian: safeData
+      harian: safeData,
+      telat: t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0
     });
     setIsEditModalOpen(true);
   };
@@ -5003,9 +5157,11 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
        if (!isNaN(val) && Number(val) > 0) autoHadir++;
     });
 
+    const newTelat = editingData.telat !== '' && editingData.telat !== undefined ? Math.max(0, Number(editingData.telat)) : 0;
+
     // Memberikan jeda (delay) visual cerdas
     setTimeout(() => {
-      setTeachers(prev => prev.map(t => {
+      const updated = teachers.map(t => {
         if (t.id === editingData.id) {
           return {
             ...t,
@@ -5018,18 +5174,23 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
               },
               disiplin: {
                 ...(t.payroll?.disiplin || {}),
-                hadir: autoHadir // Disimpan ke database
+                hadir: autoHadir,
+                telat: newTelat
               }
             }
           };
         }
         return t;
-      }));
+      });
+
+      setTeachers(updated);
+      safeStorageSet('payedu_teachers', updated);
+      pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn(e));
       
       setIsSaving(false); // Matikan loading
       setIsEditModalOpen(false);
       setEditingData(null);
-    }, 600);
+    }, 400);
   };
 
   // FUNGSI BARU: Untuk mengubah jam wajib langsung di tabel
@@ -5092,10 +5253,13 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
     }));
   };
 
-  // 🪄 TAMBALAN CERDAS: Fungsi untuk mengubah jumlah telat langsung di tabel
+  // 🪄 TAMBALAN CERDAS: Fungsi untuk mengubah jumlah telat langsung di tabel (Manual/Quick-Sync)
   const handleInlineTelatChange = (teacherId, newValue) => {
     const telatVal = newValue === '' ? '' : Math.max(0, Number(newValue));
-    setTeachers(prev => prev.map(t => {
+    const target = teachers.find(t => t.id === teacherId);
+    const oldVal = target?.payroll?.disiplin?.telat || 0;
+
+    const updated = teachers.map(t => {
       if (t.id === teacherId) {
         return {
           ...t,
@@ -5109,7 +5273,20 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
         };
       }
       return t;
-    }));
+    });
+
+    setTeachers(updated);
+    safeStorageSet('payedu_teachers', updated);
+
+    if (saveAuditLog && target && Number(oldVal) !== Number(telatVal)) {
+      saveAuditLog(
+        user?.name || 'Administrator',
+        'Ubah Keterlambatan',
+        target.name,
+        `Mengubah keterlambatan ${target.name} dari ${oldVal} menjadi ${telatVal} kali`,
+        'finansial'
+      );
+    }
   };
 
   // 🪄 FUNGSI BARU: Mengubah TMT langsung di tabel Gaji dan mereset override nominal
@@ -5216,6 +5393,43 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                     </div>
                   ))}
                 </div>
+                {/* 🪄 INPUT TAMBAHAN: Keterlambatan (Disiplin) dengan tombol Tarik dari Presensi */}
+                <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="bg-red-50/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                        <Clock className="text-red-500" size={15} /> Keterlambatan Kehadiran (Disiplin)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Jumlah keterlambatan masuk kelas untuk perhitungan potongan disiplin periode {bulan}.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <div className="flex items-center gap-1.5">
+                        <input 
+                          type="number"
+                          min="0"
+                          value={editingData.telat !== undefined ? editingData.telat : 0}
+                          onChange={(e) => setEditingData(prev => ({ ...prev, telat: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0) }))}
+                          className="w-16 p-1.5 text-center border border-red-300 dark:border-red-600 rounded-lg bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 font-black text-sm focus:ring-2 focus:ring-red-500 outline-none shadow-xs"
+                          placeholder="0"
+                        />
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Kali</span>
+                      </div>
+                      {(teacherPresensiMap[editingData.id]?.totalSessionsLate || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingData(prev => ({ ...prev, telat: teacherPresensiMap[editingData.id].totalSessionsLate }))}
+                          className="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 dark:text-amber-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-xs whitespace-nowrap"
+                          title={`Presensi mencatat ${teacherPresensiMap[editingData.id].totalSessionsLate} kali terlambat bulan ini`}
+                        >
+                          <Sparkles size={13} className="text-amber-500" />
+                          Tarik Presensi ({teacherPresensiMap[editingData.id].totalSessionsLate}x)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -5233,6 +5447,291 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🪄 MODAL BARU: SINKRONISASI KETERLAMBATAN DARI PRESENSI GURU & STAFF */}
+      {isSyncModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl shadow-inner border border-white/20">
+                  <UserCheck size={22} className="text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
+                    Tarik Keterlambatan dari Presensi Guru
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-medium">Periode {bulan}</span>
+                  </h3>
+                  <p className="text-xs text-teal-100 mt-0.5">
+                    Sinkronkan jumlah keterlambatan dari modul Presensi Guru & Staff langsung ke kolom Telat tabel Rekap Jam Mengajar.
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsSyncModalOpen(false)} 
+                className="p-1.5 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={20}/>
+              </button>
+            </div>
+
+            {/* Pilihan Metode Perhitungan & Summary */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 space-y-4 shrink-0">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-teal-600 dark:text-teal-400" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    Metode Perhitungan Keterlambatan:
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setSyncMethod('sesi')}
+                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${syncMethod === 'sesi' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                  >
+                    <span>Jumlah Sesi Terlambat</span>
+                    <span className="text-[10px] opacity-75 font-normal">(Standar)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSyncMethod('hari')}
+                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${syncMethod === 'hari' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                  >
+                    <span>Jumlah Hari Unik</span>
+                    <span className="text-[10px] opacity-75 font-normal">(1x/hari)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Ringkasan Indikator */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
+                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Total Pegawai</span>
+                  <div className="text-lg font-black text-slate-800 dark:text-slate-200">{activeTeachers.length}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] font-bold text-amber-500 uppercase">Terlambat di Presensi</span>
+                  <div className="text-lg font-black text-amber-600 dark:text-amber-400">{totalGuruTelatPresensi}</div>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] font-bold text-blue-500 uppercase">Perlu Update (Beda)</span>
+                  <div className="text-lg font-black text-blue-600 dark:text-blue-400">
+                    {syncComparisonList.filter(item => item.isDiff).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Tabs & Search */}
+            <div className="p-3 sm:px-5 sm:py-3 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-800 shrink-0">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setSyncFilterTab('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${syncFilterTab === 'all' ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  Semua ({syncComparisonList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSyncFilterTab('diff')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors flex items-center gap-1 ${syncFilterTab === 'diff' ? 'bg-amber-500 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  <span>Perlu Update</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 font-black">
+                    {syncComparisonList.filter(item => item.isDiff).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSyncFilterTab('late')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer transition-colors flex items-center gap-1 ${syncFilterTab === 'late' ? 'bg-red-500 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  <span>Ada Telat</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 font-black">
+                    {syncComparisonList.filter(item => item.presensiLate > 0).length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari guru / NIPY..."
+                  value={syncModalSearch}
+                  onChange={(e) => setSyncModalSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* List Tabel Perbandingan */}
+            <div className="overflow-y-auto overflow-x-auto flex-1 p-0">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-bold sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="p-3 w-10 text-center">
+                      <input 
+                        type="checkbox"
+                        checked={filteredSyncList.length > 0 && filteredSyncList.every(item => selectedSyncIds.includes(item.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const addIds = filteredSyncList.map(item => item.id);
+                            setSelectedSyncIds(prev => Array.from(new Set([...prev, ...addIds])));
+                          } else {
+                            const removeIds = new Set(filteredSyncList.map(item => item.id));
+                            setSelectedSyncIds(prev => prev.filter(id => !removeIds.has(id)));
+                          }
+                        }}
+                        className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer w-4 h-4"
+                      />
+                    </th>
+                    <th className="p-3">Nama Pegawai</th>
+                    <th className="p-3 text-center">Di Tabel Saat Ini</th>
+                    <th className="p-3">Hasil Rekap Presensi Guru</th>
+                    <th className="p-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {filteredSyncList.map(item => {
+                    const isChecked = selectedSyncIds.includes(item.id);
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className={`transition-colors cursor-pointer ${isChecked ? 'bg-teal-50/40 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}
+                        onClick={() => {
+                          setSelectedSyncIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]);
+                        }}
+                      >
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedSyncIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]);
+                            }}
+                            className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer w-4 h-4"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-800 dark:text-slate-200">{item.name}</div>
+                          <div className="text-[10px] text-slate-500">{item.nipy} • {item.position}</div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className={`inline-block px-2.5 py-1 rounded-lg font-black text-xs ${item.tableLate > 0 ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800/50' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                            {item.tableLate} Kali
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`font-black text-xs ${item.presensiLate > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                                {item.presensiLate} Kali Keterlambatan
+                              </span>
+                              {item.totalMinutesLate > 0 && (
+                                <span className="text-[10px] text-slate-400">({item.totalMinutesLate} menit total)</span>
+                              )}
+                            </div>
+                            {item.details && item.details.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {item.details.slice(0, 4).map((d, dIdx) => (
+                                  <span key={dIdx} className="text-[10px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 rounded">
+                                    {d}
+                                  </span>
+                                ))}
+                                {item.details.length > 4 && (
+                                  <span className="text-[10px] text-slate-400 self-center">+{item.details.length - 4} sesi lagi</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 italic">Disiplin / Tidak ada telat</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-center">
+                          {item.isDiff ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/50">
+                              <AlertCircle size={11} /> Beda ({item.tableLate} → {item.presensiLate})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/50">
+                              <CheckCircle size={11} /> Sesuai
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredSyncList.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="p-8 text-center text-slate-400 text-xs">
+                        Tidak ada data pegawai yang sesuai dengan filter pencarian.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  <strong className="text-teal-600 dark:text-teal-400">{selectedSyncIds.length}</strong> dari {filteredSyncList.length} pegawai dipilih
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const diffIds = syncComparisonList.filter(item => item.isDiff).map(item => item.id);
+                    setSelectedSyncIds(diffIds);
+                  }}
+                  className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 font-bold underline cursor-pointer"
+                >
+                  Pilih yang Berbeda Saja
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsSyncModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || selectedSyncIds.length === 0}
+                  onClick={handleApplySync}
+                  className="px-5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  <span>Terapkan ke Kolom Telat ({selectedSyncIds.length})</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🪄 TOAST NOTIFIKASI SINKRONISASI SUKSES */}
+      {syncToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 dark:bg-slate-100/95 text-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-3 border border-slate-700 dark:border-slate-300 animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle className="text-emerald-400 dark:text-emerald-600 shrink-0" size={20} />
+          <span className="text-xs sm:text-sm font-bold">{syncToast}</span>
+          <button type="button" onClick={() => setSyncToast(null)} className="ml-2 text-slate-400 hover:text-white dark:hover:text-black">
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -5307,6 +5806,23 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
           
           {/* DIPERBARUI: Action Buttons dibiarkan melipat (wrap) dengan rapi di perangkat sempit */}
           <div className="flex flex-wrap gap-2 w-full xl:w-auto justify-end sm:justify-start xl:justify-end">
+            {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
+            <button 
+              type="button"
+              onClick={handleOpenSyncModal} 
+              className="flex-1 sm:flex-none bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5 font-bold text-sm cursor-pointer hover:shadow-md"
+              title="Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff"
+            >
+              <UserCheck size={16} /> 
+              <span className="hidden sm:inline">Tarik dari Presensi</span>
+              <span className="sm:hidden">Presensi</span>
+              {totalGuruTelatPresensi > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 bg-white/25 text-white text-[10px] rounded-full font-black">
+                  {totalGuruTelatPresensi}
+                </span>
+              )}
+            </button>
+
             {/* TAMBAHAN: Tombol Reset Bulan */}
             <button onClick={handleResetBulan} className="flex-1 sm:flex-none bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-3 py-2 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5 font-bold text-sm">
               <Trash2 size={16} /> <span className="hidden md:inline">Reset Bulan</span><span className="md:hidden">Reset</span>
@@ -5367,7 +5883,26 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                     <div><span className="text-slate-400">Tepat Waktu:</span> <span className="font-black text-emerald-600 dark:text-emerald-400 block text-sm">{tepatWaktu} JPL</span></div>
                     <div><span className="text-slate-400">Jam Wajib Target:</span> <span className="font-bold block dark:text-slate-200">{wajib} JPL</span></div>
                     <div><span className="text-slate-400">Jam Plus & Insidental:</span> <span className="font-bold text-emerald-600 block">+{jamPlus + tInsidentalJam} JPL</span></div>
-                    <div><span className="text-slate-400">Jumlah Telat:</span> <span className={`font-bold block ${isLateOften ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{telat} Kali</span></div>
+                    <div>
+                      <span className="text-slate-400">Jumlah Telat:</span> 
+                      <span className={`font-bold block ${isLateOften ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{telat} Kali</span>
+                      {(() => {
+                        const pInfo = teacherPresensiMap[t.id];
+                        const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
+                        if (pLate > 0 && pLate !== telat) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleInlineTelatChange(t.id, pLate)}
+                              className="mt-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              ⚡ Tarik Presensi ({pLate}x)
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <div><span className="text-slate-400">Selisih Target:</span> <span className={`font-bold block ${selisih < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{selisih > 0 ? `+${selisih}` : selisih} JPL</span></div>
                  </div>
                </div>
@@ -5494,15 +6029,50 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                       {selisih > 0 ? `+${selisih}` : selisih}
                     </td>
                     <td className={`p-1.5 text-center border border-slate-400 dark:border-slate-500 align-middle ${isLateOften ? 'bg-red-100/50 dark:bg-red-900/30' : 'bg-red-50/30 dark:bg-red-900/10'}`}>
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0} 
-                        onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
-                        className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
-                        title="Edit jumlah telat secara langsung"
-                        placeholder="0"
-                      />
+                      <div className="flex flex-col items-center justify-center gap-1 py-0.5">
+                        <input 
+                          type="number" 
+                          min="0"
+                          value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0} 
+                          onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
+                          className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
+                          title="Edit manual jumlah keterlambatan (dapat diubah bebas oleh Admin)"
+                          placeholder="0"
+                        />
+                        {(() => {
+                          const pInfo = teacherPresensiMap[t.id];
+                          const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
+                          const curLate = Number(t.payroll?.disiplin?.telat) || 0;
+                          
+                          if (pLate > 0) {
+                            if (pLate !== curLate) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleInlineTelatChange(t.id, pLate)}
+                                  className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer flex items-center gap-0.5 shadow-xs whitespace-nowrap"
+                                  title={`Presensi Guru mencatat ${pLate}x keterlambatan. Klik untuk langsung menerapkan nilai ini.`}
+                                >
+                                  ⚡ Presensi: {pLate}x
+                                </button>
+                              );
+                            } else {
+                              return (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap" title="Nilai sudah sinkron dengan Presensi Guru">
+                                  ✓ Presensi ({pLate}x)
+                                </span>
+                              );
+                            }
+                          } else if (curLate > 0) {
+                            return (
+                              <span className="text-[9px] text-slate-400 italic" title="Diinput manual oleh Admin (Catatan Presensi: 0)">
+                                Manual
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     </td>
                     <td className="p-3 text-center font-black text-emerald-700 dark:text-emerald-400 border border-slate-400 dark:border-slate-500 bg-emerald-50/50 dark:bg-emerald-900/20 text-lg">
                       {tepatWaktu}
