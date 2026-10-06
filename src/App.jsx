@@ -21,6 +21,8 @@ import {
   fetchPresensiGuru,
   pushPresensiGuru,
   subscribePresensiGuru,
+  subscribeAllChanges,
+  checkCloudTimestamp,
   deduplicateArchives,
   deduplicateTeachers
 } from './services/dbService';
@@ -793,6 +795,7 @@ export default function App() {
   const lastSavedFeedbacksRef = useRef(JSON.stringify(feedbacks));
   const lastSavedLogsRef = useRef(JSON.stringify(loginHistory));
   const lastSavedPresensiRef = useRef(JSON.stringify(presensiGuru));
+  const lastKnownCloudTimestampRef = useRef(null); // 🔋 Smart Polling: Pelacak timestamp cloud terakhir
 
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -1017,15 +1020,43 @@ export default function App() {
     };
   }, []);
 
-  // Radar Latar Belakang (Polling) mengecek versi data dari Supabase Cloud (Setiap 8 detik)
+  // 📡 Real-time Subscription: Menerima perubahan SEMUA data dari Supabase secara instan (hemat bandwidth)
+  useEffect(() => {
+    let realtimeThrottleTimer = null;
+    const throttledFetch = () => {
+      if (realtimeThrottleTimer) return;
+      realtimeThrottleTimer = setTimeout(() => {
+        realtimeThrottleTimer = null;
+        if (!isPushingDataRef.current) fetchCloudData(true);
+      }, 2000); // Tunggu 2 detik setelah perubahan terakhir sebelum fetch
+    };
+
+    const unsubscribeAll = subscribeAllChanges(
+      throttledFetch, // onSettingsChange
+      throttledFetch, // onTeachersChange
+      throttledFetch  // onArchivesChange
+    );
+    return () => {
+      if (realtimeThrottleTimer) clearTimeout(realtimeThrottleTimer);
+      unsubscribeAll();
+    };
+  }, []);
+
+  // 🔋 Radar Latar Belakang (Smart Polling) — Cek ringan setiap 2 menit, fetch penuh hanya jika ada perubahan
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return; 
 
-    const pollInterval = setInterval(() => {
+    const pollInterval = setInterval(async () => {
        if (!isPushingDataRef.current) {
-          fetchCloudData(true); 
+          try {
+            const cloudTs = await checkCloudTimestamp();
+            if (cloudTs && cloudTs !== lastKnownCloudTimestampRef.current) {
+              lastKnownCloudTimestampRef.current = cloudTs;
+              fetchCloudData(true);
+            }
+          } catch (e) { /* skip jika gagal cek timestamp */ }
        }
-    }, 8000); 
+    }, 120000); // ⚡ 2 menit (sebelumnya 8 detik — menghemat ~93% bandwidth polling)
 
     return () => clearInterval(pollInterval);
   }, [isDataLoaded, generalSettings.lastModified, hasConflict]);
@@ -1140,7 +1171,7 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict, user]);
 
-  // 🪄 PERBAIKAN PERMANEN 3: Auto-Save Arsip dan Feedback
+  // 🪄 PERBAIKAN PERMANEN 3: Auto-Save Arsip dan Feedback (🔋 dengan Debounce untuk hemat bandwidth)
   useEffect(() => {
     // Hanya Admin yang boleh memanipulasi Arsip secara global
     if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
@@ -1149,7 +1180,10 @@ export default function App() {
     lastSavedArchivesRef.current = currentStr;
 
     safeStorageSet('payedu_archives', archives);
-    pushToSupabase('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
+    const timeoutId = setTimeout(() => {
+      pushToSupabase('SAVE_ARCHIVES', archives).catch(e => console.warn(e));
+    }, 3000); // 🔋 Debounce 3 detik agar tidak push terlalu sering
+    return () => clearTimeout(timeoutId);
   }, [archives, isDataLoaded, hasConflict, user]);
 
   useEffect(() => {
@@ -1160,10 +1194,13 @@ export default function App() {
     lastSavedFeedbacksRef.current = currentStr;
 
     safeStorageSet('payedu_feedbacks', feedbacks);
-    pushToSupabase('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
+    const timeoutId = setTimeout(() => {
+      pushToSupabase('SAVE_FEEDBACKS', feedbacks).catch(e => console.warn(e));
+    }, 3000); // 🔋 Debounce 3 detik
+    return () => clearTimeout(timeoutId);
   }, [feedbacks, isDataLoaded, hasConflict, user]);
 
-  // Auto-Save Riwayat Login
+  // Auto-Save Riwayat Login (🔋 dengan Debounce)
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
     const currentStr = JSON.stringify(loginHistory);
@@ -1171,10 +1208,13 @@ export default function App() {
 
     lastSavedLogsRef.current = currentStr;
     safeStorageSet('payedu_loginHistory', loginHistory);
-    pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
+    const timeoutId = setTimeout(() => {
+      pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
+    }, 5000); // 🔋 Debounce 5 detik (login logs jarang berubah)
+    return () => clearTimeout(timeoutId);
   }, [loginHistory, isDataLoaded, hasConflict]);
 
-  // Auto-Save Presensi Guru (Hanya untuk Admin / Kepala Sekolah)
+  // Auto-Save Presensi Guru (Hanya untuk Admin / Kepala Sekolah, 🔋 dengan Debounce)
   // HP Guru tidak melakukan auto-save pasif di background agar tidak menimpa edit manual Admin
   useEffect(() => {
     if (!isDataLoaded || !user || user.role === 'guru') return;
@@ -1183,7 +1223,10 @@ export default function App() {
 
     lastSavedPresensiRef.current = currentStr;
     safeStorageSet('payedu_presensi_guru', presensiGuru);
-    pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
+    const timeoutId = setTimeout(() => {
+      pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
+    }, 3000); // 🔋 Debounce 3 detik
+    return () => clearTimeout(timeoutId);
   }, [presensiGuru, isDataLoaded, user]);
 
   // 🛡️ PROTEKSI PERMANEN: Flush data sebelum reload / tutup browser

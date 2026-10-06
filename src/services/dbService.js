@@ -33,9 +33,13 @@ const safeStorageSet = (key, value) => {
 // agar tidak bertabrakan dengan settings umum (id='general')
 // ==========================================
 
+// 🔋 OPTIMASI BANDWIDTH: Pelacak hash push terakhir agar tidak push data identik berulang-ulang
+let _lastPushedPresensiHash = '';
+
 /**
  * Menyimpan data presensi guru ke LocalStorage dan Supabase (baris terpisah).
  * Fungsi ini dipanggil langsung setiap kali ada perubahan presensi.
+ * 🔋 OPTIMASI: Dilengkapi hash tracking untuk skip push jika data tidak berubah.
  */
 export const pushPresensiGuru = async (presensiArray, options = {}) => {
   if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
@@ -51,6 +55,12 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
   // 2. Simpan ke Supabase sebagai baris terpisah di tabel settings
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline)' };
+  }
+
+  // 🔋 OPTIMASI BANDWIDTH: Skip push jika data identik dengan push terakhir yang berhasil
+  const currentPresensiHash = JSON.stringify(presensiArray);
+  if (!options.overwrite && _lastPushedPresensiHash === currentPresensiHash) {
+    return { status: 'success', message: 'Data presensi tidak berubah, skip sync ke cloud' };
   }
 
   try {
@@ -91,6 +101,8 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
       console.error('Supabase presensi_guru upsert error:', error);
       return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud: ' + error.message };
     }
+    // 🔋 Update hash setelah push berhasil
+    _lastPushedPresensiHash = JSON.stringify(dataToPush);
     return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud', data: dataToPush };
   } catch (error) {
     console.error('Error saat menyimpan presensi ke Supabase:', error);
@@ -772,5 +784,70 @@ export const fetchCloudData = async () => {
       }
     };
   }
+};
+
+// ==========================================
+// 🔋 OPTIMASI BANDWIDTH: Fungsi-Fungsi Penghematan Egress
+// ==========================================
+
+/**
+ * Pengecekan ringan: Hanya mengambil timestamp `updated_at` dari settings.
+ * Bandwidth: ~100 bytes vs ~100KB untuk full fetch.
+ * Digunakan oleh smart polling untuk mendeteksi perubahan tanpa mengunduh semua data.
+ */
+export const checkCloudTimestamp = async () => {
+  if (!isSupabaseConfigured() || !supabase || !navigator.onLine) return null;
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('updated_at')
+      .eq('id', 'general')
+      .single();
+    if (error) return null;
+    return data?.updated_at || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
+ * Subscribe ke perubahan SEMUA tabel utama via Supabase Realtime.
+ * Menggantikan polling agresif — zero bandwidth untuk mendeteksi perubahan.
+ * Callback dipanggil saat data di server berubah.
+ */
+export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchivesChange) => {
+  if (!isSupabaseConfigured() || !supabase) {
+    return () => {}; // noop unsubscribe
+  }
+
+  const channel = supabase
+    .channel('payedu-all-data-changes')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'settings',
+      filter: 'id=eq.general'
+    }, () => {
+      if (typeof onSettingsChange === 'function') onSettingsChange();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'teachers'
+    }, () => {
+      if (typeof onTeachersChange === 'function') onTeachersChange();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'archives'
+    }, () => {
+      if (typeof onArchivesChange === 'function') onArchivesChange();
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 };
 
