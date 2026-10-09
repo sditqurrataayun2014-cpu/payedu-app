@@ -504,7 +504,8 @@ export default function PresensiGuruView({
       if (rId && targetTId && rId === targetTId) return true;
       if (normTName && r.teacherName) {
         const rNormName = String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (rNormName && (rNormName === normTName || rNormName.includes(normTName) || normTName.includes(rNormName))) return true;
+        // Wajib pencocokan nama PERSIS (exact match), DILARANG pakai includes/substring agar tidak tertukar antar guru (misal INA dengan NUR 'AFNI AGUSTINA)
+        if (rNormName && rNormName === normTName) return true;
       }
       return false;
     });
@@ -575,11 +576,11 @@ export default function PresensiGuruView({
       if (byName) return byName;
     }
 
-    // 5. Cocokkan Nama Bersih (tanpa gelar/tanda baca)
+    // 5. Cocokkan Nama Bersih (tanpa gelar/tanda baca) - Wajib exact match tanpa substring collision
     if (cleanCurName) {
       const byClean = activeTeachers.find(t => {
         const cleanT = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        return cleanT && (cleanT === cleanCurName || cleanT.includes(cleanCurName) || cleanCurName.includes(cleanT));
+        return cleanT && cleanT === cleanCurName;
       });
       if (byClean) return byClean;
     }
@@ -743,10 +744,10 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     const tId = teacher.id != null ? String(teacher.id).trim() : '';
     if (rId && tId && rId === tId) return true;
 
-    // 2. Name matching (clean without punctuation/spaces)
+    // 2. Name matching (clean without punctuation/spaces) - Wajib exact match tanpa substring collision
     const tName = String(teacher.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const rName = String(r.teacherName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (tName && rName && (tName === rName || tName.includes(rName) || rName.includes(tName))) return true;
+    if (tName && rName && tName === rName) return true;
 
     // 3. Linked username or NIPY matching
     if (teacher.linkedUsername && rId && rId.toLowerCase() === String(teacher.linkedUsername).trim().toLowerCase()) return true;
@@ -1404,12 +1405,12 @@ function AdminRekapPanel({
       const rId = String(r.teacherId || '').trim();
       if (rId && targetId && rId === targetId) return true;
 
-      // 2. Cocokkan Nama Lengkap atau Nama Bersih
+      // 2. Cocokkan Nama Lengkap atau Nama Bersih - Wajib exact match tanpa substring collision
       if (targetName && r.teacherName) {
         const rName = String(r.teacherName).trim().toLowerCase();
         if (rName === targetName) return true;
         const cleanRName = rName.replace(/[^a-z0-9]/g, '');
-        if (cleanRName && cleanTargetName && (cleanRName === cleanTargetName || cleanRName.includes(cleanTargetName) || cleanTargetName.includes(cleanRName))) {
+        if (cleanRName && cleanTargetName && cleanRName === cleanTargetName) {
           return true;
         }
       }
