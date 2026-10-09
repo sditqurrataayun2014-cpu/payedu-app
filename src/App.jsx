@@ -25,6 +25,7 @@ import {
   checkCloudTimestamp,
   deduplicateArchives,
   deduplicateTeachers,
+  sortTeachersById,
   fetchSettingsOnly,
   fetchTeachersOnly,
   fetchArchivesOnly,
@@ -133,7 +134,7 @@ const sanitizeTeacherData = (t) => {
 const sanitizeTeacherList = (list) => {
   if (!Array.isArray(list)) return [];
   const sanitized = list.map(sanitizeTeacherData);
-  return deduplicateTeachers(sanitized);
+  return sortTeachersById(deduplicateTeachers(sanitized));
 };
 
 // --- DATA DUMMY & KONSTANTA (SEKARANG MENJADI DINAMIS) ---
@@ -1634,6 +1635,14 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
       );
 
       if (teacherData && !authUser) {
+         // 🛡️ KEAMANAN: Tolak login jika guru berstatus Non-Aktif / Resign
+         if (!isTeacherActive(teacherData)) {
+            recordLogin(teacherData.name, 'Guru', 'Gagal (Status Non-Aktif/Resign)');
+            setError('Akses ditolak: Akun pegawai ini telah dinonaktifkan (Status: Resign/Non-Aktif). Hubungi Tata Usaha.');
+            setIsLoading(false);
+            return;
+         }
+
          // Cek password custom ATAU plain password ATAU default password (2 huruf inisial kapital + 123)
          const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
          const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
@@ -3266,7 +3275,9 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
   const [isSaving, setIsSaving] = useState(false);
 
-  const filtered = teachers.filter(t => {
+  const sortedTeachers = useMemo(() => sortTeachersById(teachers), [teachers]);
+
+  const filtered = sortedTeachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
     const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
     
@@ -12494,10 +12505,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
     ];
 
-    // 2. Petakan data Guru secara langsung dari database guru
-    const teacherAccounts = teachers.map(t => {
+    // 2. Petakan data Guru secara langsung dari database guru dengan urutan rapi dan status keaktifan
+    const sortedTeachers = sortTeachersById(teachers);
+    const teacherAccounts = sortedTeachers.map(t => {
       const cleanName = t.name ? t.name.replace(/[^a-zA-Z]/g, '') : 'GU';
       const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
+      const isAct = isTeacherActive(t);
       
       return { 
         id: t.id, 
@@ -12506,7 +12519,9 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         password: t.customPassword || simpleHash(defaultPass),
         plainPassword: t.plainPassword || defaultPass, // Password akan selalu tampil JELAS untuk Admin
         role: 'Guru',
-        phone: t.phone || ''
+        phone: t.phone || '',
+        isActive: isAct,
+        workStatus: t.workStatus || (isAct ? 'Aktif' : 'Resign')
       };
     });
     
@@ -12514,6 +12529,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   }, [teachers]);
 
   const [searchAcc, setSearchAcc] = useState('');
+  const [accStatusFilter, setAccStatusFilter] = useState('AKTIF'); // 'AKTIF', 'ALL', 'ADMIN', 'RESIGN'
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
@@ -12554,11 +12570,33 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   // TAMBAHAN: State Notifikasi Lokal untuk Error AI Summarizer
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
 
-  // PERBAIKAN: Menambahkan fallback (|| '') untuk mencegah crash toLowerCase pada data undefined
-  const filteredAccounts = accounts.filter(a =>
-    (a.name || '').toLowerCase().includes(searchAcc.toLowerCase()) ||
-    (a.username || '').toLowerCase().includes(searchAcc.toLowerCase())
-  );
+  // PERBAIKAN CERDAS: Filter Akun dengan urutan deterministik & filter status keaktifan
+  const filteredAccounts = useMemo(() => {
+    return (accounts || []).filter(a => {
+      const name = (a.name || '').toLowerCase();
+      const uname = (a.username || '').toLowerCase();
+      const s = searchAcc.toLowerCase().trim();
+      const matchSearch = !s || name.includes(s) || uname.includes(s);
+      if (!matchSearch) return false;
+
+      if (accStatusFilter === 'ADMIN') {
+        return a.role === 'Admin' || a.role === 'Kepala Sekolah' || a.role === 'Yayasan';
+      }
+      if (accStatusFilter === 'RESIGN') {
+        return a.role === 'Guru' && a.isActive === false;
+      }
+      if (accStatusFilter === 'AKTIF') {
+        return a.role !== 'Guru' || a.isActive !== false;
+      }
+      return true; // 'ALL'
+    }).sort((a, b) => {
+      const isAAdmin = a.role === 'Admin' || a.role === 'Kepala Sekolah' || a.role === 'Yayasan';
+      const isBAdmin = b.role === 'Admin' || b.role === 'Kepala Sekolah' || b.role === 'Yayasan';
+      if (isAAdmin && !isBAdmin) return -1;
+      if (!isAAdmin && isBAdmin) return 1;
+      return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true });
+    });
+  }, [accounts, searchAcc, accStatusFilter]);
 
   // 🪄 TAMBALAN CERDAS: Export Data Login ke CSV Sesuai Gambar 🪄
   const handleExportLoginCSV = () => {
@@ -13705,8 +13743,22 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                        <Key className="text-amber-500" size={18} /> Akses Login Pengguna
                      </h3>
+                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                       Kelola akun pengguna, reset sandi, dan kirim kredensial login via WhatsApp
+                     </p>
                    </div>
-                   <div className="flex gap-2 w-full xl:w-auto flex-wrap sm:flex-nowrap">
+                   <div className="flex gap-2 w-full xl:w-auto flex-wrap sm:flex-nowrap items-center">
+                      <select
+                        value={accStatusFilter}
+                        onChange={e => setAccStatusFilter(e.target.value)}
+                        className="py-2 px-3 text-xs md:text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-400 font-semibold shadow-sm shrink-0"
+                        title="Filter Status Akun"
+                      >
+                        <option value="AKTIF">Hanya Akun Aktif</option>
+                        <option value="ALL">Semua Akun (Termasuk Resign)</option>
+                        <option value="ADMIN">Hanya Admin & Kepsek</option>
+                        <option value="RESIGN">Pegawai Non-Aktif / Resign</option>
+                      </select>
                       <div className="relative w-full sm:flex-1">
                         <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                         <input 
@@ -13733,8 +13785,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                <h4 className="font-bold text-base text-slate-800 dark:text-white">{acc.name || 'Tanpa Nama'}</h4>
                                <div className="text-xs font-mono text-slate-500 mt-0.5">Username: <span className="font-bold text-slate-700 dark:text-slate-200">{acc.username || '-'}</span></div>
                             </div>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                               {acc.role || 'Guru'}
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : acc.isActive === false ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                               {acc.isActive === false ? 'Guru (Resign)' : (acc.role || 'Guru')}
                             </span>
                          </div>
 
@@ -13802,24 +13854,28 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                              )}
                            </td>
                            <td className="p-4">
-                             <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
-                               {acc.role || 'Guru'}
+                             <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : acc.isActive === false ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                               {acc.isActive === false ? 'Guru (Resign)' : (acc.role || 'Guru')}
                              </span>
                            </td>
                            <td className="p-4 text-center">
                              <div className="flex items-center justify-center gap-2">
                                {/* TAMBAHAN: Tombol Kirim Akses via WhatsApp */}
-                               <button 
-                                 onClick={() => {
-                                    const passText = acc.plainPassword || `${(acc.name.replace(/[^a-zA-Z]/g, '').substring(0,2).toUpperCase() || 'GU')}123`;
-                                    const text = `Halo ${acc.name},\nBerikut adalah akses login Portal Pegawai Anda:\n\nUsername: ${acc.username}\nPassword: ${passText}\n\nHarap simpan dengan baik.`;
-                                    window.open(`https://api.whatsapp.com/send?phone=${acc.phone || ''}&text=${encodeURIComponent(text)}`);
-                                 }}
-                                 className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors"
-                                 title="Kirim Akses via WhatsApp"
-                               >
-                                 <Send size={14} />
-                               </button>
+                                {acc.isActive !== false ? (
+                                 <button 
+                                   onClick={() => {
+                                      const passText = acc.plainPassword || `${(acc.name.replace(/[^a-zA-Z]/g, '').substring(0,2).toUpperCase() || 'GU')}123`;
+                                      const text = `Halo ${acc.name},\nBerikut adalah akses login Portal Pegawai Anda:\n\nUsername: ${acc.username}\nPassword: ${passText}\n\nHarap simpan dengan baik.`;
+                                      window.open(`https://api.whatsapp.com/send?phone=${acc.phone || ''}&text=${encodeURIComponent(text)}`);
+                                   }}
+                                   className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors"
+                                   title="Kirim Akses via WhatsApp"
+                                 >
+                                   <Send size={14} />
+                                 </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic px-1">Non-Aktif</span>
+                                )}
 
                                <button onClick={() => openModal('edit', acc)} className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-md transition-colors" title="Edit Akun">
                                  <Edit size={14} />

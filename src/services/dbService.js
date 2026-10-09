@@ -385,8 +385,21 @@ export const deduplicateArchives = (archivesList) => {
 };
 
 /**
+ * Menyortir array data guru secara alami berdasarkan ID (G01QA, G02QA, ..., G85QA).
+ * Menjamin urutan guru selalu konsisten dan tidak acak di seluruh sistem.
+ */
+export const sortTeachersById = (teachersList) => {
+  if (!Array.isArray(teachersList)) return [];
+  return [...teachersList].sort((a, b) => {
+    const idA = String(a?.id || '');
+    const idB = String(b?.id || '');
+    return idA.localeCompare(idB, undefined, { numeric: true });
+  });
+};
+
+/**
  * Deduplikasi data guru berdasarkan ID, NIPY, atau Nama Lengkap yang dinormalisasi.
- * Mencegah munculnya data guru ganda di seluruh sistem.
+ * Mencegah munculnya data guru ganda di seluruh sistem dan mengembalikan data terurut rapi.
  */
 export const deduplicateTeachers = (teachersList) => {
   if (!Array.isArray(teachersList)) return [];
@@ -412,7 +425,7 @@ export const deduplicateTeachers = (teachersList) => {
       map.set(key, t);
     }
   }
-  return Array.from(map.values());
+  return sortTeachersById(Array.from(map.values()));
 };
 
 /**
@@ -662,10 +675,11 @@ export const fetchCloudData = async (options = {}) => {
       console.warn('Gagal mengambil settings dari Supabase:', settingsErr);
     }
 
-    // 2. Fetch Teachers
+    // 2. Fetch Teachers (Terurut rapi berdasarkan ID)
     const { data: teachersRows, error: teachersErr } = await supabase
       .from('teachers')
-      .select('id, data');
+      .select('id, data')
+      .order('id', { ascending: true });
 
     if (teachersErr) console.warn('Gagal mengambil teachers dari Supabase:', teachersErr);
 
@@ -955,7 +969,8 @@ export const fetchTeachersOnly = async () => {
   try {
     const { data: rows, error } = await supabase
       .from('teachers')
-      .select('id, data');
+      .select('id, data')
+      .order('id', { ascending: true });
     if (error || !Array.isArray(rows)) return null;
     const teachers = rows.map(r => {
       const parsedData = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
