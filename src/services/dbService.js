@@ -63,51 +63,66 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
     return { status: 'success', message: 'Data presensi tidak berubah, skip sync ke cloud' };
   }
 
-  try {
-    let dataToPush = presensiArray;
-    // 🛡️ ANTI OVERWRITE / CONCURRENCY SAFE:
-    // Sebelum menyimpan ke Supabase, ambil data presensi server terkini dan gabungkan (merge).
-    // KECUALI jika options.overwrite === true (misal saat Admin menghapus rekaman secara eksplisit).
-    if (!options.overwrite) {
-      try {
-        const { data: serverRow } = await supabase
-          .from('settings')
-          .select('data')
-          .eq('id', 'presensi_guru')
-          .single();
+  // 🛡️ ANTI-RACE CONDITION RETRY LOOP (Hingga 3 kali dengan Exponential Jitter)
+  // Menghindari tabrakan saat puluhan guru menekan tombol absen secara serempak di jam 7 pagi
+  const maxRetries = options.overwrite ? 1 : 3;
+  let lastError = null;
 
-        if (serverRow?.data) {
-          const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
-          if (Array.isArray(serverData) && serverData.length > 0) {
-            dataToPush = mergePresensiArrays(serverData, presensiArray);
-            safeStorageSet('payedu_presensi_guru', dataToPush);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      let dataToPush = presensiArray;
+      // 🛡️ ANTI OVERWRITE / CONCURRENCY SAFE:
+      // Ambil data presensi server terkini dan gabungkan (merge)
+      if (!options.overwrite) {
+        try {
+          const { data: serverRow } = await supabase
+            .from('settings')
+            .select('data')
+            .eq('id', 'presensi_guru')
+            .single();
+
+          if (serverRow?.data) {
+            const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              dataToPush = mergePresensiArrays(serverData, presensiArray);
+              safeStorageSet('payedu_presensi_guru', dataToPush);
+            }
           }
+        } catch (fetchErr) {
+          console.warn(`Peringatan pembacaan data presensi cloud sebelum push (attempt ${attempt}):`, fetchErr);
         }
-      } catch (fetchErr) {
-        console.warn('Peringatan pembacaan data presensi cloud sebelum push:', fetchErr);
+      }
+
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ 
+          id: 'presensi_guru', 
+          data: dataToPush, 
+          updated_at: now 
+        });
+
+      if (!error) {
+        // 🔋 Update hash setelah push berhasil
+        _lastPushedPresensiHash = JSON.stringify(dataToPush);
+        return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud', data: dataToPush };
+      } else {
+        lastError = error;
+        if (attempt < maxRetries) {
+          // Jitter delay acak 150-450ms untuk memecah tabrakan serentak
+          await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
+        }
+      }
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
       }
     }
-
-    const now = new Date().toISOString();
-    const { error } = await supabase
-      .from('settings')
-      .upsert({ 
-        id: 'presensi_guru', 
-        data: dataToPush, 
-        updated_at: now 
-      });
-
-    if (error) {
-      console.error('Supabase presensi_guru upsert error:', error);
-      return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud: ' + error.message };
-    }
-    // 🔋 Update hash setelah push berhasil
-    _lastPushedPresensiHash = JSON.stringify(dataToPush);
-    return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud', data: dataToPush };
-  } catch (error) {
-    console.error('Error saat menyimpan presensi ke Supabase:', error);
-    return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud' };
   }
+
+  console.error('Supabase presensi_guru upsert error:', lastError);
+  return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud' };
 };
 
 /**
@@ -248,35 +263,41 @@ export function mergePresensiArrays(serverArr, localArr) {
 
     // Rekonsiliasi Status
     const isMeaningfulStatus = (s) => s && !['Alpa', 'Belum Absen'].includes(s);
+
+    // 🛡️ ATURAN ANTI-WIPEOUT 1: Jam Masuk
+    // Jika salah satu rekaman memiliki jamMasuk valid, jamMasuk TIDAK BOLEH HILANG
+    // kecuali rekaman baru memang sengaja berstatus izin/sakit resmi tanpa jam masuk.
+    let finalJamMasuk = newer.jamMasuk || older.jamMasuk || null;
+
+    // 🛡️ ATURAN ANTI-WIPEOUT 2: Jam Pulang
+    let finalJamPulang = newer.jamPulang || older.jamPulang || null;
+
+    // 🛡️ ATURAN ANTI-WIPEOUT 3: Status Kehadiran
+    // Status bermakna (Hadir, Terlambat, Izin, Sakit, Cuti, Dinas Luar) SELALU MENANG atas 'Alpa' atau 'Belum Absen'
     let finalStatus = newer.status;
-    if (!isMeaningfulStatus(newer.status) && isMeaningfulStatus(older.status) && newTime === existingTime) {
+    if (isMeaningfulStatus(older.status) && !isMeaningfulStatus(newer.status)) {
       finalStatus = older.status;
+    } else if (!isMeaningfulStatus(newer.status) && finalJamMasuk) {
+      // Jika memiliki jam masuk tapi status bertuliskan 'Alpa' atau 'Belum Absen', perbaiki menjadi Hadir / Terlambat
+      finalStatus = ((newer.terlambatMenit ?? 0) > 0 || (older.terlambatMenit ?? 0) > 0) ? 'Terlambat' : 'Hadir';
     } else if (!finalStatus) {
-      finalStatus = older.status || 'Alpa';
+      finalStatus = older.status || (finalJamMasuk ? 'Hadir' : 'Alpa');
     }
 
-    // Rekonsiliasi Jam Masuk:
-    // Utamakan data yang lebih baru jika diisi.
-    // Jika data yang lebih baru tidak ada jamMasuk (misal hanya absen pulang), gunakan jamMasuk data lama.
-    let finalJamMasuk = newer.jamMasuk;
-    if (!finalJamMasuk && older.jamMasuk && !['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(newer.status)) {
-      finalJamMasuk = older.jamMasuk;
-    }
-
-    // Rekonsiliasi Jam Pulang:
-    let finalJamPulang = newer.jamPulang;
-    if (!finalJamPulang && older.jamPulang) {
-      finalJamPulang = older.jamPulang;
+    // Jika status pengajuan izin resmi yang sah tanpa jam masuk
+    if (['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(finalStatus) && !newer.jamMasuk && !older.jamMasuk) {
+      finalJamMasuk = null;
+      finalJamPulang = null;
     }
 
     // Terlambat Menit
     let finalTerlambat = newer.terlambatMenit;
-    if (finalTerlambat === undefined || finalTerlambat === null) {
-      finalTerlambat = older.terlambatMenit ?? 0;
+    if (finalTerlambat === undefined || finalTerlambat === null || (finalTerlambat === 0 && (older.terlambatMenit ?? 0) > 0)) {
+      finalTerlambat = older.terlambatMenit ?? newer.terlambatMenit ?? 0;
     }
 
     // Keterangan
-    const finalKeterangan = newer.keterangan !== undefined && newer.keterangan !== ''
+    const finalKeterangan = (newer.keterangan !== undefined && newer.keterangan !== '')
       ? newer.keterangan
       : (older.keterangan || '');
 
@@ -603,7 +624,11 @@ export const pushCloudData = async (action, payload) => {
  * Mengambil seluruh data aplikasi dari Supabase (dengan fallback ke LocalStorage & Auto-Push jika Supabase kosong).
  * CATATAN: Presensi guru kini diambil TERPISAH via fetchPresensiGuru().
  */
-export const fetchCloudData = async () => {
+export const fetchCloudData = async (options = {}) => {
+  const isBackground = typeof options === 'boolean' ? options : !!options?.isBackground;
+  const userRole = typeof options === 'object' ? options?.role : undefined;
+  const isGuru = userRole === 'guru';
+
   const localSettings = safeStorageGet('payedu_settings', null);
   const localTeachers = safeStorageGet('payedu_teachers', []);
   const localArchives = safeStorageGet('payedu_archives', []);
@@ -626,7 +651,7 @@ export const fetchCloudData = async () => {
   }
 
   try {
-    // 1. Fetch General Settings
+    // 1. Fetch General Settings (~1-2 KB)
     const { data: settingsRow, error: settingsErr } = await supabase
       .from('settings')
       .select('data')
@@ -644,27 +669,84 @@ export const fetchCloudData = async () => {
 
     if (teachersErr) console.warn('Gagal mengambil teachers dari Supabase:', teachersErr);
 
-    // 3. Fetch Archives
-    const { data: archivesRows, error: archivesErr } = await supabase
-      .from('archives')
-      .select('id, period, data');
+    // 3. 🔋 OPTIMASI EGRESS ARSIP GAJI:
+    // Guru & Admin tetap bisa melihat seluruh arsip bulan-bulan lampau secara utuh.
+    // Namun kita gunakan cek timestamp ringan (~100 bytes) agar tidak mengunduh ulang megabytes arsip jika belum ada perubahan.
+    let serverArchives = null;
+    const forceArchives = typeof options === 'object' && options?.forceArchives;
+    if (localArchives && localArchives.length > 0 && !forceArchives) {
+      try {
+        const { data: latestArcRow } = await supabase
+          .from('archives')
+          .select('updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(1);
 
-    if (archivesErr) console.warn('Gagal mengambil archives dari Supabase:', archivesErr);
+        const latestTs = latestArcRow?.[0]?.updated_at ? new Date(latestArcRow[0].updated_at).getTime() : 0;
+        const lastSyncTs = Number(safeStorageGet('payedu_archives_last_sync', 0)) || 0;
 
-    // 4. Fetch Feedbacks
-    const { data: feedbackRows, error: feedbackErr } = await supabase
-      .from('feedbacks')
-      .select('id, data');
+        if (latestTs > 0 && lastSyncTs > 0 && latestTs <= lastSyncTs) {
+          // Arsip belum ada update baru dari admin, gunakan cache lokal (Hemat ~99% bandwidth!)
+          serverArchives = localArchives;
+        } else {
+          // Ada arsip baru atau belum pernah sync, unduh data terbaru
+          const { data: archivesRows, error: archivesErr } = await supabase
+            .from('archives')
+            .select('id, period, data');
+          if (!archivesErr && Array.isArray(archivesRows)) {
+            serverArchives = archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data));
+            safeStorageSet('payedu_archives_last_sync', Date.now());
+          }
+        }
+      } catch (arcCheckErr) {
+        serverArchives = localArchives;
+      }
+    } else {
+      // Local kosong atau dipaksa refresh: ambil penuh
+      const { data: archivesRows, error: archivesErr } = await supabase
+        .from('archives')
+        .select('id, period, data');
+      if (!archivesErr && Array.isArray(archivesRows)) {
+        serverArchives = archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data));
+        safeStorageSet('payedu_archives_last_sync', Date.now());
+      }
+    }
 
-    if (feedbackErr) console.warn('Gagal mengambil feedbacks dari Supabase:', feedbackErr);
+    // 4. 🔋 OPTIMASI: Feedbacks (Kotak Saran)
+    // Akun Guru tidak pernah melihat list feedback seluruh sekolah, lewati unduhan untuk guru!
+    let serverFeedbacks = localFeedbacks;
+    if (!isGuru) {
+      const { data: feedbackRows, error: feedbackErr } = await supabase
+        .from('feedbacks')
+        .select('id, data')
+        .limit(50);
+      if (!feedbackErr && Array.isArray(feedbackRows)) {
+        serverFeedbacks = feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data));
+      }
+    }
 
-    // 5. Fetch Login Logs (Terurut kronologis terbaru di atas)
-    const { data: logRows, error: logErr } = await supabase
-      .from('login_logs')
-      .select('id, data, created_at')
-      .order('created_at', { ascending: false });
-
-    if (logErr) console.warn('Gagal mengambil login_logs dari Supabase:', logErr);
+    // 5. 🔋 OPTIMASI: Login Logs (Riwayat Masuk)
+    // Akun Guru tidak pernah melihat log login admin, lewati unduhan untuk guru!
+    let serverLogs = localLogs;
+    if (!isGuru) {
+      const { data: logRows, error: logErr } = await supabase
+        .from('login_logs')
+        .select('id, data, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50); // Batasi hanya 50 log terakhir (bukan ribuan)
+      if (!logErr && Array.isArray(logRows)) {
+        serverLogs = logRows.map(r => {
+          const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+          return {
+            id: r.id || parsed.id,
+            created_at: r.created_at || parsed.created_at || parsed.timestamp,
+            timestamp: parsed.timestamp || r.created_at,
+            ...parsed,
+            id: r.id || parsed.id
+          };
+        });
+      }
+    }
 
     // Parse data dari Supabase
     let serverSettings = settingsRow?.data ? (typeof settingsRow.data === 'string' ? JSON.parse(settingsRow.data) : settingsRow.data) : null;
@@ -710,19 +792,6 @@ export const fetchCloudData = async () => {
       });
     }
 
-    const serverArchives = archivesRows && archivesRows.length > 0 ? archivesRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
-    const serverFeedbacks = feedbackRows && feedbackRows.length > 0 ? feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data)) : null;
-    const serverLogs = logRows && logRows.length > 0 ? logRows.map(r => {
-      const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
-      return {
-        id: r.id || parsed.id,
-        created_at: r.created_at || parsed.created_at || parsed.timestamp,
-        timestamp: parsed.timestamp || r.created_at,
-        ...parsed,
-        id: r.id || parsed.id
-      };
-    }) : null;
-
     const serverTime = Number(serverSettings?.lastModified) || 0;
     const localTime = Number(localSettings?.lastModified) || 0;
     const isLocalNewer = localTime > serverTime && localSettings && Object.keys(localSettings).length > 0;
@@ -735,13 +804,13 @@ export const fetchCloudData = async () => {
     );
     let finalArchives = deduplicateArchives(
       (isLocalNewer && localArchives && localArchives.length > 0)
-        ? localArchives
+        ? localArchives 
         : (serverArchives || localArchives || [])
     );
     const finalFeedbacks = serverFeedbacks || localFeedbacks;
     const finalLogs = serverLogs || localLogs;
 
-    if ((!serverTeachers || isLocalNewer) && localTeachers.length > 0) {
+    if ((!serverTeachers || isLocalNewer) && localTeachers.length > 0 && !isGuru) {
       console.log('Database Cloud Supabase perlu pembaruan (data lokal lebih baru / cloud kosong). Melakukan auto-push data ke Supabase...');
       pushCloudData('SYNC_ALL', {
         settings: finalSettings,
@@ -849,5 +918,110 @@ export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchiv
   return () => {
     supabase.removeChannel(channel);
   };
+};
+
+/**
+ * 🔋 OPTIMASI: Mengambil HANYA settings dari Supabase (~1-2 KB).
+ * Digunakan saat hanya tabel settings yang berubah tanpa download data lain.
+ */
+export const fetchSettingsOnly = async () => {
+  if (!isSupabaseConfigured() || !navigator.onLine) return null;
+  try {
+    const { data: row, error } = await supabase
+      .from('settings')
+      .select('data')
+      .eq('id', 'general')
+      .single();
+    if (error || !row?.data) return null;
+    const settings = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+    if (settings) {
+      delete settings.presensiGuru;
+      safeStorageSet('payedu_settings', settings);
+      return settings;
+    }
+    return null;
+  } catch (e) {
+    console.warn('Gagal fetch settings only:', e);
+    return null;
+  }
+};
+
+/**
+ * 🔋 OPTIMASI: Mengambil HANYA data teachers dari Supabase (~20-50 KB).
+ * Digunakan saat hanya tabel teachers yang berubah.
+ */
+export const fetchTeachersOnly = async () => {
+  if (!isSupabaseConfigured() || !navigator.onLine) return null;
+  try {
+    const { data: rows, error } = await supabase
+      .from('teachers')
+      .select('id, data');
+    if (error || !Array.isArray(rows)) return null;
+    const teachers = rows.map(r => {
+      const parsedData = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+      return {
+        ...parsedData,
+        id: r.id || parsedData.id,
+        name: r.name || parsedData.name || ''
+      };
+    });
+    const clean = deduplicateTeachers(teachers);
+    safeStorageSet('payedu_teachers', clean);
+    return clean;
+  } catch (e) {
+    console.warn('Gagal fetch teachers only:', e);
+    return null;
+  }
+};
+
+/**
+ * 🔋 OPTIMASI: Mengambil HANYA data archives dari Supabase.
+ * Digunakan saat admin membuka tab arsip atau ada pembaruan arsip gaji baru.
+ */
+export const fetchArchivesOnly = async () => {
+  if (!isSupabaseConfigured() || !navigator.onLine) return null;
+  try {
+    const { data: rows, error } = await supabase
+      .from('archives')
+      .select('id, period, data');
+    if (error || !Array.isArray(rows)) return null;
+    const archives = rows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data));
+    const clean = deduplicateArchives(archives);
+    safeStorageSet('payedu_archives', clean);
+    safeStorageSet('payedu_archives_last_sync', Date.now());
+    return clean;
+  } catch (e) {
+    console.warn('Gagal fetch archives only:', e);
+    return null;
+  }
+};
+
+/**
+ * 🔄 AUTO-SYNC PRESENSI TERTUNDA MILIK GURU:
+ * Memeriksa apakah guru memiliki absen hari ini di LocalStorage (misal absen masuk tadi pagi
+ * saat server sempat terputus/offline) yang belum tersimpan di cloud.
+ * Begitu guru membuka aplikasi di HP, sistem otomatis menyinkronkannya di latar belakang
+ * tanpa menunggu guru menekan tombol absen pulang di sore hari!
+ */
+export const syncPendingTeacherAttendance = async (teacherId, localPresensi) => {
+  if (!teacherId || !isSupabaseConfigured() || !navigator.onLine) return;
+  const list = Array.isArray(localPresensi) ? localPresensi : safeStorageGet('payedu_presensi_guru', []);
+  if (!Array.isArray(list) || list.length === 0) return;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const myTodayRecord = list.find(r => 
+    r && (String(r.teacherId) === String(teacherId) || (r.teacherName && String(r.teacherName).trim().toLowerCase() === String(teacherId).trim().toLowerCase())) && 
+    (r.date === todayStr || !r.date) && 
+    (r.jamMasuk || ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Cuti', 'Dinas Luar'].includes(r.status))
+  );
+
+  if (myTodayRecord) {
+    console.log('[AutoSync] Presensi guru hari ini ditemukan di memori lokal, menyinkronkan ke Supabase Cloud...');
+    try {
+      await pushPresensiGuru(list);
+    } catch (e) {
+      console.warn('[AutoSync] Background sync presensi warning:', e);
+    }
+  }
 };
 

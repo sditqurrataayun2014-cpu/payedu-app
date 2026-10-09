@@ -24,7 +24,11 @@ import {
   subscribeAllChanges,
   checkCloudTimestamp,
   deduplicateArchives,
-  deduplicateTeachers
+  deduplicateTeachers,
+  fetchSettingsOnly,
+  fetchTeachersOnly,
+  fetchArchivesOnly,
+  syncPendingTeacherAttendance
 } from './services/dbService';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import PresensiGuruView, { getSesiTheme } from './PresensiGuruView';
@@ -868,7 +872,7 @@ export default function App() {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
       
-      const res = await fetchFromSupabase();
+      const res = await fetchFromSupabase({ isBackground: isBackgroundSync, role: user?.role });
       
       if (res.status === 'success' && res.data) {
         const serverSettings = res.data.settings && Object.keys(res.data.settings).length > 0 ? res.data.settings : defaultGeneralSettings;
@@ -1020,27 +1024,76 @@ export default function App() {
     };
   }, []);
 
-  // 📡 Real-time Subscription: Menerima perubahan SEMUA data dari Supabase secara instan (hemat bandwidth)
+  // 📡 Real-time Subscription: Menerima perubahan data spesifik via Supabase Realtime (Ultra Hemat Bandwidth)
   useEffect(() => {
-    let realtimeThrottleTimer = null;
-    const throttledFetch = () => {
-      if (realtimeThrottleTimer) return;
-      realtimeThrottleTimer = setTimeout(() => {
-        realtimeThrottleTimer = null;
-        if (!isPushingDataRef.current) fetchCloudData(true);
-      }, 2000); // Tunggu 2 detik setelah perubahan terakhir sebelum fetch
-    };
+    let settingsTimer = null;
+    let teachersTimer = null;
+    let archivesTimer = null;
 
     const unsubscribeAll = subscribeAllChanges(
-      throttledFetch, // onSettingsChange
-      throttledFetch, // onTeachersChange
-      throttledFetch  // onArchivesChange
+      // 1. Settings berubah -> fetch HANYA settings (~1-2 KB)
+      () => {
+        if (settingsTimer) return;
+        settingsTimer = setTimeout(() => {
+          settingsTimer = null;
+          if (!isPushingDataRef.current) {
+            fetchSettingsOnly().then(newSettings => {
+              if (newSettings) {
+                setGeneralSettings(newSettings);
+                safeStorageSet('payedu_settings', newSettings);
+              }
+            });
+          }
+        }, 1500);
+      },
+      // 2. Teachers berubah -> fetch HANYA teachers (~20-50 KB)
+      () => {
+        if (teachersTimer) return;
+        teachersTimer = setTimeout(() => {
+          teachersTimer = null;
+          if (!isPushingDataRef.current) {
+            fetchTeachersOnly().then(newTeachers => {
+              if (newTeachers) {
+                const clean = sanitizeTeacherList(newTeachers);
+                setTeachers(clean);
+                safeStorageSet('payedu_teachers', clean);
+              }
+            });
+          }
+        }, 1500);
+      },
+      // 3. Archives berubah -> fetch HANYA archives
+      () => {
+        if (archivesTimer) return;
+        archivesTimer = setTimeout(() => {
+          archivesTimer = null;
+          if (!isPushingDataRef.current) {
+            fetchArchivesOnly().then(newArchives => {
+              if (newArchives) {
+                const clean = deduplicateArchives(newArchives);
+                setArchives(clean);
+                safeStorageSet('payedu_archives', clean);
+              }
+            });
+          }
+        }, 1500);
+      }
     );
     return () => {
-      if (realtimeThrottleTimer) clearTimeout(realtimeThrottleTimer);
+      if (settingsTimer) clearTimeout(settingsTimer);
+      if (teachersTimer) clearTimeout(teachersTimer);
+      if (archivesTimer) clearTimeout(archivesTimer);
       unsubscribeAll();
     };
   }, []);
+
+  // 🔄 AUTO-SYNC PRESENSI TERTUNDA UNTUK GURU:
+  // Mengirimkan otomatis absen masuk yang tersimpan lokal (misal tadi pagi saat server terputus)
+  // tanpa menunggu guru menekan tombol absen pulang di sore hari!
+  useEffect(() => {
+    if (!user || user.role !== 'guru' || !isDataLoaded) return;
+    syncPendingTeacherAttendance(user.id, presensiGuru);
+  }, [user, isDataLoaded]);
 
   // 🔋 Radar Latar Belakang (Smart Polling) — Cek ringan setiap 2 menit, fetch penuh hanya jika ada perubahan
   useEffect(() => {
