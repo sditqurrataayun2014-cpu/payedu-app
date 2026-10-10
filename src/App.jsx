@@ -86,6 +86,22 @@ const getLocalIsoDate = (d = new Date()) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+// 📱 HELPER UNIVERSAL: Pembaruan Data Guru Ringkas (cth: ikat perangkat HP otomatis)
+export const createTeacherPatchHandler = (setTeachers) => (teacherId, patch) => {
+  if (typeof setTeachers !== 'function') return;
+  setTeachers(prev => {
+    const updated = (prev || []).map(t => {
+      if (String(t.id) === String(teacherId)) {
+        return { ...t, ...patch };
+      }
+      return t;
+    });
+    safeStorageSet('payedu_teachers', updated);
+    pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn('Gagal sync patch guru ke cloud:', e));
+    return updated;
+  });
+};
+
 // 🪄 AUTO-REPAIR & SANITIZER DATA GURU (Membersihkan JSON nyasar di kolom pendidikan & merapikan data)
 const sanitizeTeacherData = (t) => {
   if (!t || typeof t !== 'object') return t;
@@ -734,19 +750,7 @@ export default function App() {
   });
 
   // 📱 Handler Pembaruan Data Guru Ringkas (cth: ikat perangkat HP otomatis)
-  const handleUpdateTeacherPatch = useCallback((teacherId, patch) => {
-    setTeachers(prev => {
-      const updated = (prev || []).map(t => {
-        if (String(t.id) === String(teacherId)) {
-          return { ...t, ...patch };
-        }
-        return t;
-      });
-      safeStorageSet('payedu_teachers', updated);
-      pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn('Gagal sync patch guru ke cloud:', e));
-      return updated;
-    });
-  }, []);
+  const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
 
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
 
@@ -2039,6 +2043,7 @@ function MaintenanceScreen({ onLogout, appName, schoolName, appVersion }) {
 
 // --- MAIN LAYOUT & NAVIGATION ---
 function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, auditLogs, setAuditLogs, saveAuditLog, isOnline, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
+  const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
   const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
@@ -10554,6 +10559,7 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
 
 // Portal Khusus Guru (Read-only view dengan Sidebar)
 function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru, saveAuditLog }) {
+  const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
   const myData = teachers.find(t => t.id === user.id);
   
   if (!myData) {
