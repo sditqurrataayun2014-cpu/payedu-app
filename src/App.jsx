@@ -13906,6 +13906,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                          <th className="p-4 font-bold">Username Login</th>
                          <th className="p-4 font-bold">Password</th>
                          <th className="p-4 font-bold">Hak Akses (Role)</th>
+                         <th className="p-4 font-bold">Perangkat HP</th>
                          <th className="p-4 font-bold text-center">Aksi</th>
                        </tr>
                      </thead>
@@ -13932,6 +13933,29 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${acc.role === 'Admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : acc.role === 'Kepala Sekolah' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : acc.role === 'Yayasan' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : acc.isActive === false ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                                {acc.isActive === false ? 'Guru (Resign)' : (acc.role || 'Guru')}
                              </span>
+                           </td>
+                           <td className="p-4">
+                             {acc.role === 'Guru' ? (
+                               acc.registeredDeviceId ? (
+                                 <div className="flex items-center gap-2">
+                                   <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 text-xs">
+                                     <Smartphone size={13} /> {acc.registeredDeviceName || 'HP Terdaftar'}
+                                   </span>
+                                   <button
+                                     type="button"
+                                     onClick={() => handleResetTeacherDevice(acc)}
+                                     className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 rounded font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                                     title="Buka kuncian HP agar guru bisa pakai HP baru"
+                                   >
+                                     <Unlock size={11} /> Reset HP
+                                   </button>
+                                 </div>
+                               ) : (
+                                 <span className="text-slate-400 italic text-xs">Belum Terikat</span>
+                               )
+                             ) : (
+                               <span className="text-slate-400 italic text-xs">Bebas Akses</span>
+                             )}
                            </td>
                            <td className="p-4 text-center">
                              <div className="flex items-center justify-center gap-2">
