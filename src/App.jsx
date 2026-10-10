@@ -733,6 +733,21 @@ export default function App() {
     return safeStorageGet('payedu_audit_logs', []);
   });
 
+  // 📱 Handler Pembaruan Data Guru Ringkas (cth: ikat perangkat HP otomatis)
+  const handleUpdateTeacherPatch = useCallback((teacherId, patch) => {
+    setTeachers(prev => {
+      const updated = (prev || []).map(t => {
+        if (String(t.id) === String(teacherId)) {
+          return { ...t, ...patch };
+        }
+        return t;
+      });
+      safeStorageSet('payedu_teachers', updated);
+      pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn('Gagal sync patch guru ke cloud:', e));
+      return updated;
+    });
+  }, []);
+
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   // 📡 Deteksi Koneksi Internet & Auto-Sync Saat Online Kembali
