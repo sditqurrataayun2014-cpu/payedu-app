@@ -28,18 +28,94 @@ const safeStorageSet = (key, value) => {
 };
 
 // ==========================================
-// PRESENSI GURU: PENYIMPANAN TERPISAH
-// Menggunakan baris terpisah di tabel `settings` dengan id='presensi_guru'
-// agar tidak bertabrakan dengan settings umum (id='general')
+// PRESENSI GURU: DUAL-ENGINE STORAGE
+// 1. Prioritas Utama: Tabel Mandiri `presensi_records` (Relasional Cepat)
+// 2. Failsafe Cadangan: Baris `settings` (id='presensi_guru')
+// 3. Sumber Offline Cepat: LocalStorage ('payedu_presensi_guru')
 // ==========================================
 
-// 🔋 OPTIMASI BANDWIDTH: Pelacak hash push terakhir agar tidak push data identik berulang-ulang
+let _isPresensiRecordsTableAvailable = null;
 let _lastPushedPresensiHash = '';
 
 /**
- * Menyimpan data presensi guru ke LocalStorage dan Supabase (baris terpisah).
- * Fungsi ini dipanggil langsung setiap kali ada perubahan presensi.
- * 🔋 OPTIMASI: Dilengkapi hash tracking untuk skip push jika data tidak berubah.
+ * Mengecek ketersediaan tabel mandiri `presensi_records` di Supabase.
+ */
+export const isPresensiRecordsTableAvailable = async () => {
+  if (_isPresensiRecordsTableAvailable !== null) return _isPresensiRecordsTableAvailable;
+  if (!isSupabaseConfigured() || !supabase) return false;
+  try {
+    const { error } = await supabase.from('presensi_records').select('id').limit(1);
+    _isPresensiRecordsTableAvailable = !error;
+  } catch {
+    _isPresensiRecordsTableAvailable = false;
+  }
+  return _isPresensiRecordsTableAvailable;
+};
+
+export const sanitizeTime = (t) => {
+  if (!t || typeof t !== 'string') return null;
+  const trimmed = t.trim();
+  if (!trimmed || trimmed === '-' || trimmed.toLowerCase() === 'null') return null;
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}:${match[3] || '00'}`;
+};
+
+export const sanitizeDate = (d) => {
+  if (!d) return null;
+  const str = String(d).trim();
+  if (str.length >= 10 && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return str.slice(0, 10);
+  }
+  return null;
+};
+
+export const mapPresensiToDbRow = (r) => ({
+  id: String(r.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+  date: sanitizeDate(r.date) || new Date().toISOString().slice(0, 10),
+  teacher_id: String(r.teacherId || r.teacher_id || '').trim() || 'UNKNOWN',
+  teacher_name: String(r.teacherName || r.teacher_name || 'Guru').trim(),
+  sesi_id: String(r.sesiId || r.sesi_id || 'pagi').trim(),
+  sesi_nama: r.sesiNama || r.sesi_nama || null,
+  jam_masuk: sanitizeTime(r.jamMasuk || r.jam_masuk),
+  jam_pulang: sanitizeTime(r.jamPulang || r.jam_pulang),
+  status: r.status || 'Hadir',
+  terlambat_menit: Number(r.terlambatMenit || r.terlambat_menit || 0) || 0,
+  lokasi_masuk: r.lokasiMasuk || r.lokasi_masuk || null,
+  lokasi_pulang: r.lokasiPulang || r.lokasi_pulang || null,
+  qr_valid_masuk: !!(r.qrValidMasuk || r.qr_valid_masuk),
+  qr_valid_pulang: !!(r.qrValidPulang || r.qr_valid_pulang),
+  keterangan: r.keterangan || null,
+  device_id: r.deviceId || r.device_id || null,
+  updated_by: r.updatedBy || r.updated_by || 'Sistem',
+  updated_at: r.updatedAt || r.updated_at || new Date().toISOString()
+});
+
+export const mapDbRowToPresensi = (row) => ({
+  id: row.id,
+  date: row.date,
+  teacherId: row.teacher_id,
+  teacherName: row.teacher_name,
+  sesiId: row.sesi_id,
+  sesiNama: row.sesi_nama,
+  jamMasuk: row.jam_masuk,
+  jamPulang: row.jam_pulang,
+  status: row.status,
+  terlambatMenit: Number(row.terlambat_menit || 0),
+  lokasiMasuk: row.lokasi_masuk,
+  lokasiPulang: row.lokasi_pulang,
+  qrValidMasuk: !!row.qr_valid_masuk,
+  qrValidPulang: !!row.qr_valid_pulang,
+  keterangan: row.keterangan || '',
+  deviceId: row.device_id || null,
+  updatedBy: row.updated_by || 'Sistem',
+  updatedAt: row.updated_at
+});
+
+/**
+ * Menyimpan data presensi guru ke LocalStorage dan Supabase.
+ * Menggunakan mesin relasional `presensi_records` jika tersedia,
+ * dengan cadangan ganda (failsafe) ke baris `settings`.
  */
 export const pushPresensiGuru = async (presensiArray, options = {}) => {
   if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
@@ -52,7 +128,7 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
     return { status: 'success', message: 'Array presensi lokal kosong, skip sync ke cloud' };
   }
 
-  // 2. Simpan ke Supabase sebagai baris terpisah di tabel settings
+  // 2. Simpan ke Supabase jika online
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline)' };
   }
@@ -63,16 +139,65 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
     return { status: 'success', message: 'Data presensi tidak berubah, skip sync ke cloud' };
   }
 
-  // 🛡️ ANTI-RACE CONDITION RETRY LOOP (Hingga 3 kali dengan Exponential Jitter)
-  // Menghindari tabrakan saat puluhan guru menekan tombol absen secara serempak di jam 7 pagi
+  const hasTable = await isPresensiRecordsTableAvailable();
+
+  // 🚀 MESIN 1: SIMPAN KE TABEL MANDIRI presensi_records
+  if (hasTable) {
+    try {
+      // Deduplikasi by ID agar tidak ada tabrakan ON CONFLICT di batch Postgres
+      const map = new Map();
+      for (const r of presensiArray) {
+        if (!r) continue;
+        const row = mapPresensiToDbRow(r);
+        const existing = map.get(row.id);
+        if (!existing) {
+          map.set(row.id, row);
+        } else {
+          const tOld = new Date(existing.updated_at || 0).getTime();
+          const tNew = new Date(row.updated_at || 0).getTime();
+          if (tNew >= tOld) map.set(row.id, row);
+        }
+      }
+
+      const rows = Array.from(map.values());
+      const BATCH_SIZE = 100;
+      let hasError = false;
+
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const chunk = rows.slice(i, i + BATCH_SIZE);
+        const { error: batchErr } = await supabase
+          .from('presensi_records')
+          .upsert(chunk, { onConflict: 'id' });
+        if (batchErr) {
+          console.warn('Gagal upsert batch presensi_records:', batchErr);
+          hasError = true;
+          break;
+        }
+      }
+
+      if (!hasError) {
+        _lastPushedPresensiHash = currentPresensiHash;
+        // Backup senyap ke settings agar kedua tempat selalu sinkron
+        supabase.from('settings').upsert({
+          id: 'presensi_guru',
+          data: presensiArray,
+          updated_at: new Date().toISOString()
+        }).catch(() => {});
+
+        return { status: 'success', message: 'Presensi berhasil disinkronkan ke tabel presensi_records', data: presensiArray };
+      }
+    } catch (tableErr) {
+      console.warn('Peringatan penyimpanan ke presensi_records, mencoba fallback ke settings:', tableErr);
+    }
+  }
+
+  // 🛡️ MESIN 2 (FALLBACK): SIMPAN KE TABEL settings JIKA TABEL MANDIRI BELUM ADA
   const maxRetries = options.overwrite ? 1 : 3;
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       let dataToPush = presensiArray;
-      // 🛡️ ANTI OVERWRITE / CONCURRENCY SAFE:
-      // Ambil data presensi server terkini dan gabungkan (merge)
       if (!options.overwrite) {
         try {
           const { data: serverRow } = await supabase
@@ -103,13 +228,11 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
         });
 
       if (!error) {
-        // 🔋 Update hash setelah push berhasil
         _lastPushedPresensiHash = JSON.stringify(dataToPush);
-        return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud', data: dataToPush };
+        return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud (settings)', data: dataToPush };
       } else {
         lastError = error;
         if (attempt < maxRetries) {
-          // Jitter delay acak 150-450ms untuk memecah tabrakan serentak
           await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
         }
       }
@@ -126,17 +249,54 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
 };
 
 /**
- * Mengambil data presensi guru dari Supabase (baris terpisah) dengan fallback LocalStorage.
+ * Mengambil data presensi guru dari Supabase dengan Dual-Engine:
+ * Mencoba tabel `presensi_records` terlebih dahulu, lalu fallback ke `settings`.
  */
 export const fetchPresensiGuru = async () => {
   const localPresensi = safeStorageGet('payedu_presensi_guru', []);
-  // Pastikan localPresensi benar-benar array
   const safeLocal = Array.isArray(localPresensi) ? localPresensi : [];
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', source: 'local', data: safeLocal };
   }
 
+  const hasTable = await isPresensiRecordsTableAvailable();
+
+  // 🚀 MESIN 1: AMBIL DARI TABEL MANDIRI presensi_records
+  if (hasTable) {
+    try {
+      let allRecords = [];
+      let from = 0;
+      const step = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('presensi_records')
+          .select('*')
+          .range(from, from + step - 1);
+
+        if (error) {
+          console.warn('Gagal fetch presensi_records chunk:', error);
+          break;
+        }
+        if (!data || data.length === 0) break;
+        allRecords = allRecords.concat(data);
+        if (data.length < step) break;
+        from += step;
+      }
+
+      if (allRecords.length > 0) {
+        const mapped = allRecords.map(mapDbRowToPresensi);
+        const merged = mergePresensiArrays(mapped, safeLocal);
+        safeStorageSet('payedu_presensi_guru', merged);
+        return { status: 'success', source: 'presensi_records', data: merged };
+      }
+    } catch (tableErr) {
+      console.warn('Gagal membaca dari presensi_records, mencoba fallback ke settings:', tableErr);
+    }
+  }
+
+  // 🛡️ MESIN 2 (FALLBACK): AMBIL DARI SETTINGS
   try {
     const { data: row, error } = await supabase
       .from('settings')
@@ -438,21 +598,34 @@ export const subscribePresensiGuru = (onUpdate) => {
     return () => {}; // noop unsubscribe
   }
   const channel = supabase
-    .channel('public:settings:presensi_guru')
+    .channel('public:presensi_dual_realtime')
     .on('postgres_changes', { 
       event: '*', 
       schema: 'public', 
-      table: 'settings', 
-      filter: 'id=eq.presensi_guru' 
+      table: 'presensi_records' 
     }, async () => {
-      // Saat ada perubahan di baris presensi_guru pada tabel settings, re-fetch data presensi terbaru
       try {
         const res = await fetchPresensiGuru();
         if (res.status === 'success' && Array.isArray(res.data)) {
           onUpdate(res.data);
         }
       } catch (err) {
-        console.warn('Gagal sinkronisasi presensi real-time:', err);
+        console.warn('Gagal sinkronisasi presensi_records real-time:', err);
+      }
+    })
+    .on('postgres_changes', { 
+      event: '*', 
+      schema: 'public', 
+      table: 'settings', 
+      filter: 'id=eq.presensi_guru' 
+    }, async () => {
+      try {
+        const res = await fetchPresensiGuru();
+        if (res.status === 'success' && Array.isArray(res.data)) {
+          onUpdate(res.data);
+        }
+      } catch (err) {
+        console.warn('Gagal sinkronisasi presensi settings real-time:', err);
       }
     })
     .subscribe();

@@ -3,10 +3,11 @@ import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
-  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users
+  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { pushPresensiGuru, fetchPresensiGuru } from './services/dbService';
+import { getOrCreateDeviceId, verifyTeacherDevice } from './services/deviceService';
 
 // ==========================================
 // KONSTANTA & HELPER LOKAL
@@ -399,7 +400,7 @@ export default function PresensiGuruView({
   teachers = [], presensiGuru = [], setPresensiGuru,
   currentUser, schoolProfile, setSchoolProfile,
   showCsvPreview, triggerPrint, addAuditLog,
-  initialSesiId,
+  initialSesiId, onUpdateTeacher
 }) {
   // Toast & Confirm state
   const [toastMessage, setToastMessage] = useState(null);
@@ -663,6 +664,7 @@ export default function PresensiGuruView({
             currentUser={currentUser}
             schoolProfile={schoolProfile}
             initialSesiId={initialSesiId}
+            onUpdateTeacher={onUpdateTeacher}
           />
         ) : (
           <div className={`${cx.card3xl} p-10 text-center space-y-3`}>
@@ -700,7 +702,7 @@ export default function PresensiGuruView({
 // ==========================================
 // SUB-VIEW: SELF SERVICE (PORTAL GURU)
 // ==========================================
-function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord, showToast, addAuditLog, currentUser, schoolProfile, initialSesiId }) {
+function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord, showToast, addAuditLog, currentUser, schoolProfile, initialSesiId, onUpdateTeacher }) {
   const [showIzinModal, setShowIzinModal] = useState(false);
   const [izinStatus, setIzinStatus] = useState('Sakit');
   const [izinKeterangan, setIzinKeterangan] = useState('');
@@ -793,7 +795,14 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     if (sudahMasuk) { showToast(`Anda sudah melakukan absen masuk sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
     const capture = new Date();
     const { status, terlambatMenit } = computeStatus(capture, sesiAktif);
-    const patch = { jamMasuk: nowToHHMMSS(capture), status, terlambatMenit, keterangan: '', sesiNama: sesiAktif.nama };
+    const patch = { 
+      jamMasuk: nowToHHMMSS(capture), 
+      status, 
+      terlambatMenit, 
+      keterangan: '', 
+      sesiNama: sesiAktif.nama,
+      deviceId: getOrCreateDeviceId()
+    };
     if (verifikasi.lokasi) patch.lokasiMasuk = verifikasi.lokasi;
     if (verifikasi.qrValid !== undefined) patch.qrValidMasuk = verifikasi.qrValid;
     upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, patch);
@@ -813,7 +822,10 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     if (!sudahMasuk) { showToast(`Anda belum melakukan absen masuk sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
     if (sudahPulang) { showToast(`Anda sudah melakukan absen pulang sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
     const capture = new Date();
-    const patch = { jamPulang: nowToHHMMSS(capture) };
+    const patch = { 
+      jamPulang: nowToHHMMSS(capture),
+      deviceId: getOrCreateDeviceId()
+    };
     if (verifikasi.lokasi) patch.lokasiPulang = verifikasi.lokasi;
     if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
     upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, patch);
@@ -827,6 +839,35 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   const lokasiAktif = isLokasiAktif(settings);
   const qrAktif = isQrAktif(settings);
   const perluVerifikasi = lokasiAktif || qrAktif;
+
+  // 🛡️ Handler Mulai Absen dengan Pemeriksaan Kunci Perangkat (Device Lock)
+  const handleMulaiVerifikasi = (mode) => {
+    if (settings?.deviceLockEnabled) {
+      const devCheck = verifyTeacherDevice(teacher, true);
+      if (!devCheck.isAllowed) {
+        showToast(
+          `Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Utama'}. Dilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`,
+          'error'
+        );
+        return;
+      }
+      if (devCheck.needsEnroll) {
+        onUpdateTeacher?.(teacher.id, {
+          registeredDeviceId: devCheck.currentDeviceId,
+          registeredDeviceName: devCheck.currentDeviceName,
+          registeredDeviceAt: new Date().toISOString()
+        });
+        showToast(`📱 Perangkat ini (${devCheck.currentDeviceName}) berhasil didaftarkan sebagai HP resmi presensi Anda.`, 'success');
+      }
+    }
+
+    if (perluVerifikasi) {
+      setVerifikasiMode(mode);
+    } else {
+      if (mode === 'masuk') handleAbsenMasuk({});
+      else handleAbsenPulang({});
+    }
+  };
 
   const handleAjukan = () => {
     if (sudahMasuk) { showToast('Anda sudah absen masuk hari ini, tidak bisa mengajukan izin/sakit.', 'error'); return; }
@@ -912,7 +953,7 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
               <button
                 type="button"
                 disabled={sudahMasuk || isIzinLike}
-                onClick={() => setVerifikasiMode('masuk')}
+                onClick={() => handleMulaiVerifikasi('masuk')}
                 className="flex items-center justify-center gap-1.5 bg-white text-slate-800 font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
               >
                 <LogIn size={16} strokeWidth={2.5} className="text-emerald-600" /> Absen Masuk
@@ -920,7 +961,7 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
               <button
                 type="button"
                 disabled={!sudahMasuk || sudahPulang}
-                onClick={() => setVerifikasiMode('pulang')}
+                onClick={() => handleMulaiVerifikasi('pulang')}
                 className="flex items-center justify-center gap-1.5 bg-slate-900/80 text-white font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
               >
                 <LogOut size={16} strokeWidth={2.5} className="text-indigo-400" /> Absen Pulang
@@ -2316,6 +2357,12 @@ function AdminRekapPanel({
             <QrSettingField settingsForm={settingsForm} setSettingsForm={setSettingsForm} schoolProfile={schoolProfile} showConfirm={showConfirm} />
           </div>
 
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+            <p className={cx.sectionHeader}>Kunci 1 Akun 1 Perangkat HP (Device Lock)</p>
+            <p className="text-[11px] text-slate-400 mb-3 pl-1">Cegah kecurangan titip absen antar guru. Setiap akun guru akan otomatis terikat pada HP yang pertama kali dipakai absen. Absensi dari HP guru lain akan otomatis ditolak.</p>
+            <DeviceLockSettingField settingsForm={settingsForm} setSettingsForm={setSettingsForm} />
+          </div>
+
           <button type="button" onClick={handleSaveSettings} className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">
             <Save size={16} /> Simpan Pengaturan
           </button>
@@ -2790,6 +2837,41 @@ function QrSettingField({ settingsForm, setSettingsForm, schoolProfile, showConf
         </button>
       </div>
       <p className="text-[10px] text-slate-400 pl-1">Cetak QR ini dan tempel di gerbang/kantor sekolah. Setiap kali dibuat ulang, QR lama otomatis tidak berlaku.</p>
+    </div>
+  );
+}
+
+function DeviceLockSettingField({ settingsForm, setSettingsForm }) {
+  const isEnabled = !!settingsForm.deviceLockEnabled;
+
+  return (
+    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5 uppercase tracking-wider">
+            <Smartphone size={15} className={isEnabled ? 'text-teal-600' : 'text-slate-400'} />
+            Kunci 1 Akun 1 HP Guru
+          </span>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            {isEnabled ? 'Status: AKTIF — Guru hanya bisa presensi dari 1 HP terdaftar miliknya' : 'Status: NONAKTIF — Guru dapat presensi dari HP mana saja'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSettingsForm({ ...settingsForm, deviceLockEnabled: !isEnabled })}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${isEnabled ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+        >
+          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+      </div>
+      {isEnabled && (
+        <div className="p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded-xl text-xs text-teal-800 dark:text-teal-200 flex items-start gap-2">
+          <ShieldCheck size={16} className="shrink-0 mt-0.5 text-teal-600" />
+          <span className="leading-relaxed">
+            <b>Cegah Titip Absen:</b> Guru yang baru pertama kali absen akan otomatis mengikat HP yang dipakainya. Jika guru berganti HP baru, Admin dapat membuka kuncian dengan tombol <b>Reset HP</b> di menu <i>Akses Login Pengguna</i>.
+          </span>
+        </div>
+      )}
     </div>
   );
 }

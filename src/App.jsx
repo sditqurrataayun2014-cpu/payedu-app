@@ -13,7 +13,7 @@ import {
   Info, MessageSquare, ChevronDown, ChevronUp, Send, History, Bell, BellRing,
   Building, Key, Save, Lock, Archive, FolderOpen, ShieldCheck, CreditCard, Database,
   Fingerprint, Cloud, CloudOff, RefreshCw, CalendarDays, ListPlus, CheckSquare, Wrench, UserCheck, Clock3, Check,
-  WifiOff, FileSpreadsheet, Filter
+  WifiOff, FileSpreadsheet, Filter, Smartphone, Unlock
 } from 'lucide-react';
 import { 
   fetchCloudData as fetchFromSupabase, 
@@ -2215,6 +2215,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
               pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
             }} 
             addAuditLog={saveAuditLog} 
+            onUpdateTeacher={handleUpdateTeacherPatch}
           />
         );
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} presensiGuru={presensiGuru} saveAuditLog={saveAuditLog} user={user} />;
@@ -11779,6 +11780,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                 } 
               }} 
               addAuditLog={saveAuditLog} 
+              onUpdateTeacher={handleUpdateTeacherPatch}
             />
           </div>
         )}
@@ -12521,7 +12523,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         role: 'Guru',
         phone: t.phone || '',
         isActive: isAct,
-        workStatus: t.workStatus || (isAct ? 'Aktif' : 'Resign')
+        workStatus: t.workStatus || (isAct ? 'Aktif' : 'Resign'),
+        registeredDeviceId: t.registeredDeviceId || null,
+        registeredDeviceName: t.registeredDeviceName || null,
+        registeredDeviceAt: t.registeredDeviceAt || null
       };
     });
     
@@ -12597,6 +12602,30 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true });
     });
   }, [accounts, searchAcc, accStatusFilter]);
+
+  // 📱 Handler Reset Kunci Perangkat HP Guru
+  const handleResetTeacherDevice = async (acc) => {
+    const isConfirmed = window.confirm(`Reset kunci perangkat untuk "${acc.name || 'guru ini'}"?\n\nSetelah direset, guru dapat mengaitkan HP barunya saat login atau presensi berikutnya.`);
+    if (!isConfirmed) return;
+
+    setTeachers(prev => {
+      const updated = prev.map(t => {
+        if (String(t.id) === String(acc.id)) {
+          const copy = { ...t };
+          delete copy.registeredDeviceId;
+          delete copy.registeredDeviceName;
+          delete copy.registeredDeviceAt;
+          return copy;
+        }
+        return t;
+      });
+      safeStorageSet('payedu_teachers', updated);
+      pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn(e));
+      return updated;
+    });
+
+    alert(`Berhasil! Kunci HP untuk "${acc.name}" telah dibuka.\nGuru dapat mendaftarkan HP barunya saat presensi berikutnya.`);
+  };
 
   // 🪄 TAMBALAN CERDAS: Export Data Login ke CSV Sesuai Gambar 🪄
   const handleExportLoginCSV = () => {
@@ -13801,6 +13830,31 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                             )}
                          </div>
 
+                         <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                            <span className="text-slate-400 font-medium">Perangkat HP:</span>
+                            {acc.role === 'Guru' ? (
+                               acc.registeredDeviceId ? (
+                                  <div className="flex items-center gap-1.5">
+                                     <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
+                                        <Smartphone size={12} /> {acc.registeredDeviceName || 'HP Terdaftar'}
+                                     </span>
+                                     <button
+                                        type="button"
+                                        onClick={() => handleResetTeacherDevice(acc)}
+                                        className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 rounded font-bold text-[10px] flex items-center gap-0.5 transition-colors cursor-pointer"
+                                        title="Buka kuncian HP agar guru bisa pakai HP baru"
+                                     >
+                                        <Unlock size={10} /> Reset HP
+                                     </button>
+                                  </div>
+                               ) : (
+                                  <span className="text-slate-400 italic text-[11px]">Belum Terikat</span>
+                               )
+                            ) : (
+                               <span className="text-slate-400 italic text-[11px]">Bebas Akses</span>
+                            )}
+                         </div>
+
                          <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
                             <button 
                               onClick={() => {
@@ -13888,7 +13942,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                          </tr>
                        ))}
                        {filteredAccounts.length === 0 && (
-                         <tr><td colSpan="5" className="p-8 text-center text-slate-500">Tidak ada data akun ditemukan.</td></tr>
+                         <tr><td colSpan="6" className="p-8 text-center text-slate-500">Tidak ada data akun ditemukan.</td></tr>
                        )}
                      </tbody>
                    </table>
