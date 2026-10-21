@@ -253,23 +253,75 @@ const cariLokasiTerdekat = (lat, lon, lokasiList) => {
 const isGeoSupported = () => typeof navigator !== 'undefined' && !!navigator.geolocation;
 
 // Ambil koordinat GPS perangkat guru
+// 🛡️ PERBAIKAN: Multi-reading GPS dengan pemilihan akurasi terbaik
+// Mengambil 2 bacaan GPS (1 cepat dari cache, 1 fresh) dan memilih yang paling akurat.
+// Ini mencegah GPS error saat transisi WiFi → data seluler (listrik padam).
 const ambilPosisiSekarang = () =>
   new Promise((resolve, reject) => {
     if (!isGeoSupported()) {
       reject(new Error('Perangkat / browser Anda tidak mendukung fitur lokasi GPS.'));
       return;
     }
+
+    const readings = [];
+    let resolved = false;
+    let timeoutTimer = null;
+
+    const resolveWithBest = () => {
+      if (resolved) return;
+      resolved = true;
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (readings.length === 0) {
+        reject(new Error('Gagal membaca koordinat GPS setelah beberapa percobaan.'));
+        return;
+      }
+      // Pilih reading dengan akurasi terbaik (nilai accuracy terkecil = paling akurat)
+      readings.sort((a, b) => (a.accuracy || 9999) - (b.accuracy || 9999));
+      resolve(readings[0]);
+    };
+
+    // Bacaan 1: Cepat (gunakan cache GPS hingga 30 detik terakhir)
+    // Ini mencegah GPS error saat transisi jaringan (WiFi → data seluler)
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      (pos) => {
+        readings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        // Jika akurasi sudah sangat bagus (<50m), langsung resolve tanpa menunggu bacaan ke-2
+        if (pos.coords.accuracy < 50) {
+          resolveWithBest();
+        }
+      },
+      () => {}, // Diabaikan — bacaan ke-2 yang fresh akan menjadi fallback
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+    );
+
+    // Bacaan 2: Akurat (fresh dari sensor GPS satelit, tanpa cache)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        readings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        resolveWithBest();
+      },
       (err) => {
-        let msg = 'Gagal membaca koordinat GPS.';
-        if (err.code === 1) msg = 'Izin akses lokasi (GPS) ditolak. Mohon izinkan akses lokasi pada browser HP Anda.';
-        else if (err.code === 2) msg = 'Sinyal GPS tidak terdeteksi. Pastikan GPS HP aktif.';
-        else if (err.code === 3) msg = 'Waktu permintaan GPS habis (timeout). Coba lagi di tempat terbuka.';
-        reject(new Error(msg));
+        // Jika bacaan fresh gagal, gunakan bacaan cache (jika ada)
+        if (readings.length > 0) {
+          resolveWithBest();
+        } else {
+          let msg = 'Gagal membaca koordinat GPS.';
+          if (err.code === 1) msg = 'Izin akses lokasi (GPS) ditolak. Mohon izinkan akses lokasi pada browser HP Anda.';
+          else if (err.code === 2) msg = 'Sinyal GPS tidak terdeteksi. Pastikan GPS HP aktif.';
+          else if (err.code === 3) msg = 'Waktu permintaan GPS habis (timeout). Coba lagi di tempat terbuka.';
+          if (!resolved) {
+            resolved = true;
+            reject(new Error(msg));
+          }
+        }
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+
+    // Safety timeout: jika setelah 16 detik belum resolve, gunakan apapun yang ada
+    timeoutTimer = setTimeout(() => {
+      if (!resolved) resolveWithBest();
+    }, 16000);
   });
 
 const generateSesiId = () => 'sesi_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -1107,40 +1159,104 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       setGpsStatus('fail');
       return;
     }
+
+    // 🛡️ PERBAIKAN: Multi-reading GPS dengan toleransi akurasi
+    const gpsReadings = [];
+    let gpsResolved = false;
+    let gpsTimer = null;
+
+    const processGpsResult = () => {
+      if (gpsResolved) return;
+      gpsResolved = true;
+      if (gpsTimer) clearTimeout(gpsTimer);
+
+      if (gpsReadings.length === 0) {
+        setGpsError('Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.');
+        setGpsStatus('fail');
+        return;
+      }
+
+      // Pilih reading paling akurat
+      gpsReadings.sort((a, b) => (a.accuracy || 9999) - (b.accuracy || 9999));
+      const best = gpsReadings[0];
+      const { latitude, longitude, accuracy } = best;
+
+      const terdekat = cariLokasiTerdekat(latitude, longitude, lokasiList);
+      const jarak = terdekat ? (Number.isFinite(terdekat.jarakMeter) ? terdekat.jarakMeter : (Number.isFinite(terdekat.jarak) ? terdekat.jarak : 0)) : null;
+      const dalamRadius = terdekat ? (terdekat.dalamRadius ?? terdekat.diDalamRadius ?? false) : false;
+
+      setGpsInfo(terdekat ? {
+        latitude,
+        longitude,
+        jarakMeter: jarak ?? 0,
+        jarak: jarak ?? 0,
+        akurasi: Math.round(accuracy || 0),
+        namaLokasi: terdekat.nama || 'Lokasi Sekolah',
+        radiusMeter: terdekat.radiusMeter || 150,
+        dalamRadius
+      } : null);
+
+      // 🛡️ PERBAIKAN: Toleransi akurasi GPS
+      // Jika akurasi sensor GPS sangat rendah (>200m), kemungkinan besar posisi
+      // berasal dari cell tower (bukan GPS satelit) — ini terjadi saat transisi
+      // WiFi → data seluler. Beri pesan khusus agar guru mengerti dan coba lagi.
+      if (!dalamRadius && accuracy > 200) {
+        setGpsError(
+          `⚠️ Sinyal GPS lemah (akurasi ±${Math.round(accuracy)}m). ` +
+          `Posisi terdeteksi ±${jarak ?? 0}m dari "${terdekat?.nama || 'Lokasi Sekolah'}" ` +
+          `tetapi hasil ini TIDAK AKURAT karena sinyal GPS sedang lemah. ` +
+          `Ini biasa terjadi saat WiFi terputus dan HP berpindah ke paket data. ` +
+          `Tunggu 10-15 detik lalu tekan "Cek Ulang" agar GPS mendapatkan sinyal satelit yang lebih baik.`
+        );
+        setGpsStatus('fail');
+        return;
+      }
+
+      setGpsStatus(dalamRadius ? 'ok' : 'fail');
+      if (!dalamRadius) {
+        setGpsError(terdekat
+          ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m)${accuracy > 100 ? ` — Akurasi GPS: ±${Math.round(accuracy)}m (sinyal kurang optimal)` : ''}. Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
+          : 'Titik koordinat lokasi sekolah belum dapat diverifikasi atau belum didaftarkan di pengaturan. Hubungi Admin Sekolah.');
+      }
+    };
+
+    // Bacaan 1: Cepat (dari cache GPS terakhir, mencegah error saat transisi jaringan)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        const terdekat = cariLokasiTerdekat(latitude, longitude, lokasiList);
-        const jarak = terdekat ? (Number.isFinite(terdekat.jarakMeter) ? terdekat.jarakMeter : (Number.isFinite(terdekat.jarak) ? terdekat.jarak : 0)) : null;
-        const dalamRadius = terdekat ? (terdekat.dalamRadius ?? terdekat.diDalamRadius ?? false) : false;
+        gpsReadings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        if (pos.coords.accuracy < 50) processGpsResult(); // Akurasi bagus, langsung proses
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+    );
 
-        setGpsInfo(terdekat ? {
-          latitude,
-          longitude,
-          jarakMeter: jarak ?? 0,
-          jarak: jarak ?? 0,
-          akurasi: Math.round(accuracy || 0),
-          namaLokasi: terdekat.nama || 'Lokasi Sekolah',
-          radiusMeter: terdekat.radiusMeter || 150,
-          dalamRadius
-        } : null);
-
-        setGpsStatus(dalamRadius ? 'ok' : 'fail');
-        if (!dalamRadius) {
-          setGpsError(terdekat
-            ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m). Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
-            : 'Titik koordinat lokasi sekolah belum dapat diverifikasi atau belum didaftarkan di pengaturan. Hubungi Admin Sekolah.');
-        }
+    // Bacaan 2: Fresh dari sensor GPS satelit
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        gpsReadings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        processGpsResult();
       },
       (err) => {
-        const errMsg = err.code === 1
-          ? 'Izin akses lokasi (GPS) DITOLAK oleh browser/HP. Anda wajib mengizinkan akses lokasi untuk melakukan presensi.'
-          : 'Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.';
-        setGpsError(errMsg);
-        setGpsStatus('fail');
+        if (gpsReadings.length > 0) {
+          processGpsResult();
+        } else {
+          const errMsg = err.code === 1
+            ? 'Izin akses lokasi (GPS) DITOLAK oleh browser/HP. Anda wajib mengizinkan akses lokasi untuk melakukan presensi.'
+            : 'Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.';
+          if (!gpsResolved) {
+            gpsResolved = true;
+            setGpsError(errMsg);
+            setGpsStatus('fail');
+          }
+        }
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
+
+    // Safety timeout
+    gpsTimer = setTimeout(() => {
+      if (!gpsResolved) processGpsResult();
+    }, 16000);
   }, [lokasiList]);
 
   const tick = useCallback(() => {

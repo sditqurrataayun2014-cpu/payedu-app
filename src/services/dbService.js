@@ -32,10 +32,73 @@ const safeStorageSet = (key, value) => {
 // 1. Prioritas Utama: Tabel Mandiri `presensi_records` (Relasional Cepat)
 // 2. Failsafe Cadangan: Baris `settings` (id='presensi_guru')
 // 3. Sumber Offline Cepat: LocalStorage ('payedu_presensi_guru')
+// 4. 🛡️ Antrian Offline: Jika push gagal total, data masuk antrian retry otomatis
 // ==========================================
 
 let _isPresensiRecordsTableAvailable = null;
 let _lastPushedPresensiHash = '';
+let _lastPushedPresensiTime = 0; // Timestamp push terakhir yang berhasil
+const HASH_VALIDITY_MS = 5000; // Hash hanya valid selama 5 detik (mencegah data lama memblokir push baru)
+
+// 🛡️ ANTRIAN OFFLINE: Menyimpan data presensi yang gagal dipush ke cloud
+const PENDING_QUEUE_KEY = 'payedu_presensi_pending_queue';
+
+const enqueuePendingPush = (presensiArray) => {
+  try {
+    // Simpan hanya snapshot terbaru (tidak menumpuk banyak versi)
+    safeStorageSet(PENDING_QUEUE_KEY, {
+      data: presensiArray,
+      timestamp: Date.now(),
+      retryCount: 0
+    });
+    console.log('[Antrian Offline] Data presensi masuk antrian untuk retry otomatis.');
+  } catch (e) {
+    console.warn('[Antrian Offline] Gagal menyimpan antrian:', e);
+  }
+};
+
+const dequeuePendingPush = () => {
+  try {
+    const pending = safeStorageGet(PENDING_QUEUE_KEY, null);
+    if (pending && pending.data && Array.isArray(pending.data) && pending.data.length > 0) {
+      return pending;
+    }
+  } catch (e) {}
+  return null;
+};
+
+const clearPendingQueue = () => {
+  try { localStorage.removeItem(PENDING_QUEUE_KEY); } catch (e) {}
+};
+
+/**
+ * 🔄 Flush antrian presensi yang tertunda (dipanggil saat online kembali atau saat login).
+ * Mengirimkan data presensi yang sebelumnya gagal dipush ke cloud.
+ */
+export const flushPendingPresensi = async () => {
+  if (!isSupabaseConfigured() || !navigator.onLine) return;
+  const pending = dequeuePendingPush();
+  if (!pending) return;
+
+  // Jangan retry jika data sudah terlalu lama (> 24 jam) — mungkin sudah kadaluarsa
+  const ageMs = Date.now() - (pending.timestamp || 0);
+  if (ageMs > 24 * 60 * 60 * 1000) {
+    console.log('[Antrian Offline] Data antrian sudah kadaluarsa (>24 jam), dihapus.');
+    clearPendingQueue();
+    return;
+  }
+
+  console.log('[Antrian Offline] Mengirim ulang data presensi tertunda ke cloud...');
+  try {
+    const result = await pushPresensiGuru(pending.data, { overwrite: false, _fromQueue: true });
+    if (result.status === 'success') {
+      console.log('[Antrian Offline] ✅ Berhasil mengirim data tertunda ke cloud!');
+      clearPendingQueue();
+    }
+  } catch (e) {
+    console.warn('[Antrian Offline] Gagal flush antrian:', e);
+  }
+};
 
 /**
  * Mengecek ketersediaan tabel mandiri `presensi_records` di Supabase.
@@ -130,64 +193,86 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
 
   // 2. Simpan ke Supabase jika online
   if (!isSupabaseConfigured() || !navigator.onLine) {
-    return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline)' };
+    // 🛡️ Jika offline, masukkan ke antrian agar otomatis retry saat online kembali
+    enqueuePendingPush(presensiArray);
+    return { status: 'success', message: 'Presensi tersimpan di LocalStorage (offline, masuk antrian retry)' };
   }
 
   // 🔋 OPTIMASI BANDWIDTH: Skip push jika data identik dengan push terakhir yang berhasil
+  // ⚡ PERBAIKAN: Hash hanya valid selama 5 detik — mencegah data lama memblokir push guru lain
   const currentPresensiHash = JSON.stringify(presensiArray);
-  if (!options.overwrite && _lastPushedPresensiHash === currentPresensiHash) {
+  const hashAge = Date.now() - _lastPushedPresensiTime;
+  if (!options.overwrite && !options._fromQueue && _lastPushedPresensiHash === currentPresensiHash && hashAge < HASH_VALIDITY_MS) {
     return { status: 'success', message: 'Data presensi tidak berubah, skip sync ke cloud' };
   }
 
   const hasTable = await isPresensiRecordsTableAvailable();
 
-  // 🚀 MESIN 1: SIMPAN KE TABEL MANDIRI presensi_records
+  // 🚀 MESIN 1: SIMPAN KE TABEL MANDIRI presensi_records (DENGAN RETRY)
   if (hasTable) {
-    try {
-      // Deduplikasi by ID agar tidak ada tabrakan ON CONFLICT di batch Postgres
-      const map = new Map();
-      for (const r of presensiArray) {
-        if (!r) continue;
-        const row = mapPresensiToDbRow(r);
-        const existing = map.get(row.id);
-        if (!existing) {
-          map.set(row.id, row);
+    const TABLE_MAX_RETRIES = 3;
+    for (let tableAttempt = 1; tableAttempt <= TABLE_MAX_RETRIES; tableAttempt++) {
+      try {
+        // Deduplikasi by ID agar tidak ada tabrakan ON CONFLICT di batch Postgres
+        const map = new Map();
+        for (const r of presensiArray) {
+          if (!r) continue;
+          const row = mapPresensiToDbRow(r);
+          const existing = map.get(row.id);
+          if (!existing) {
+            map.set(row.id, row);
+          } else {
+            const tOld = new Date(existing.updated_at || 0).getTime();
+            const tNew = new Date(row.updated_at || 0).getTime();
+            if (tNew >= tOld) map.set(row.id, row);
+          }
+        }
+
+        const rows = Array.from(map.values());
+        const BATCH_SIZE = 100;
+        let hasError = false;
+
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+          const chunk = rows.slice(i, i + BATCH_SIZE);
+          const { error: batchErr } = await supabase
+            .from('presensi_records')
+            .upsert(chunk, { onConflict: 'id' });
+          if (batchErr) {
+            console.warn(`[Retry ${tableAttempt}/${TABLE_MAX_RETRIES}] Gagal upsert batch presensi_records:`, batchErr);
+            hasError = true;
+            break;
+          }
+        }
+
+        if (!hasError) {
+          _lastPushedPresensiHash = currentPresensiHash;
+          _lastPushedPresensiTime = Date.now();
+          clearPendingQueue(); // Bersihkan antrian jika ada
+          // Backup senyap ke settings agar kedua tempat selalu sinkron
+          supabase.from('settings').upsert({
+            id: 'presensi_guru',
+            data: presensiArray,
+            updated_at: new Date().toISOString()
+          }).catch(() => {});
+
+          return { status: 'success', message: 'Presensi berhasil disinkronkan ke tabel presensi_records', data: presensiArray };
+        }
+
+        // Exponential backoff sebelum retry
+        if (tableAttempt < TABLE_MAX_RETRIES) {
+          const delay = Math.min(500 * Math.pow(2, tableAttempt - 1), 4000) + Math.random() * 500;
+          console.log(`[Retry] Menunggu ${Math.round(delay)}ms sebelum retry ke-${tableAttempt + 1}...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      } catch (tableErr) {
+        console.warn(`[Retry ${tableAttempt}/${TABLE_MAX_RETRIES}] Peringatan penyimpanan ke presensi_records:`, tableErr);
+        if (tableAttempt < TABLE_MAX_RETRIES) {
+          const delay = Math.min(500 * Math.pow(2, tableAttempt - 1), 4000) + Math.random() * 500;
+          await new Promise(r => setTimeout(r, delay));
         } else {
-          const tOld = new Date(existing.updated_at || 0).getTime();
-          const tNew = new Date(row.updated_at || 0).getTime();
-          if (tNew >= tOld) map.set(row.id, row);
+          console.warn('Semua retry presensi_records gagal, mencoba fallback ke settings...');
         }
       }
-
-      const rows = Array.from(map.values());
-      const BATCH_SIZE = 100;
-      let hasError = false;
-
-      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const chunk = rows.slice(i, i + BATCH_SIZE);
-        const { error: batchErr } = await supabase
-          .from('presensi_records')
-          .upsert(chunk, { onConflict: 'id' });
-        if (batchErr) {
-          console.warn('Gagal upsert batch presensi_records:', batchErr);
-          hasError = true;
-          break;
-        }
-      }
-
-      if (!hasError) {
-        _lastPushedPresensiHash = currentPresensiHash;
-        // Backup senyap ke settings agar kedua tempat selalu sinkron
-        supabase.from('settings').upsert({
-          id: 'presensi_guru',
-          data: presensiArray,
-          updated_at: new Date().toISOString()
-        }).catch(() => {});
-
-        return { status: 'success', message: 'Presensi berhasil disinkronkan ke tabel presensi_records', data: presensiArray };
-      }
-    } catch (tableErr) {
-      console.warn('Peringatan penyimpanan ke presensi_records, mencoba fallback ke settings:', tableErr);
     }
   }
 
@@ -229,6 +314,8 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
 
       if (!error) {
         _lastPushedPresensiHash = JSON.stringify(dataToPush);
+        _lastPushedPresensiTime = Date.now();
+        clearPendingQueue(); // Bersihkan antrian jika ada
         return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud (settings)', data: dataToPush };
       } else {
         lastError = error;
@@ -245,7 +332,9 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
   }
 
   console.error('Supabase presensi_guru upsert error:', lastError);
-  return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud' };
+  // 🛡️ Push gagal total → masukkan ke antrian offline untuk retry otomatis nanti
+  enqueuePendingPush(presensiArray);
+  return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud (masuk antrian retry)' };
 };
 
 /**

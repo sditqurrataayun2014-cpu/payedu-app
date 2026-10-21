@@ -29,7 +29,8 @@ import {
   fetchSettingsOnly,
   fetchTeachersOnly,
   fetchArchivesOnly,
-  syncPendingTeacherAttendance
+  syncPendingTeacherAttendance,
+  flushPendingPresensi
 } from './services/dbService';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import PresensiGuruView, { getSesiTheme } from './PresensiGuruView';
@@ -758,6 +759,8 @@ export default function App() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
+      // 🛡️ Flush antrian presensi yang gagal saat offline
+      flushPendingPresensi().catch(e => console.warn('[Flush Queue] Warning:', e));
       fetchCloudData(true);
     };
     const handleOffline = () => {
@@ -1113,6 +1116,8 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role !== 'guru' || !isDataLoaded) return;
     syncPendingTeacherAttendance(user.id, presensiGuru);
+    // 🛡️ Flush antrian presensi yang gagal saat offline (jika ada)
+    flushPendingPresensi().catch(e => console.warn('[Flush Queue Login] Warning:', e));
   }, [user, isDataLoaded]);
 
   // 🔋 Radar Latar Belakang (Smart Polling) — Cek ringan setiap 2 menit, fetch penuh hanya jika ada perubahan
@@ -1287,18 +1292,22 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [loginHistory, isDataLoaded, hasConflict]);
 
-  // Auto-Save Presensi Guru (Hanya untuk Admin / Kepala Sekolah, 🔋 dengan Debounce)
-  // HP Guru tidak melakukan auto-save pasif di background agar tidak menimpa edit manual Admin
+  // Auto-Save Presensi Guru (🛡️ PERBAIKAN: Kini berlaku untuk SEMUA role, termasuk Guru)
+  // HP Guru menggunakan debounce lebih panjang (5 detik) agar tidak mengganggu push langsung saat absen.
+  // Ini adalah safety net: jika push langsung saat upsertRecord() gagal, auto-save ini akan mengirim ulang.
   useEffect(() => {
-    if (!isDataLoaded || !user || user.role === 'guru') return;
+    if (!isDataLoaded || !user) return;
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
     lastSavedPresensiRef.current = currentStr;
     safeStorageSet('payedu_presensi_guru', presensiGuru);
+    // Guru menggunakan debounce lebih panjang (5 detik) agar push langsung di upsertRecord() selesai duluan
+    // Admin menggunakan debounce 3 detik (lebih cepat karena mengedit manual lewat portal)
+    const debounceMs = (user.role === 'guru') ? 5000 : 3000;
     const timeoutId = setTimeout(() => {
       pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
-    }, 3000); // 🔋 Debounce 3 detik
+    }, debounceMs);
     return () => clearTimeout(timeoutId);
   }, [presensiGuru, isDataLoaded, user]);
 
