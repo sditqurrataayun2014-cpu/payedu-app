@@ -10630,22 +10630,77 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     ? defaultSesiList
     : rawSesiList;
 
+  // 🎯 SMART SESSION DETECTOR (Anti-Absen Hilang di Siang/Sore Hari):
+  // 1. Prioritas Tertinggi: Jika guru SUDAH absen masuk di suatu sesi hari ini tapi BELUM absen pulang (jamMasuk && !jamPulang),
+  //    maka aplikasi WAJIB TETAP memilih sesi tersebut! Ini menjamin guru yang masuk pagi TETAP melihat Sesi Pagi saat ingin absen pulang di siang/sore hari.
+  // 2. Jika semua sesi sudah selesai pulang atau belum absen sama sekali:
+  //    - Sebelum jam 15:00 -> tetap prioritaskan Sesi Pagi (KBM utama sekolah).
+  //    - Jam 15:00 ke atas -> jika ada sesi Sore/Halaqoh, barulah beralih ke Sesi Sore.
   const [selectedQuickSesiId, setSelectedQuickSesiId] = useState(() => {
-    const currentHour = new Date().getHours();
-    if (currentHour >= 12 && sesiList.some(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'))) {
-      const sore = sesiList.find(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'));
-      return sore ? sore.id : sesiList[0]?.id;
+    const todayStr = getLocalIsoDate(new Date());
+    const myId = String(myData?.id || '').trim();
+    const myCleanName = myData?.name ? String(myData.name).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+    const activeUnfinishedRecord = (presensiGuru || []).find(r => {
+      if (!r || r.date !== todayStr) return false;
+      const rId = String(r.teacherId || '').trim();
+      const rClean = String(r.teacherName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isMe = (myId && rId && rId === myId) || (myCleanName && rClean && myCleanName === rClean);
+      return isMe && r.jamMasuk && !r.jamPulang;
+    });
+
+    if (activeUnfinishedRecord && activeUnfinishedRecord.sesiId) {
+      return activeUnfinishedRecord.sesiId;
     }
-    return sesiList[0]?.id;
+
+    const currentHour = new Date().getHours();
+    if (currentHour >= 15 && sesiList.some(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'))) {
+      const sore = sesiList.find(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'));
+      return sore ? sore.id : (sesiList[0]?.id || 'pagi');
+    }
+    return sesiList[0]?.id || 'pagi';
   });
+
+  // Sinkronkan otomatis jika ada sesi aktif yang belum absen pulang
+  useEffect(() => {
+    if (!presensiGuru || presensiGuru.length === 0) return;
+    const myId = String(myData?.id || '').trim();
+    const myCleanName = myData?.name ? String(myData.name).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const activeUnfinished = (presensiGuru || []).find(r => {
+      if (!r || r.date !== todayIsoDate) return false;
+      const rId = String(r.teacherId || '').trim();
+      const rClean = String(r.teacherName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isMe = (myId && rId && rId === myId) || (myCleanName && rClean && myCleanName === rClean);
+      return isMe && r.jamMasuk && !r.jamPulang;
+    });
+    if (activeUnfinished?.sesiId) {
+      setSelectedQuickSesiId(prev => {
+        const curRec = (presensiGuru || []).find(r => {
+          if (!r || r.date !== todayIsoDate) return false;
+          const rId = String(r.teacherId || '').trim();
+          const rClean = String(r.teacherName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+          const isMe = (myId && rId && rId === myId) || (myCleanName && rClean && myCleanName === rClean);
+          return isMe && (r.sesiId === prev || (!r.sesiId && prev === sesiList[0]?.id));
+        });
+        return curRec?.jamMasuk ? prev : activeUnfinished.sesiId;
+      });
+    }
+  }, [presensiGuru, todayIsoDate, myData, sesiList]);
 
   const currentQuickSesi = sesiList.find(s => s.id === selectedQuickSesiId) || sesiList[0];
 
-  const todayAttendance = (presensiGuru || []).find(r => 
-    (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
-    r.date === todayIsoDate && 
-    (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
-  );
+  const myIdStr = myData?.id != null ? String(myData.id).trim() : '';
+  const myCleanNameStr = myData?.name ? String(myData.name).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+  const todayAttendance = (presensiGuru || []).find(r => {
+    if (!r || r.date !== todayIsoDate) return false;
+    const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+    const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
+    if (!isMe) return false;
+    const rSesi = r.sesiId || sesiList[0]?.id;
+    return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
+  });
 
   const sudahAbsenMasuk = !!todayAttendance?.jamMasuk;
   const sudahAbsenPulang = !!todayAttendance?.jamPulang;
@@ -10668,11 +10723,15 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     const status = terlambatMenit > 0 ? 'Terlambat' : 'Hadir';
 
     const updated = [...(presensiGuru || [])];
-    const idx = updated.findIndex(r => 
-      (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
-      r.date === todayIsoDate && 
-      (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
-    );
+    const idx = updated.findIndex(r => {
+      if (!r || r.date !== todayIsoDate) return false;
+      const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+      const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+      const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
+      if (!isMe) return false;
+      const rSesi = r.sesiId || sesiList[0]?.id;
+      return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
+    });
     const existingRec = idx >= 0 ? updated[idx] : null;
     const patch = {
       id: existingRec?.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
@@ -10710,11 +10769,15 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     const capture = new Date();
     const nowHHMMSS = capture.toTimeString().slice(0, 8);
     const updated = [...(presensiGuru || [])];
-    const idx = updated.findIndex(r => 
-      (String(r.teacherId) === String(myData.id) || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
-      r.date === todayIsoDate && 
-      (r.sesiId === currentQuickSesi.id || (!r.sesiId && currentQuickSesi.id === sesiList[0]?.id))
-    );
+    const idx = updated.findIndex(r => {
+      if (!r || r.date !== todayIsoDate) return false;
+      const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+      const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+      const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
+      if (!isMe) return false;
+      const rSesi = r.sesiId || sesiList[0]?.id;
+      return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
+    });
     if (idx >= 0) {
       updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString(), updatedBy: myData.name || 'Guru' };
       if (typeof setPresensiGuru === 'function') {

@@ -536,6 +536,15 @@ export default function PresensiGuruView({
   };
   const activeTeachers = useMemo(() => (teachers || []).filter(isTeacherActive).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [teachers]);
 
+  // 🛡️ PERBAIKAN KRITIKAL: sesiUtamaId WAJIB dideklarasi di parent scope
+  // agar fungsi sesiRecord() & upsertRecord() bisa mencocokkan data lama (tanpa sesiId)
+  // dengan sesi utama/pertama. Sebelumnya undefined → menyebabkan upsert selalu membuat
+  // record baru (duplikat) dan absen masuk guru "hilang" saat dicek di sesi tertentu.
+  const sesiUtamaId = useMemo(() => {
+    const list = getSesiList(schoolProfile?.presensiGuruSettings || settings);
+    return list[0]?.id || 'pagi';
+  }, [settings, schoolProfile?.presensiGuruSettings]);
+
   // Jam berjalan (live clock)
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -774,17 +783,6 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   );
   const sesiList = sesiTerjadwalHariIni.length > 0 ? sesiTerjadwalHariIni : sesiSemua;
   const multiSesi = sesiList.length > 0;
-  const [selectedSesiId, setSelectedSesiId] = useState(initialSesiId || sesiSemua[0]?.id);
-
-  // Sinkronkan sesi jika initialSesiId berubah dari luar (misal klik akses cepat di profil)
-  useEffect(() => {
-    if (initialSesiId) {
-      setSelectedSesiId(initialSesiId);
-    }
-  }, [initialSesiId]);
-
-  const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0] || sesiSemua[0];
-
   const today = todayStr();
 
   // Helper pencocokan cerdas profil guru ke rekaman presensi (string-safe & nama-safe)
@@ -809,6 +807,34 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
 
     return false;
   }, [teacher, sesiUtamaId]);
+
+  // 🎯 SMART ACTIVE SESSION:
+  // Cari apakah ada sesi hari ini yang sudah absen masuk tapi belum absen pulang
+  const unfinishedSesi = useMemo(() => {
+    if (!teacher || !Array.isArray(presensiGuru)) return null;
+    return (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, null) && r.jamMasuk && !r.jamPulang);
+  }, [presensiGuru, today, teacher, isTeacherRecordMatch]);
+
+  const [selectedSesiId, setSelectedSesiId] = useState(() => {
+    if (unfinishedSesi?.sesiId) return unfinishedSesi.sesiId;
+    if (initialSesiId) return initialSesiId;
+    return sesiSemua[0]?.id || 'pagi';
+  });
+
+  // Sinkronkan sesi secara cerdas:
+  // Jika guru sudah absen masuk di Sesi Pagi dan belum absen pulang, PRIORITASKAN Sesi Pagi agar tombol absen pulang langsung aktif!
+  useEffect(() => {
+    if (unfinishedSesi?.sesiId) {
+      setSelectedSesiId(prev => {
+        const curRec = (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, prev));
+        return curRec?.jamMasuk ? prev : unfinishedSesi.sesiId;
+      });
+    } else if (initialSesiId) {
+      setSelectedSesiId(initialSesiId);
+    }
+  }, [unfinishedSesi, initialSesiId, presensiGuru, today, isTeacherRecordMatch]);
+
+  const sesiAktif = sesiList.find(s => s.id === selectedSesiId) || sesiList[0] || sesiSemua[0];
 
   const record = teacher && sesiAktif ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, sesiAktif.id)) : null;
 

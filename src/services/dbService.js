@@ -135,7 +135,7 @@ export const sanitizeDate = (d) => {
 
 export const mapPresensiToDbRow = (r) => ({
   id: String(r.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
-  date: sanitizeDate(r.date) || new Date().toISOString().slice(0, 10),
+  date: sanitizeDate(r.date) || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }),
   teacher_id: String(r.teacherId || r.teacher_id || '').trim() || 'UNKNOWN',
   teacher_name: String(r.teacherName || r.teacher_name || 'Guru').trim(),
   sesi_id: String(r.sesiId || r.sesi_id || 'pagi').trim(),
@@ -456,6 +456,12 @@ export function mergePresensiArrays(serverArr, localArr) {
 
   const normStr = (v) => String(v || '').trim().toLowerCase();
   const cleanStr = (v) => normStr(v).replace(/[^a-z0-9]/g, '');
+  // 🛡️ Normalisasi Sesi ID: perlakukan null/empty/'default' sebagai 'pagi' agar data lama & baru selaras
+  const normSesi = (s) => {
+    const str = normStr(s);
+    if (!str || str === 'default' || str === 'null' || str === 'undefined') return 'pagi';
+    return str;
+  };
 
   const getRecordTime = (rec) => {
     if (!rec) return 0;
@@ -475,9 +481,9 @@ export function mergePresensiArrays(serverArr, localArr) {
     // Tanggal wajib sama
     if (normStr(a.date) !== normStr(b.date)) return false;
 
-    // Sesi wajib sama (default sesiId adalah 'default' atau 'pagi')
-    const sesiA = normStr(a.sesiId || 'default');
-    const sesiB = normStr(b.sesiId || 'default');
+    // Sesi wajib sama (default sesiId adalah 'pagi')
+    const sesiA = normSesi(a.sesiId);
+    const sesiB = normSesi(b.sesiId);
     if (sesiA !== sesiB) {
       const namaA = normStr(a.sesiNama);
       const namaB = normStr(b.sesiNama);
@@ -516,10 +522,15 @@ export function mergePresensiArrays(serverArr, localArr) {
     // 🛡️ ATURAN ANTI-WIPEOUT 1: Jam Masuk
     // Jika salah satu rekaman memiliki jamMasuk valid, jamMasuk TIDAK BOLEH HILANG
     // kecuali rekaman baru memang sengaja berstatus izin/sakit resmi tanpa jam masuk.
-    let finalJamMasuk = newer.jamMasuk || older.jamMasuk || null;
+    // Gunakan null-check eksplisit agar jam yang sah tidak terhapus.
+    let finalJamMasuk = (newer.jamMasuk != null && newer.jamMasuk !== '') ? newer.jamMasuk
+                      : (older.jamMasuk != null && older.jamMasuk !== '') ? older.jamMasuk
+                      : null;
 
     // 🛡️ ATURAN ANTI-WIPEOUT 2: Jam Pulang
-    let finalJamPulang = newer.jamPulang || older.jamPulang || null;
+    let finalJamPulang = (newer.jamPulang != null && newer.jamPulang !== '') ? newer.jamPulang
+                       : (older.jamPulang != null && older.jamPulang !== '') ? older.jamPulang
+                       : null;
 
     // 🛡️ ATURAN ANTI-WIPEOUT 3: Status Kehadiran
     // Status bermakna (Hadir, Terlambat, Izin, Sakit, Cuti, Dinas Luar) SELALU MENANG atas 'Alpa' atau 'Belum Absen'
@@ -557,10 +568,10 @@ export function mergePresensiArrays(serverArr, localArr) {
       teacherId: newer.teacherId != null ? newer.teacherId : older.teacherId,
       teacherName: newer.teacherName || older.teacherName,
       date: newer.date || older.date,
-      sesiId: newer.sesiId || older.sesiId,
+      sesiId: newer.sesiId || older.sesiId || 'pagi',
       sesiNama: newer.sesiNama || older.sesiNama,
-      jamMasuk: finalJamMasuk || null,
-      jamPulang: finalJamPulang || null,
+      jamMasuk: finalJamMasuk,
+      jamPulang: finalJamPulang,
       status: finalStatus,
       terlambatMenit: finalTerlambat,
       keterangan: finalKeterangan,
@@ -580,7 +591,7 @@ export function mergePresensiArrays(serverArr, localArr) {
 
   for (const r of allRecords) {
     if (!r) continue;
-    const bucketKey = `${normStr(r.date)}_${normStr(r.sesiId || 'default')}`;
+    const bucketKey = `${normStr(r.date)}_${normSesi(r.sesiId)}`;
     let bucket = bucketMap.get(bucketKey);
     if (!bucket) {
       bucket = [];
@@ -1285,7 +1296,7 @@ export const syncPendingTeacherAttendance = async (teacherId, localPresensi) => 
   const list = Array.isArray(localPresensi) ? localPresensi : safeStorageGet('payedu_presensi_guru', []);
   if (!Array.isArray(list) || list.length === 0) return;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
   const myTodayRecord = list.find(r => 
     r && (String(r.teacherId) === String(teacherId) || (r.teacherName && String(r.teacherName).trim().toLowerCase() === String(teacherId).trim().toLowerCase())) && 
     (r.date === todayStr || !r.date) && 
