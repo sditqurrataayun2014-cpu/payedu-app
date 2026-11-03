@@ -34,6 +34,7 @@ import {
 } from './services/dbService';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import PresensiGuruView, { getSesiTheme } from './PresensiGuruView';
+import { verifyTeacherDevice } from './services/deviceService';
 
 // 🪄 HELPER UNIVERSAL: Mengecek status keaktifan pegawai (Mencegah pegawai Non-Aktif / Resign muncul di operasional gaji & presensi)
 export const isTeacherActive = (t) => {
@@ -10711,6 +10712,21 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   const needVerification = isGpsActive || isQrActive;
 
   const handleQuickAbsenMasuk = () => {
+    if (presensiSettings?.deviceLockEnabled) {
+      const devCheck = verifyTeacherDevice(myData, true);
+      if (!devCheck.isAllowed) {
+        alert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Jika Anda menggunakan HP yang sama tetapi berbeda browser (misal WhatsApp), silakan buka aplikasi di Google Chrome, atau hubungi Admin sekolah.`);
+        return;
+      }
+      if (devCheck.needsEnroll || devCheck.needsUpdate) {
+        handleUpdateTeacherPatch(myData.id, {
+          registeredDeviceId: devCheck.currentDeviceId,
+          registeredDeviceName: devCheck.currentDeviceName,
+          registeredHwFingerprint: devCheck.currentHwFingerprint,
+          registeredDeviceAt: new Date().toISOString()
+        });
+      }
+    }
     if (needVerification) {
       setActiveTab('portal_presensi');
       return;
@@ -10762,6 +10778,21 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   };
 
   const handleQuickAbsenPulang = () => {
+    if (presensiSettings?.deviceLockEnabled) {
+      const devCheck = verifyTeacherDevice(myData, true);
+      if (!devCheck.isAllowed) {
+        alert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`);
+        return;
+      }
+      if (devCheck.needsEnroll || devCheck.needsUpdate) {
+        handleUpdateTeacherPatch(myData.id, {
+          registeredDeviceId: devCheck.currentDeviceId,
+          registeredDeviceName: devCheck.currentDeviceName,
+          registeredHwFingerprint: devCheck.currentHwFingerprint,
+          registeredDeviceAt: new Date().toISOString()
+        });
+      }
+    }
     if (needVerification) {
       setActiveTab('portal_presensi');
       return;
@@ -12707,6 +12738,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           const copy = { ...t };
           delete copy.registeredDeviceId;
           delete copy.registeredDeviceName;
+          delete copy.registeredHwFingerprint;
           delete copy.registeredDeviceAt;
           return copy;
         }
@@ -12718,6 +12750,62 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     });
 
     alert(`Berhasil! Kunci HP untuk "${acc.name}" telah dibuka.\nGuru dapat mendaftarkan HP barunya saat presensi berikutnya.`);
+  };
+
+  // 📱 Handler Reset Kunci Perangkat HP untuk SEMUA Guru Sekaligus
+  const handleResetAllTeacherDevices = () => {
+    const isConfirmed = window.confirm(
+      "PERHATIAN: Apakah Anda yakin ingin membuka kuncian HP untuk SEMUA guru?\n\nSemua guru akan dapat mendaftarkan HP barunya secara otomatis pada saat presensi berikutnya."
+    );
+    if (!isConfirmed) return;
+
+    setTeachers(prev => {
+      const updated = prev.map(t => {
+        const copy = { ...t };
+        delete copy.registeredDeviceId;
+        delete copy.registeredDeviceName;
+        delete copy.registeredHwFingerprint;
+        delete copy.registeredDeviceAt;
+        return copy;
+      });
+      safeStorageSet('payedu_teachers', updated);
+      pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn(e));
+      return updated;
+    });
+
+    alert("✅ Berhasil! Kunci HP seluruh guru telah di-reset.\nGuru dapat menautkan HP baru saat presensi.");
+  };
+
+  // 🛡️ Handler Master Switch Kunci 1 Akun 1 HP Guru (Aktifkan / Nonaktifkan Global)
+  const isGlobalDeviceLockActive = !!generalSettings?.presensiGuruSettings?.deviceLockEnabled;
+
+  const handleToggleGlobalDeviceLock = () => {
+    const nextVal = !isGlobalDeviceLockActive;
+    const confirmMsg = nextVal 
+      ? "Aktifkan Kunci 1 Akun 1 HP Guru (Device Lock)?\n\nKetika aktif, setiap guru hanya bisa absen dari 1 HP terdaftar miliknya. Titip absen dari HP guru lain akan otomatis ditolak."
+      : "Nonaktifkan Kunci HP Guru?\n\nKetika dinonaktifkan, guru bebas presensi dari HP atau browser mana saja tanpa batasan perangkat.";
+    if (!window.confirm(confirmMsg)) return;
+
+    const currentPresensiSettings = generalSettings?.presensiGuruSettings || {};
+    const updatedPresensiSettings = {
+      ...currentPresensiSettings,
+      deviceLockEnabled: nextVal
+    };
+    const updatedSettings = {
+      ...generalSettings,
+      presensiGuruSettings: updatedPresensiSettings,
+      lastModified: Date.now()
+    };
+    setGeneralSettings(updatedSettings);
+    safeStorageSet('payedu_settings', updatedSettings);
+    try {
+      localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(updatedPresensiSettings));
+    } catch (e) {}
+    pushToSupabase('SAVE_SETTINGS', updatedSettings).catch(e => console.warn(e));
+    alert(nextVal 
+      ? "✅ KUNCI 1 AKUN 1 HP GURU BERHASIL DIAKTIFKAN!\n\nSetiap guru kini wajib absen dari HP resmi miliknya." 
+      : "🔓 KUNCI HP GURU TELAH DINONAKTIFKAN!\n\nGuru kini bebas presensi dari browser atau HP mana saja."
+    );
   };
 
   // 🪄 TAMBALAN CERDAS: Export Data Login ke CSV Sesuai Gambar 🪄
@@ -13895,6 +13983,61 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      <button onClick={() => openModal('add')} className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5 shrink-0">
                         <PlusCircle size={16} /> Tambah Admin
                      </button>
+                   </div>
+                </div>
+
+                {/* 📱 KARTU KONTROL PENUH KUNCI HP GURU (DEVICE LOCK) */}
+                <div className="mx-5 mt-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-900/40 dark:to-slate-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                   <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                         isGlobalDeviceLockActive 
+                            ? 'bg-teal-600 text-white shadow-teal-500/20' 
+                            : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                      }`}>
+                         <Smartphone size={22} />
+                      </div>
+                      <div>
+                         <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">
+                               Pengaturan Kunci 1 Akun 1 HP Guru
+                            </h4>
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                               isGlobalDeviceLockActive 
+                                  ? 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800' 
+                                  : 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                            }`}>
+                               {isGlobalDeviceLockActive ? 'AKTIF (Terkunci)' : 'NONAKTIF (Bebas HP)'}
+                            </span>
+                         </div>
+                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-2xl leading-relaxed">
+                            {isGlobalDeviceLockActive 
+                               ? 'Fitur Aktif: Guru hanya bisa presensi dari 1 HP miliknya (mencegah titip absen). Jika guru ganti HP atau beda browser, Admin dapat klik tombol "Reset HP" di tabel bawah.' 
+                               : 'Fitur Nonaktif: Guru bebas presensi dari HP atau browser mana saja tanpa batasan perangkat.'}
+                         </p>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                      <button
+                         type="button"
+                         onClick={handleToggleGlobalDeviceLock}
+                         className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                            isGlobalDeviceLockActive 
+                               ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800' 
+                               : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-500/25'
+                         }`}
+                      >
+                         {isGlobalDeviceLockActive ? 'Nonaktifkan Kunci HP' : 'Aktifkan Kunci HP'}
+                      </button>
+                      {isGlobalDeviceLockActive && (
+                         <button
+                            type="button"
+                            onClick={handleResetAllTeacherDevices}
+                            className="px-3.5 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                            title="Buka kuncian HP seluruh guru sekaligus jika ingin mereset semuanya"
+                         >
+                            <Unlock size={14} /> Reset Semua HP
+                         </button>
+                      )}
                    </div>
                 </div>
 

@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = {
   lokasi: { latitude: null, longitude: null, radiusMeter: 150 },
   lokasiList: [],
   qrToken: '',
+  deviceLockEnabled: false,
   // FITUR BARU: multi-sesi (CRUD) — mendukung sesi Pagi (KBM), Sore (Halaqoh), Rapat/Kajian,
   // atau sesi lain yang diatur bebas oleh Admin. Sesi pertama = sesi utama/legacy.
   sesiList: [
@@ -924,18 +925,21 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
       const devCheck = verifyTeacherDevice(teacher, true);
       if (!devCheck.isAllowed) {
         showToast(
-          `Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Utama'}. Dilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`,
+          `Presensi Ditolak! Akun Anda terdaftar pada: ${devCheck.registeredDeviceName || 'HP Terdaftar'}. Perangkat saat ini: ${devCheck.currentDeviceName}. Dilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`,
           'error'
         );
         return;
       }
-      if (devCheck.needsEnroll) {
+      if (devCheck.needsEnroll || devCheck.needsUpdate) {
         onUpdateTeacher?.(teacher.id, {
           registeredDeviceId: devCheck.currentDeviceId,
           registeredDeviceName: devCheck.currentDeviceName,
+          registeredHwFingerprint: devCheck.currentHwFingerprint,
           registeredDeviceAt: new Date().toISOString()
         });
-        showToast(`📱 Perangkat ini (${devCheck.currentDeviceName}) berhasil didaftarkan sebagai HP resmi presensi Anda.`, 'success');
+        if (devCheck.needsEnroll) {
+          showToast(`📱 Perangkat ini (${devCheck.currentDeviceName}) berhasil didaftarkan sebagai HP resmi presensi Anda.`, 'success');
+        }
       }
     }
 
