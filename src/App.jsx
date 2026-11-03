@@ -10605,6 +10605,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   // 🪄 FITUR BARU: State Animasi Selebrasi Konfeti
   const [showCelebration, setShowCelebration] = useState(false);
 
+  // 🪄 FITUR BARU: Auto Trigger Verifikasi Modal Presensi saat klik Absen dari Kartu Profil
+  const [autoTriggerPresensiMode, setAutoTriggerPresensiMode] = useState(null);
+
   // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini (Mendukung Sesi Pagi & Sore / Seluruh Sesi)
   const [liveNow, setLiveNow] = useState(new Date());
   useEffect(() => {
@@ -10728,6 +10731,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       }
     }
     if (needVerification) {
+      setAutoTriggerPresensiMode('masuk');
       setActiveTab('portal_presensi');
       return;
     }
@@ -10794,6 +10798,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       }
     }
     if (needVerification) {
+      setAutoTriggerPresensiMode('pulang');
       setActiveTab('portal_presensi');
       return;
     }
@@ -11980,6 +11985,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
               presensiGuru={presensiGuru} 
               setPresensiGuru={setPresensiGuru} 
               initialSesiId={selectedQuickSesiId}
+              initialAction={autoTriggerPresensiMode}
+              onActionConsumed={() => setAutoTriggerPresensiMode(null)}
               currentUser={{ id: user.id, teacherId: user.id, name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
               schoolProfile={{ 
                 nama: settings.schoolName || 'SD IT Qurrata A\'yun', 

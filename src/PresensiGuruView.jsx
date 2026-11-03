@@ -453,7 +453,8 @@ export default function PresensiGuruView({
   teachers = [], presensiGuru = [], setPresensiGuru,
   currentUser, schoolProfile, setSchoolProfile,
   showCsvPreview, triggerPrint, addAuditLog,
-  initialSesiId, onUpdateTeacher
+  initialSesiId, onUpdateTeacher,
+  initialAction = null, onActionConsumed
 }) {
   // Toast & Confirm state
   const [toastMessage, setToastMessage] = useState(null);
@@ -697,21 +698,42 @@ export default function PresensiGuruView({
         </Modal>
       )}
 
-      {/* HEADER BANNER TUNGGAL (ELEGAN & TERPADU) */}
-      <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-        <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-black mb-2 flex items-center gap-3">
-            <Fingerprint className="text-teal-100" size={32} />
-            {isTeacher ? 'Presensi Mandiri Pegawai' : 'Presensi Guru & Staff'}
-          </h1>
-          <p className="text-teal-50 text-sm md:text-base max-w-xl font-medium">
-            {isTeacher 
-              ? 'Lakukan pencatatan absen masuk, absen pulang, pengajuan izin, serta pantau riwayat kedisiplinan kerja harian Anda.'
-              : 'Absensi digital terintegrasi — rekapitulasi kehadiran, jam kedatangan, dan keterlambatan pegawai sekolah.'}
-          </p>
+      {/* HEADER PRESENSI GURU MODERN */}
+      {isTeacher ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs animate-in fade-in duration-500">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-400/20 dark:text-teal-300 flex items-center justify-center shrink-0">
+              <Fingerprint size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">
+                  Presensi Mandiri Pegawai
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50">
+                  {currentUser?.name || 'Guru'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Pencatatan absensi harian digital terhubung langsung ke database & sistem penggajian.
+              </p>
+            </div>
+          </div>
         </div>
-        <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
-      </div>
+      ) : (
+        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+          <div className="relative z-10">
+            <h1 className="text-2xl md:text-3xl font-black mb-2 flex items-center gap-3">
+              <Fingerprint className="text-teal-100" size={32} />
+              Presensi Guru & Staff
+            </h1>
+            <p className="text-teal-50 text-sm md:text-base max-w-xl font-medium">
+              Absensi digital terintegrasi — rekapitulasi kehadiran, jam kedatangan, dan keterlambatan pegawai sekolah.
+            </p>
+          </div>
+          <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
+        </div>
+      )}
 
       {isTeacher ? (
         matchedTeacher ? (
@@ -727,6 +749,8 @@ export default function PresensiGuruView({
             schoolProfile={schoolProfile}
             initialSesiId={initialSesiId}
             onUpdateTeacher={onUpdateTeacher}
+            initialAction={initialAction}
+            onActionConsumed={onActionConsumed}
           />
         ) : (
           <div className={`${cx.card3xl} p-10 text-center space-y-3`}>
@@ -764,11 +788,17 @@ export default function PresensiGuruView({
 // ==========================================
 // SUB-VIEW: SELF SERVICE (PORTAL GURU)
 // ==========================================
-function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord, showToast, addAuditLog, currentUser, schoolProfile, initialSesiId, onUpdateTeacher }) {
+function TeacherSelfService({
+  now, settings, teacher, presensiGuru, upsertRecord,
+  showToast, addAuditLog, currentUser, schoolProfile,
+  initialSesiId, onUpdateTeacher,
+  initialAction, onActionConsumed
+}) {
   const [showIzinModal, setShowIzinModal] = useState(false);
   const [izinStatus, setIzinStatus] = useState('Sakit');
   const [izinKeterangan, setIzinKeterangan] = useState('');
   const [verifikasiMode, setVerifikasiMode] = useState(null); // null | 'masuk' | 'pulang'
+  const [verifikasiTargetSesi, setVerifikasiTargetSesi] = useState(null);
 
   const sesiSemua = getSesiList(settings);
   const sesiUtamaId = sesiSemua[0]?.id;
@@ -839,6 +869,141 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
 
   const record = teacher && sesiAktif ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, sesiAktif.id)) : null;
 
+  const sudahMasuk = !!record?.jamMasuk;
+  const sudahPulang = !!record?.jamPulang;
+  const isIzinLike = record && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(record.status) && !record.jamMasuk;
+
+  const handleAbsenMasuk = (verifikasi = {}, customSesi = null) => {
+    const s = customSesi || verifikasiTargetSesi || sesiAktif;
+    if (!s) return;
+    const curRecord = teacher ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id)) : null;
+    if (curRecord?.jamMasuk) {
+      showToast(`Anda sudah melakukan absen masuk sesi ${s.nama} hari ini.`, 'error');
+      return;
+    }
+    const capture = new Date();
+    const { status, terlambatMenit } = computeStatus(capture, s);
+    const patch = { 
+      jamMasuk: nowToHHMMSS(capture), 
+      status, 
+      terlambatMenit, 
+      keterangan: '', 
+      sesiNama: s.nama,
+      deviceId: getOrCreateDeviceId()
+    };
+    if (verifikasi.lokasi) patch.lokasiMasuk = verifikasi.lokasi;
+    if (verifikasi.qrValid !== undefined) patch.qrValidMasuk = verifikasi.qrValid;
+    upsertRecord(teacher.id, teacher.name, today, s.id, patch);
+    showToast(
+      status === 'Terlambat'
+        ? `Absen masuk (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Terlambat ${terlambatMenit} menit.`
+        : `Absen masuk (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Tepat waktu! 🎉`,
+      status === 'Terlambat' ? 'error' : 'success'
+    );
+    const jarakMasuk = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakMasuk}m` : '';
+    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
+    addAuditLog?.(currentUser?.name, 'Absen Masuk', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(nowToHHMMSS(capture))} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''}${lokasiKet}${qrKet})`, 'presensi_guru');
+  };
+
+  const handleAbsenPulang = (verifikasi = {}, customSesi = null) => {
+    const s = customSesi || verifikasiTargetSesi || sesiAktif;
+    if (!s) return;
+    const curRecord = teacher ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id)) : null;
+    if (!curRecord?.jamMasuk) {
+      showToast(`Anda belum melakukan absen masuk sesi ${s.nama} hari ini.`, 'error');
+      return;
+    }
+    if (curRecord?.jamPulang) {
+      showToast(`Anda sudah melakukan absen pulang sesi ${s.nama} hari ini.`, 'error');
+      return;
+    }
+    const capture = new Date();
+    const patch = { 
+      jamPulang: nowToHHMMSS(capture),
+      deviceId: getOrCreateDeviceId()
+    };
+    if (verifikasi.lokasi) patch.lokasiPulang = verifikasi.lokasi;
+    if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
+    upsertRecord(teacher.id, teacher.name, today, s.id, patch);
+    showToast(`Absen pulang (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))}. Selamat beristirahat!`, 'success');
+    const jarakPulang = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakPulang}m` : '';
+    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
+    addAuditLog?.(currentUser?.name, 'Absen Pulang', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(nowToHHMMSS(capture))}${lokasiKet}${qrKet}`, 'presensi_guru');
+  };
+
+  const lokasiAktif = isLokasiAktif(settings);
+  const qrAktif = isQrAktif(settings);
+  const perluVerifikasi = lokasiAktif || qrAktif;
+
+  // 🛡️ Handler Mulai Absen dengan Pemeriksaan Kunci Perangkat (Device Lock)
+  const handleMulaiVerifikasi = (mode, customSesi = null) => {
+    const targetSesi = customSesi || sesiAktif;
+    if (!targetSesi) return;
+
+    const curRecord = teacher && targetSesi ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, targetSesi.id)) : null;
+    const isMasuk = !!curRecord?.jamMasuk;
+    const isPulang = !!curRecord?.jamPulang;
+
+    if (mode === 'masuk' && isMasuk) {
+      showToast(`Anda sudah melakukan absen masuk sesi ${targetSesi.nama} hari ini.`, 'error');
+      return;
+    }
+    if (mode === 'pulang' && !isMasuk) {
+      showToast(`Anda belum melakukan absen masuk sesi ${targetSesi.nama} hari ini.`, 'error');
+      return;
+    }
+    if (mode === 'pulang' && isPulang) {
+      showToast(`Anda sudah melakukan absen pulang sesi ${targetSesi.nama} hari ini.`, 'error');
+      return;
+    }
+
+    if (settings?.deviceLockEnabled) {
+      const devCheck = verifyTeacherDevice(teacher, true);
+      if (!devCheck.isAllowed) {
+        showToast(
+          `Presensi Ditolak! Akun Anda terdaftar pada: ${devCheck.registeredDeviceName || 'HP Terdaftar'}. Perangkat saat ini: ${devCheck.currentDeviceName}. Dilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`,
+          'error'
+        );
+        return;
+      }
+      if (devCheck.needsEnroll || devCheck.needsUpdate) {
+        onUpdateTeacher?.(teacher.id, {
+          registeredDeviceId: devCheck.currentDeviceId,
+          registeredDeviceName: devCheck.currentDeviceName,
+          registeredHwFingerprint: devCheck.currentHwFingerprint,
+          registeredDeviceAt: new Date().toISOString()
+        });
+        if (devCheck.needsEnroll) {
+          showToast(`📱 Perangkat ini (${devCheck.currentDeviceName}) berhasil didaftarkan sebagai HP resmi presensi Anda.`, 'success');
+        }
+      }
+    }
+
+    if (perluVerifikasi) {
+      setVerifikasiTargetSesi(targetSesi);
+      setVerifikasiMode(mode);
+    } else {
+      if (mode === 'masuk') handleAbsenMasuk({}, targetSesi);
+      else handleAbsenPulang({}, targetSesi);
+    }
+  };
+
+  // 🚀 AUTO-TRIGGER MODAL SAAT GURU KLIK ABSEN DARI KARTU PROFIL / DASHBOARD
+  useEffect(() => {
+    if (initialAction) {
+      const targetSesi = (initialSesiId && sesiList.find(s => s.id === initialSesiId)) || sesiAktif;
+      if (initialSesiId && initialSesiId !== selectedSesiId) {
+        setSelectedSesiId(initialSesiId);
+      }
+      // Langsung munculkan modal verifikasi presensi
+      handleMulaiVerifikasi(initialAction, targetSesi);
+      onActionConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAction, initialSesiId]);
+
   if (!teacher) {
     return (
       <div className={`${cx.card3xl} p-10 text-center`}>
@@ -866,91 +1031,6 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
     );
   }
 
-  const sudahMasuk = !!record?.jamMasuk;
-  const sudahPulang = !!record?.jamPulang;
-  const isIzinLike = record && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(record.status) && !record.jamMasuk;
-
-  const handleAbsenMasuk = (verifikasi = {}) => {
-    if (sudahMasuk) { showToast(`Anda sudah melakukan absen masuk sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
-    const capture = new Date();
-    const { status, terlambatMenit } = computeStatus(capture, sesiAktif);
-    const patch = { 
-      jamMasuk: nowToHHMMSS(capture), 
-      status, 
-      terlambatMenit, 
-      keterangan: '', 
-      sesiNama: sesiAktif.nama,
-      deviceId: getOrCreateDeviceId()
-    };
-    if (verifikasi.lokasi) patch.lokasiMasuk = verifikasi.lokasi;
-    if (verifikasi.qrValid !== undefined) patch.qrValidMasuk = verifikasi.qrValid;
-    upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, patch);
-    showToast(
-      status === 'Terlambat'
-        ? `Absen masuk (${sesiAktif.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Terlambat ${terlambatMenit} menit.`
-        : `Absen masuk (${sesiAktif.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Tepat waktu! 🎉`,
-      status === 'Terlambat' ? 'error' : 'success'
-    );
-    const jarakMasuk = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakMasuk}m` : '';
-    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
-    addAuditLog?.(currentUser?.name, 'Absen Masuk', teacher.name, `Sesi ${sesiAktif.nama}, Pukul ${formatJam(nowToHHMMSS(capture))} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''}${lokasiKet}${qrKet})`, 'presensi_guru');
-  };
-
-  const handleAbsenPulang = (verifikasi = {}) => {
-    if (!sudahMasuk) { showToast(`Anda belum melakukan absen masuk sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
-    if (sudahPulang) { showToast(`Anda sudah melakukan absen pulang sesi ${sesiAktif.nama} hari ini.`, 'error'); return; }
-    const capture = new Date();
-    const patch = { 
-      jamPulang: nowToHHMMSS(capture),
-      deviceId: getOrCreateDeviceId()
-    };
-    if (verifikasi.lokasi) patch.lokasiPulang = verifikasi.lokasi;
-    if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
-    upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, patch);
-    showToast(`Absen pulang (${sesiAktif.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))}. Sampai jumpa besok!`, 'success');
-    const jarakPulang = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakPulang}m` : '';
-    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
-    addAuditLog?.(currentUser?.name, 'Absen Pulang', teacher.name, `Sesi ${sesiAktif.nama}, Pukul ${formatJam(nowToHHMMSS(capture))}${lokasiKet}${qrKet}`, 'presensi_guru');
-  };
-
-  const lokasiAktif = isLokasiAktif(settings);
-  const qrAktif = isQrAktif(settings);
-  const perluVerifikasi = lokasiAktif || qrAktif;
-
-  // 🛡️ Handler Mulai Absen dengan Pemeriksaan Kunci Perangkat (Device Lock)
-  const handleMulaiVerifikasi = (mode) => {
-    if (settings?.deviceLockEnabled) {
-      const devCheck = verifyTeacherDevice(teacher, true);
-      if (!devCheck.isAllowed) {
-        showToast(
-          `Presensi Ditolak! Akun Anda terdaftar pada: ${devCheck.registeredDeviceName || 'HP Terdaftar'}. Perangkat saat ini: ${devCheck.currentDeviceName}. Dilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`,
-          'error'
-        );
-        return;
-      }
-      if (devCheck.needsEnroll || devCheck.needsUpdate) {
-        onUpdateTeacher?.(teacher.id, {
-          registeredDeviceId: devCheck.currentDeviceId,
-          registeredDeviceName: devCheck.currentDeviceName,
-          registeredHwFingerprint: devCheck.currentHwFingerprint,
-          registeredDeviceAt: new Date().toISOString()
-        });
-        if (devCheck.needsEnroll) {
-          showToast(`📱 Perangkat ini (${devCheck.currentDeviceName}) berhasil didaftarkan sebagai HP resmi presensi Anda.`, 'success');
-        }
-      }
-    }
-
-    if (perluVerifikasi) {
-      setVerifikasiMode(mode);
-    } else {
-      if (mode === 'masuk') handleAbsenMasuk({});
-      else handleAbsenPulang({});
-    }
-  };
-
   const handleAjukan = () => {
     if (sudahMasuk) { showToast('Anda sudah absen masuk hari ini, tidak bisa mengajukan izin/sakit.', 'error'); return; }
     upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, { status: izinStatus, keterangan: izinKeterangan, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiAktif.nama });
@@ -974,10 +1054,10 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
   const monthAlpa = monthRecords.filter(r => r.status === 'Alpa').length;
 
   return (
-    <div className="space-y-6">
-      {/* PEMILIH SESI (Pagi, Sore/Halaqoh, Rapat/Kajian) DENGAN WARNA BERBEDA */}
-      {multiSesi && (
-        <div className="flex flex-wrap bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1.5 gap-2 shadow-sm w-fit">
+    <div className="space-y-5 animate-in fade-in duration-500">
+      {/* PEMILIH SESI MULTI (Pagi, Sore, Rapat) - HANYA TAMPIL JIKA ADA LEBIH DARI 1 SESI */}
+      {multiSesi && sesiList.length > 1 && (
+        <div className="flex flex-wrap items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1.5 gap-2 shadow-xs w-fit">
           {sesiList.map(s => {
             const theme = getSesiTheme(s);
             const isSel = sesiAktif.id === s.id;
@@ -986,9 +1066,9 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
                 key={s.id}
                 type="button"
                 onClick={() => setSelectedSesiId(s.id)}
-                className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
                   isSel
-                    ? `${theme.bgActive} scale-105 shadow-md`
+                    ? `${theme.bgActive} shadow-sm scale-102`
                     : `${theme.bgInactive}`
                 }`}
               >
@@ -1000,128 +1080,158 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
         </div>
       )}
 
-      {/* 🔔 BANNER PENGINGAT OTOMATIS GURU (BELUM ABSEN MASUK / BELUM ABSEN PULANG) */}
-      {!sudahMasuk && !isIzinLike ? (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300 dark:border-amber-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-bounce">
-              <BellRing size={18} />
-            </div>
-            <div>
-              <p className="text-xs font-black text-amber-900 dark:text-amber-200">
-                Peringatan: Anda belum melakukan Absen Masuk ({sesiAktif.nama})
-              </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium">
-                Batas masuk pukul <b>{formatJam(sesiAktif.jamMasuk + ':00')} WIB</b>. Silakan lakukan presensi masuk di bawah agar kehadiran Anda tercatat tepat waktu.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleMulaiVerifikasi('masuk')}
-            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
-          >
-            <LogIn size={15} /> Absen Masuk Sekarang
-          </button>
-        </div>
-      ) : sudahMasuk && !sudahPulang ? (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/15 via-indigo-500/10 to-blue-500/5 border border-blue-300 dark:border-blue-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
-              <LogOut size={18} />
-            </div>
-            <div>
-              <p className="text-xs font-black text-blue-900 dark:text-blue-200">
-                Pengingat Kepulangan: Anda belum melakukan Absen Pulang ({sesiAktif.nama})
-              </p>
-              <p className="text-[11px] text-blue-700 dark:text-blue-300/90 font-medium">
-                Jam pulang resmi: <b>{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>. Jangan lupa lakukan Absen Pulang sebelum meninggalkan sekolah.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleMulaiVerifikasi('pulang')}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
-          >
-            <LogOut size={15} /> Absen Pulang Sekarang
-          </button>
-        </div>
-      ) : sudahMasuk && sudahPulang ? (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-bold shadow-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>Alhamdulillah, Presensi Sesi {sesiAktif.nama} hari ini telah <b>LENGKAP</b> (Masuk: {formatJam(record.jamMasuk)} • Pulang: {formatJam(record.jamPulang)}).</span>
-          </div>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
-            <Cloud size={11} /> Tersimpan Aman
-          </span>
-        </div>
-      ) : null}
+      {/* KARTU UTAMA PRESENSI MANDIRI (RINGKAS, MODERN & ERGONOMIC) */}
+      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-3xl shadow-xl p-5 sm:p-7 text-white relative overflow-hidden transition-all duration-500`}>
+        <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-sm pointer-events-none" />
+        <div className="absolute -right-4 bottom-[-30px] w-28 h-28 bg-white/10 rounded-full blur-sm pointer-events-none" />
 
-      {/* KARTU JAM & AKSI ABSEN DENGAN GRADASI SESUAI WARNA TEMA SESI AKTIF */}
-      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-[2rem] shadow-xl p-6 sm:p-8 text-white relative overflow-hidden transition-all duration-500`}>
-        <div className="absolute -right-10 -top-10 w-52 h-52 bg-white/10 rounded-full blur-sm" />
-        <div className="absolute -right-4 bottom-[-40px] w-32 h-32 bg-white/10 rounded-full blur-sm" />
-        <div className="relative z-10 flex flex-col lg:flex-row justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 border border-white/20 shadow-xs">
+        <div className="relative z-10 space-y-4 sm:space-y-5">
+          {/* Top Row: Sesi Pill + Tanggal + Cloud Badge */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 border border-white/20 shadow-xs">
                 <span>{getSesiTheme(sesiAktif).iconEmoji}</span>
                 <span>Sesi {sesiAktif.nama}</span>
               </span>
-              <span className="text-white/80 text-xs font-black uppercase tracking-widest">{formatTanggalPanjang(now)}</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 backdrop-blur-sm text-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-400/30 shadow-xs" title="Data presensi tersimpan permanen di Supabase Cloud Database">
-                <Cloud size={11} className="text-emerald-300" />
-                <span>Cloud Permanen</span>
+              <span className="text-white/80 text-xs font-bold tracking-wide">
+                {formatTanggalPanjang(now)}
               </span>
             </div>
-            <p className="text-5xl sm:text-6xl font-black tracking-tight mt-1 font-mono drop-shadow-sm">{now.toTimeString().slice(0, 8)}</p>
-            <p className="mt-3 text-white/90 text-sm font-bold">
-              Assalamu'alaikum, <span className="text-white font-black underline decoration-white/40">{teacher.name}</span> — {teacher.position || 'Guru'}
-            </p>
-            <p className="text-white/80 text-xs mt-1 flex items-center gap-1">
-              <MapPin size={12} /> Jam masuk: <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')}</b> (toleransi {sesiAktif.toleransiMenit} mnt) • Pulang: <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')}</b>
-            </p>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 backdrop-blur-sm text-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-400/30 shadow-xs" title="Data presensi tersimpan permanen di Supabase Cloud Database">
+              <Cloud size={11} className="text-emerald-300" />
+              <span>Cloud Permanen</span>
+            </span>
           </div>
-          <div className="flex flex-col gap-3 min-w-[220px]">
-            <div className="bg-white/15 backdrop-blur rounded-2xl p-4 border border-white/20">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/80">Status Hari Ini ({sesiAktif.nama})</p>
-              <p className="text-lg font-black mt-1">
-                {record?.status && (record.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(record.status)) ? record.status : 'Belum Absen'}
-                {record?.status === 'Terlambat' && <span className="text-amber-200 font-bold text-sm"> ({record.terlambatMenit} menit)</span>}
+
+          {/* Jam & Info Sesi */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl sm:text-5xl font-black tracking-tight font-mono drop-shadow-sm">
+                  {now.toTimeString().slice(0, 8)}
+                </span>
+                <span className="text-sm font-bold text-white/80 font-mono">WIB</span>
+              </div>
+              <p className="text-xs text-white/85 mt-1 flex items-center gap-1">
+                <Clock3 size={13} className="shrink-0" />
+                Jadwal: Masuk <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')}</b> (tol. {sesiAktif.toleransiMenit} mnt) • Pulang <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')}</b>
               </p>
-              {record?.jamMasuk && <p className="text-xs text-white/90 mt-1">Masuk: {formatJam(record.jamMasuk)} {record?.jamPulang && `• Pulang: ${formatJam(record.jamPulang)}`}</p>}
-              {record?.keterangan && <p className="text-xs text-white/90 mt-1 italic">"{record.keterangan}"</p>}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={sudahMasuk || isIzinLike}
-                onClick={() => handleMulaiVerifikasi('masuk')}
-                className="flex items-center justify-center gap-1.5 bg-white text-slate-800 font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-50 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
-              >
-                <LogIn size={16} strokeWidth={2.5} className="text-emerald-600" /> Absen Masuk
-              </button>
-              <button
-                type="button"
-                disabled={!sudahMasuk || sudahPulang}
-                onClick={() => handleMulaiVerifikasi('pulang')}
-                className="flex items-center justify-center gap-1.5 bg-slate-900/80 text-white font-black text-sm px-3 py-3 rounded-xl shadow-md hover:bg-slate-900 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer"
-              >
-                <LogOut size={16} strokeWidth={2.5} className="text-indigo-400" /> Absen Pulang
-              </button>
+
+            {/* Status Kehadiran Hari Ini Pill */}
+            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-3 border border-white/20 sm:min-w-[210px]">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white/70 block">
+                Status Sesi {sesiAktif.nama}
+              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {sudahMasuk && sudahPulang ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-200 font-black text-sm">
+                    <CheckCircle2 size={16} /> Presensi Lengkap
+                  </span>
+                ) : sudahMasuk ? (
+                  <span className="inline-flex items-center gap-1 text-amber-200 font-black text-sm">
+                    <Clock size={16} /> Belum Absen Pulang
+                  </span>
+                ) : isIzinLike ? (
+                  <span className="inline-flex items-center gap-1 text-sky-200 font-black text-sm">
+                    <CalendarClock size={16} /> {record.status}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-white/90 font-black text-sm">
+                    <AlertCircle size={16} className="text-amber-300" /> Belum Absen Masuk
+                  </span>
+                )}
+              </div>
+              {record?.jamMasuk && (
+                <p className="text-[11px] text-white/90 font-medium mt-1">
+                  Masuk: {formatJam(record.jamMasuk)} {record?.jamPulang ? `• Pulang: ${formatJam(record.jamPulang)}` : ''}
+                </p>
+              )}
             </div>
-            {perluVerifikasi && (
-              <p className="text-[10px] text-white/80 flex items-center gap-1 justify-center">
-                <ShieldCheck size={12} /> Absen memerlukan verifikasi {lokasiAktif && qrAktif ? 'lokasi GPS & QR sekolah' : lokasiAktif ? 'lokasi GPS' : 'QR sekolah'}
-              </p>
-            )}
-            {!sudahMasuk && !isIzinLike && (
-              <button type="button" onClick={() => setShowIzinModal(true)} className="text-xs font-bold text-white/90 underline underline-offset-2 hover:text-white text-center cursor-pointer">
-                Tidak masuk hari ini? Ajukan Sakit / Izin
-              </button>
-            )}
+          </div>
+
+          {/* DYNAMIC ACTION SECTION (Focus-driven & thumb-friendly) */}
+          <div className="pt-2 border-t border-white/15">
+            {!sudahMasuk && !isIzinLike ? (
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleMulaiVerifikasi('masuk')}
+                    className="flex-1 py-3.5 px-6 rounded-2xl bg-white text-slate-900 font-black text-sm tracking-wide shadow-lg hover:bg-slate-50 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-700 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <LogIn size={18} strokeWidth={2.5} />
+                    </div>
+                    <span>Absen Masuk Sekarang ({sesiAktif.nama})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowIzinModal(true)}
+                    className="py-3 px-4 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-98 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+                  >
+                    <CalendarClock size={15} /> Ajukan Izin / Sakit
+                  </button>
+                </div>
+                {perluVerifikasi && (
+                  <p className="text-[11px] text-white/80 flex items-center justify-center gap-1.5">
+                    <ShieldCheck size={13} className="text-emerald-300 shrink-0" />
+                    Memerlukan verifikasi {lokasiAktif && qrAktif ? 'lokasi GPS & Barcode QR sekolah' : lokasiAktif ? 'lokasi GPS sekolah' : 'Barcode QR sekolah'}
+                  </p>
+                )}
+              </div>
+            ) : sudahMasuk && !sudahPulang ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-300 shrink-0" />
+                    <span>Masuk tercatat pukul <b>{formatJam(record.jamMasuk)} WIB</b> ({record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'})</span>
+                  </div>
+                  <span className="text-[11px] text-white/80">
+                    Jadwal pulang: <b>{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleMulaiVerifikasi('pulang')}
+                  className="w-full py-3.5 px-6 rounded-2xl bg-slate-900/90 hover:bg-slate-950 text-white font-black text-sm tracking-wide shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white/20 group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/30 text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <LogOut size={18} strokeWidth={2.5} />
+                  </div>
+                  <span>Absen Pulang Sekarang ({sesiAktif.nama})</span>
+                </button>
+                {perluVerifikasi && (
+                  <p className="text-[11px] text-white/80 flex items-center justify-center gap-1.5">
+                    <ShieldCheck size={13} className="text-indigo-300 shrink-0" />
+                    Memerlukan verifikasi {lokasiAktif && qrAktif ? 'lokasi GPS & Barcode QR sekolah' : lokasiAktif ? 'lokasi GPS sekolah' : 'Barcode QR sekolah'}
+                  </p>
+                )}
+              </div>
+            ) : sudahMasuk && sudahPulang ? (
+              <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 text-center space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/30 text-emerald-100 text-xs font-black uppercase tracking-wider">
+                  <CheckCircle2 size={15} /> Presensi Sesi {sesiAktif.nama} Hari Ini Selesai
+                </div>
+                <p className="text-xs text-white/95 font-medium">
+                  Masuk: <b>{formatJam(record.jamMasuk)} WIB</b> • Pulang: <b>{formatJam(record.jamPulang)} WIB</b> • Status: <b>{record.status}</b>
+                </p>
+                <p className="text-[11px] text-white/80">
+                  Terima kasih atas dedikasi dan pengabdian Anda hari ini. Selamat beristirahat!
+                </p>
+              </div>
+            ) : isIzinLike ? (
+              <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 text-center space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/30 text-sky-100 text-xs font-black uppercase tracking-wider">
+                  <CalendarClock size={15} /> Tercatat {record.status}
+                </div>
+                {record.keterangan && (
+                  <p className="text-xs text-white/90 italic">"{record.keterangan}"</p>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1198,11 +1308,16 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
         mode={verifikasiMode}
         settings={settings}
         schoolProfile={schoolProfile}
-        onClose={() => setVerifikasiMode(null)}
-        onVerified={(meta) => {
-          if (verifikasiMode === 'masuk') handleAbsenMasuk(meta);
-          else if (verifikasiMode === 'pulang') handleAbsenPulang(meta);
+        onClose={() => {
           setVerifikasiMode(null);
+          setVerifikasiTargetSesi(null);
+        }}
+        onVerified={(meta) => {
+          const s = verifikasiTargetSesi || sesiAktif;
+          if (verifikasiMode === 'masuk') handleAbsenMasuk(meta, s);
+          else if (verifikasiMode === 'pulang') handleAbsenPulang(meta, s);
+          setVerifikasiMode(null);
+          setVerifikasiTargetSesi(null);
         }}
       />
     </div>
@@ -1230,6 +1345,11 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   const [qrStatus, setQrStatus] = useState('idle'); // idle | scanning | ok | fail
   const [cameraError, setCameraError] = useState('');
 
+  const gpsInfoRef = useRef(gpsInfo);
+  const gpsStatusRef = useRef(gpsStatus);
+  useEffect(() => { gpsInfoRef.current = gpsInfo; }, [gpsInfo]);
+  useEffect(() => { gpsStatusRef.current = gpsStatus; }, [gpsStatus]);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -1246,10 +1366,12 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
 
   const checkGps = useCallback(() => {
     setGpsStatus('checking');
+    gpsStatusRef.current = 'checking';
     setGpsError('');
     if (!navigator.geolocation) {
       setGpsError('Perangkat/browser ini tidak mendukung fitur sensor GPS.');
       setGpsStatus('fail');
+      gpsStatusRef.current = 'fail';
       return;
     }
 
@@ -1266,6 +1388,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       if (gpsReadings.length === 0) {
         setGpsError('Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.');
         setGpsStatus('fail');
+        gpsStatusRef.current = 'fail';
         return;
       }
 
@@ -1278,7 +1401,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       const jarak = terdekat ? (Number.isFinite(terdekat.jarakMeter) ? terdekat.jarakMeter : (Number.isFinite(terdekat.jarak) ? terdekat.jarak : 0)) : null;
       const dalamRadius = terdekat ? (terdekat.dalamRadius ?? terdekat.diDalamRadius ?? false) : false;
 
-      setGpsInfo(terdekat ? {
+      const resolvedGps = terdekat ? {
         latitude,
         longitude,
         jarakMeter: jarak ?? 0,
@@ -1287,7 +1410,10 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
         namaLokasi: terdekat.nama || 'Lokasi Sekolah',
         radiusMeter: terdekat.radiusMeter || 150,
         dalamRadius
-      } : null);
+      } : null;
+
+      gpsInfoRef.current = resolvedGps;
+      setGpsInfo(resolvedGps);
 
       // 🛡️ PERBAIKAN: Toleransi akurasi GPS
       // Jika akurasi sensor GPS sangat rendah (>200m), kemungkinan besar posisi
@@ -1302,10 +1428,12 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
           `Tunggu 10-15 detik lalu tekan "Cek Ulang" agar GPS mendapatkan sinyal satelit yang lebih baik.`
         );
         setGpsStatus('fail');
+        gpsStatusRef.current = 'fail';
         return;
       }
 
       setGpsStatus(dalamRadius ? 'ok' : 'fail');
+      gpsStatusRef.current = dalamRadius ? 'ok' : 'fail';
       if (!dalamRadius) {
         setGpsError(terdekat
           ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m)${accuracy > 100 ? ` — Akurasi GPS: ±${Math.round(accuracy)}m (sinyal kurang optimal)` : ''}. Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
@@ -1340,6 +1468,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
             gpsResolved = true;
             setGpsError(errMsg);
             setGpsStatus('fail');
+            gpsStatusRef.current = 'fail';
           }
         }
       },
@@ -1368,13 +1497,36 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
           setQrStatus('ok');
           setCameraError('');
           stopScan();
+          try {
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([100, 50, 100]);
+            }
+          } catch(e) {}
+
+          const currentGps = gpsInfoRef.current;
+          const isGpsPass = !lokasiAktif || gpsStatusRef.current === 'ok';
+          if (isGpsPass) {
+            setTimeout(() => {
+              const jarak = currentGps?.jarakMeter ?? currentGps?.jarak ?? 0;
+              onVerified({
+                lokasi: lokasiAktif && currentGps ? {
+                  latitude: currentGps.latitude,
+                  longitude: currentGps.longitude,
+                  jarakMeter: jarak,
+                  jarak: jarak,
+                  nama: currentGps.namaLokasi || 'Lokasi Sekolah'
+                } : undefined,
+                qrValid: true,
+              });
+            }, 350);
+          }
           return;
         }
         setCameraError('Kode QR terbaca tapi bukan QR presensi resmi sekolah ini. Pastikan scan QR yang ditempel di sekolah.');
       }
     }
     rafRef.current = requestAnimationFrame(tick);
-  }, [combinedSettings.qrToken, stopScan]);
+  }, [combinedSettings.qrToken, stopScan, lokasiAktif, onVerified]);
 
   const startScan = useCallback(async () => {
     if (lokasiAktif && gpsStatus !== 'ok') {
@@ -1401,6 +1553,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   useEffect(() => {
     if (!isOpen) { stopScan(); return; }
     setGpsStatus('idle'); setGpsInfo(null); setGpsError('');
+    gpsStatusRef.current = 'idle'; gpsInfoRef.current = null;
     setQrStatus('idle'); setCameraError('');
     if (lokasiAktif) checkGps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
