@@ -3,7 +3,7 @@ import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
-  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone
+  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone, MessageCircle, BellRing, Cloud
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { pushPresensiGuru, fetchPresensiGuru } from './services/dbService';
@@ -1000,6 +1000,65 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
         </div>
       )}
 
+      {/* 🔔 BANNER PENGINGAT OTOMATIS GURU (BELUM ABSEN MASUK / BELUM ABSEN PULANG) */}
+      {!sudahMasuk && !isIzinLike ? (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300 dark:border-amber-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-bounce">
+              <BellRing size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-black text-amber-900 dark:text-amber-200">
+                Peringatan: Anda belum melakukan Absen Masuk ({sesiAktif.nama})
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium">
+                Batas masuk pukul <b>{formatJam(sesiAktif.jamMasuk + ':00')} WIB</b>. Silakan lakukan presensi masuk di bawah agar kehadiran Anda tercatat tepat waktu.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleMulaiVerifikasi('masuk')}
+            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+          >
+            <LogIn size={15} /> Absen Masuk Sekarang
+          </button>
+        </div>
+      ) : sudahMasuk && !sudahPulang ? (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/15 via-indigo-500/10 to-blue-500/5 border border-blue-300 dark:border-blue-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+              <LogOut size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-black text-blue-900 dark:text-blue-200">
+                Pengingat Kepulangan: Anda belum melakukan Absen Pulang ({sesiAktif.nama})
+              </p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300/90 font-medium">
+                Jam pulang resmi: <b>{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>. Jangan lupa lakukan Absen Pulang sebelum meninggalkan sekolah.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleMulaiVerifikasi('pulang')}
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+          >
+            <LogOut size={15} /> Absen Pulang Sekarang
+          </button>
+        </div>
+      ) : sudahMasuk && sudahPulang ? (
+        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-bold shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>Alhamdulillah, Presensi Sesi {sesiAktif.nama} hari ini telah <b>LENGKAP</b> (Masuk: {formatJam(record.jamMasuk)} • Pulang: {formatJam(record.jamPulang)}).</span>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">
+            <Cloud size={11} /> Tersimpan Aman
+          </span>
+        </div>
+      ) : null}
+
       {/* KARTU JAM & AKSI ABSEN DENGAN GRADASI SESUAI WARNA TEMA SESI AKTIF */}
       <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-[2rem] shadow-xl p-6 sm:p-8 text-white relative overflow-hidden transition-all duration-500`}>
         <div className="absolute -right-10 -top-10 w-52 h-52 bg-white/10 rounded-full blur-sm" />
@@ -1012,6 +1071,10 @@ function TeacherSelfService({ now, settings, teacher, presensiGuru, upsertRecord
                 <span>Sesi {sesiAktif.nama}</span>
               </span>
               <span className="text-white/80 text-xs font-black uppercase tracking-widest">{formatTanggalPanjang(now)}</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 backdrop-blur-sm text-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-400/30 shadow-xs" title="Data presensi tersimpan permanen di Supabase Cloud Database">
+                <Cloud size={11} className="text-emerald-300" />
+                <span>Cloud Permanen</span>
+              </span>
             </div>
             <p className="text-5xl sm:text-6xl font-black tracking-tight mt-1 font-mono drop-shadow-sm">{now.toTimeString().slice(0, 8)}</p>
             <p className="mt-3 text-white/90 text-sm font-bold">
@@ -1692,6 +1755,22 @@ function AdminRekapPanel({
     });
   };
 
+  // 📲 Handler Kirim Pengingat WhatsApp Sekali Klik ke Guru yang Belum Absen
+  const handleSendTeacherWAReminder = (targetTeacher) => {
+    if (!targetTeacher) return;
+    const rawPhone = targetTeacher.phone || targetTeacher.noHp || '';
+    let cleanPhone = String(rawPhone).replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+    if (!cleanPhone || cleanPhone.length < 9) {
+      alert(`Nomor WhatsApp untuk "${targetTeacher.name}" belum terdaftar atau formatnya belum valid di Data Guru.`);
+      return;
+    }
+    const namaSesi = sesiTerpilih?.nama || 'Pagi';
+    const msg = `Assalamu'alaikum wr. wb. Bapak/Ibu ${targetTeacher.name}, mengingatkan bahwa presensi kehadiran Anda untuk Sesi ${namaSesi} (${hariIni}, ${filterDate}) belum tercatat di sistem PayEdu SD IT Qurrata A'yun. Mohon dapat segera melakukan presensi kehadiran melalui portal guru. Terima kasih banyak. 🙏`;
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+  };
+
   const handleSaveSettings = () => {
     try {
       localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(settingsForm));
@@ -2067,6 +2146,15 @@ function AdminRekapPanel({
                           <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
                             Belum Hadir
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSendTeacherWAReminder(t)}
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                            title={`Kirim Pesan Pengingat Presensi ke WhatsApp ${t.name}`}
+                          >
+                            <MessageCircle size={11} className="text-emerald-600 dark:text-emerald-400" />
+                            <span>Ingatkan WA</span>
+                          </button>
                           {!readOnly && (
                             <div className="flex gap-1 ml-1">
                               <button
@@ -2272,6 +2360,16 @@ function AdminRekapPanel({
                       {!readOnly && (
                         <td className="p-3 pr-6 no-print">
                           <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {status === 'Belum Absen' && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendTeacherWAReminder(t)}
+                                title={`Kirim pengingat presensi ke WhatsApp ${t.name}`}
+                                className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-2xs cursor-pointer"
+                              >
+                                <MessageCircle size={14} />
+                              </button>
+                            )}
                             <button type="button" onClick={() => openEdit(t)} title="Edit manual" className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors"><Edit size={14} /></button>
                             <button type="button" onClick={() => handleQuickStatus(t, 'Sakit')} title="Tandai Sakit" className="px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase hover:bg-blue-100 transition-colors">Sakit</button>
                             <button type="button" onClick={() => handleQuickStatus(t, 'Izin')} title="Tandai Izin" className="px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg text-[10px] font-black uppercase hover:bg-violet-100 transition-colors">Izin</button>

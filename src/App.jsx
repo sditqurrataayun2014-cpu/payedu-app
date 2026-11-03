@@ -6,7 +6,7 @@ import {
 import { 
   LayoutDashboard, Users, Clock, Calculator, FileText, Settings, 
   LogOut, LogIn, Sun, Moon, Eye, EyeOff, Search, Edit, Trash2, 
-  Menu, X, CheckCircle, XCircle, ChevronRight, Printer, AlertCircle, UserCircle,
+  Menu, X, CheckCircle, CheckCircle2, MessageCircle, XCircle, ChevronRight, Printer, AlertCircle, UserCircle,
   GraduationCap, Wallet, Calendar, TrendingUp, Award,
   PlusCircle, Trash, Star, Briefcase, Shield, HeartHandshake, Sparkles,
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
@@ -11508,6 +11508,65 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                         }`}>
                            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
                            
+                            {/* 🔔 BANNER PENGINGAT OTOMATIS GURU (BELUM ABSEN MASUK / BELUM ABSEN PULANG) */}
+                            {!sudahAbsenMasuk && !isIzinToday ? (
+                               <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-300 dark:border-amber-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10">
+                                  <div className="flex items-start sm:items-center gap-2.5">
+                                     <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-bounce">
+                                        <BellRing size={16} />
+                                     </div>
+                                     <div>
+                                        <p className="text-xs font-black text-amber-900 dark:text-amber-200">
+                                           Pengingat Presensi: Anda belum melakukan Absen Masuk ({currentQuickSesi.nama})
+                                        </p>
+                                        <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium">
+                                           Batas waktu pukul <b>{currentQuickSesi.jamMasuk || '07:00'} WIB</b>. Segera presensi agar tercatat Hadir Tepat Waktu.
+                                        </p>
+                                     </div>
+                                  </div>
+                                  <button
+                                     type="button"
+                                     onClick={handleQuickAbsenMasuk}
+                                     className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+                                  >
+                                     <LogIn size={14} /> Absen Masuk Sekarang
+                                  </button>
+                               </div>
+                            ) : sudahAbsenMasuk && !sudahAbsenPulang ? (
+                               <div className="mb-4 p-3.5 rounded-2xl bg-blue-500/15 border border-blue-300 dark:border-blue-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs relative z-10">
+                                  <div className="flex items-start sm:items-center gap-2.5">
+                                     <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                                        <LogOut size={16} />
+                                     </div>
+                                     <div>
+                                        <p className="text-xs font-black text-blue-900 dark:text-blue-200">
+                                           Pengingat Kepulangan: Anda belum melakukan Absen Pulang ({currentQuickSesi.nama})
+                                        </p>
+                                        <p className="text-[11px] text-blue-700 dark:text-blue-300/90 font-medium">
+                                           Jam kepulangan resmi: <b>{currentQuickSesi.jamPulang || '14:00'} WIB</b>. Jangan lupa absen pulang sebelum meninggalkan sekolah.
+                                        </p>
+                                     </div>
+                                  </div>
+                                  <button
+                                     type="button"
+                                     onClick={handleQuickAbsenPulang}
+                                     className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+                                  >
+                                     <LogOut size={14} /> Absen Pulang Sekarang
+                                  </button>
+                               </div>
+                            ) : sudahAbsenMasuk && sudahAbsenPulang ? (
+                               <div className="mb-4 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-bold shadow-xs relative z-10">
+                                  <div className="flex items-center gap-2">
+                                     <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                     <span>Alhamdulillah, Presensi Sesi {currentQuickSesi.nama} hari ini telah <b>LENGKAP</b> (Masuk: {todayAttendance?.jamMasuk?.slice(0, 5)} • Pulang: {todayAttendance?.jamPulang?.slice(0, 5)} WIB).</span>
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 shrink-0">
+                                     <Cloud size={11} /> Tersimpan Aman
+                                  </span>
+                               </div>
+                            ) : null}
+
                            {/* Baris Header Widget: Judul, Sesi Selector (Pagi & Sore), dan Jam Digital */}
                            <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b relative z-10 ${
                               currentTheme.type === 'sore' ? 'border-purple-200/60 dark:border-purple-800/40' : currentTheme.type === 'rapat' ? 'border-rose-200/60 dark:border-rose-800/40' : 'border-teal-200/60 dark:border-teal-800/40'
@@ -11678,7 +11737,12 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                                  : 'border-teal-200/40 dark:border-teal-800/30 text-teal-700 dark:text-teal-300'
                            }`}>
                               <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium text-[11px]">
-                                 <Sparkles size={13} className="text-amber-500" /> Presensi otomatis tersinkron ke laporan presensi sekolah.
+                               <span className="inline-flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400 font-medium text-[11px]">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold border border-emerald-200 dark:border-emerald-800/60">
+                                     <Cloud size={11} className="text-emerald-600 dark:text-emerald-400" /> Cloud Database: Permanen
+                                  </span>
+                                  <span>• Presensi otomatis tersinkron ke laporan presensi sekolah.</span>
+                               </span>
                               </span>
                               <button 
                                  type="button"
