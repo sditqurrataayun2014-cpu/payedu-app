@@ -12777,7 +12777,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   };
 
   // 🛡️ Handler Master Switch Kunci 1 Akun 1 HP Guru (Aktifkan / Nonaktifkan Global)
-  const isGlobalDeviceLockActive = !!generalSettings?.presensiGuruSettings?.deviceLockEnabled;
+  const isGlobalDeviceLockActive = !!settings?.presensiGuruSettings?.deviceLockEnabled;
 
   const handleToggleGlobalDeviceLock = () => {
     const nextVal = !isGlobalDeviceLockActive;
@@ -12786,17 +12786,17 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       : "Nonaktifkan Kunci HP Guru?\n\nKetika dinonaktifkan, guru bebas presensi dari HP atau browser mana saja tanpa batasan perangkat.";
     if (!window.confirm(confirmMsg)) return;
 
-    const currentPresensiSettings = generalSettings?.presensiGuruSettings || {};
+    const currentPresensiSettings = settings?.presensiGuruSettings || {};
     const updatedPresensiSettings = {
       ...currentPresensiSettings,
       deviceLockEnabled: nextVal
     };
     const updatedSettings = {
-      ...generalSettings,
+      ...settings,
       presensiGuruSettings: updatedPresensiSettings,
       lastModified: Date.now()
     };
-    setGeneralSettings(updatedSettings);
+    setSettings(updatedSettings);
     safeStorageSet('payedu_settings', updatedSettings);
     try {
       localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(updatedPresensiSettings));
