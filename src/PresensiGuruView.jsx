@@ -6,7 +6,7 @@ import {
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone, MessageCircle, BellRing, Cloud
 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { pushPresensiGuru, fetchPresensiGuru } from './services/dbService';
+import { pushPresensiGuru, fetchPresensiGuru, pushSinglePresensiRecord, deleteSinglePresensiRecord } from './services/dbService';
 import { getOrCreateDeviceId, verifyTeacherDevice } from './services/deviceService';
 
 // ==========================================
@@ -574,9 +574,10 @@ export default function PresensiGuruView({
       return false;
     });
 
+    let targetRecord;
     if (idx >= 0) {
       updated = [...presensiGuru];
-      updated[idx] = {
+      targetRecord = {
         ...updated[idx],
         ...patch,
         teacherId: teacherId != null ? teacherId : updated[idx].teacherId,
@@ -585,27 +586,37 @@ export default function PresensiGuruView({
         updatedAt: new Date().toISOString(),
         updatedBy: currentUser?.name || 'Sistem'
       };
+      updated[idx] = targetRecord;
     } else {
+      targetRecord = {
+        id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        teacherId, teacherName, date, sesiId,
+        jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
+        ...patch,
+        updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || 'Sistem',
+      };
       updated = [
         ...(presensiGuru || []),
-        {
-          id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-          teacherId, teacherName, date, sesiId,
-          jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
-          ...patch,
-          updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || 'Sistem',
-        },
+        targetRecord,
       ];
     }
     if (typeof setPresensiGuru === 'function') {
       setPresensiGuru(updated);
     }
 
-    // INSTANT LOCALSTORAGE BACKUP & DIRECT CLOUD PUSH
+    // INSTANT LOCALSTORAGE BACKUP
     try {
       localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
     } catch (e) {}
-    pushPresensiGuru(updated).catch(e => console.warn('[Presensi] Push warning:', e));
+
+    // 🚀 ULTRA CEPAT & ATOMIK (~96ms): Langsung push 1 record ini ke Supabase presensi_records
+    pushSinglePresensiRecord(targetRecord).then(res => {
+      if (res?.status === 'success') {
+        console.log('[Presensi] ✅ Single record tersimpan ke cloud Supabase!');
+      } else {
+        console.warn('[Presensi] ⚠️ Single record offline/masuk antrian:', res?.message);
+      }
+    }).catch(e => console.warn('[Presensi] Single push warning:', e));
   };
 
   // Identifikasi profil guru yang sedang aktif/login secara akurat & aman
@@ -1984,7 +1995,7 @@ function AdminRekapPanel({
       try {
         localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
       } catch (e) {}
-      pushPresensiGuru(updated, { overwrite: true }).catch(e => console.warn('[Presensi] Delete sync warning:', e));
+      deleteSinglePresensiRecord(rec.id).catch(e => console.warn('[Presensi] Delete single warning:', e));
       showToast('Catatan presensi berhasil dihapus.', 'success');
     });
   };

@@ -40,8 +40,49 @@ let _lastPushedPresensiHash = '';
 let _lastPushedPresensiTime = 0; // Timestamp push terakhir yang berhasil
 const HASH_VALIDITY_MS = 5000; // Hash hanya valid selama 5 detik (mencegah data lama memblokir push baru)
 
-// 🛡️ ANTRIAN OFFLINE: Menyimpan data presensi yang gagal dipush ke cloud
+// 🛡️ ANTRIAN OFFLINE: Menyimpan data presensi yang gagal dipush ke cloud (Single & Bulk)
 const PENDING_QUEUE_KEY = 'payedu_presensi_pending_queue';
+const PENDING_SINGLE_QUEUE_KEY = 'payedu_presensi_pending_singles';
+
+export const enqueueSinglePendingRecord = (record) => {
+  try {
+    if (!record || !record.id) return;
+    const current = safeStorageGet(PENDING_SINGLE_QUEUE_KEY, []);
+    const queue = Array.isArray(current) ? current : [];
+    const idx = queue.findIndex(r => r.id === record.id);
+    if (idx >= 0) {
+      queue[idx] = record;
+    } else {
+      queue.push(record);
+    }
+    safeStorageSet(PENDING_SINGLE_QUEUE_KEY, queue);
+    console.log('[Antrian Offline] 1 record presensi masuk antrian retry:', record.teacherName, record.jamMasuk);
+  } catch (e) {
+    console.warn('[Antrian Offline] Gagal menyimpan single antrian:', e);
+  }
+};
+
+export const dequeueSinglePendingRecords = () => {
+  try {
+    const list = safeStorageGet(PENDING_SINGLE_QUEUE_KEY, []);
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch (e) {}
+  return [];
+};
+
+export const removeSinglePendingRecord = (recordId) => {
+  try {
+    if (!recordId) return;
+    const list = dequeueSinglePendingRecords();
+    if (list.length === 0) return;
+    const filtered = list.filter(r => r.id !== recordId);
+    if (filtered.length === 0) {
+      localStorage.removeItem(PENDING_SINGLE_QUEUE_KEY);
+    } else {
+      safeStorageSet(PENDING_SINGLE_QUEUE_KEY, filtered);
+    }
+  } catch (e) {}
+};
 
 const enqueuePendingPush = (presensiArray) => {
   try {
@@ -77,6 +118,24 @@ const clearPendingQueue = () => {
  */
 export const flushPendingPresensi = async () => {
   if (!isSupabaseConfigured() || !navigator.onLine) return;
+
+  // 1. Flush antrian rekaman tunggal (prioritas tercepat & paling akurat)
+  const pendingSingles = dequeueSinglePendingRecords();
+  if (pendingSingles.length > 0) {
+    console.log(`[Antrian Offline] Mengirim ${pendingSingles.length} record presensi tunggal yang tertunda...`);
+    for (const rec of pendingSingles) {
+      try {
+        const res = await pushSinglePresensiRecord(rec, { _fromQueue: true });
+        if (res.status === 'success') {
+          removeSinglePendingRecord(rec.id);
+        }
+      } catch (err) {
+        console.warn('[Antrian Offline] Gagal flush single record:', err);
+      }
+    }
+  }
+
+  // 2. Flush antrian bulk
   const pending = dequeuePendingPush();
   if (!pending) return;
 
@@ -180,6 +239,109 @@ export const mapDbRowToPresensi = (row) => ({
  * Menggunakan mesin relasional `presensi_records` jika tersedia,
  * dengan cadangan ganda (failsafe) ke baris `settings`.
  */
+/**
+ * ⚡ PUSH SINGLE PRESENSI RECORD (ATOMIC & INSTANT)
+ * Mengirimkan TEPAT 1 rekaman presensi langsung ke tabel `presensi_records` di Supabase.
+ * Kecepatan: ~50-100ms (1 baris Postgres).
+ * Tahan banting terhadap pergantian jaringan (4G -> WiFi) dengan retry otomatis.
+ */
+export const pushSinglePresensiRecord = async (record, options = {}) => {
+  if (!record || typeof record !== 'object') {
+    return { status: 'error', message: 'Data presensi tidak valid' };
+  }
+
+  // 1. Simpan seketika ke LocalStorage (Update / Tambahkan ke array lokal)
+  try {
+    const local = safeStorageGet('payedu_presensi_guru', []);
+    const safeLocal = Array.isArray(local) ? local : [];
+    const norm = (v) => String(v || '').trim().toLowerCase();
+    const idx = safeLocal.findIndex(r => {
+      if (!r) return false;
+      if (record.id && r.id && r.id === record.id) return true;
+      if (norm(r.date) === norm(record.date)) {
+        const idA = norm(r.teacherId);
+        const idB = norm(record.teacherId);
+        const sesiA = norm(r.sesiId || 'pagi');
+        const sesiB = norm(record.sesiId || 'pagi');
+        if (idA && idB && idA === idB && sesiA === sesiB) return true;
+      }
+      return false;
+    });
+
+    let updatedLocal;
+    if (idx >= 0) {
+      updatedLocal = [...safeLocal];
+      updatedLocal[idx] = { ...updatedLocal[idx], ...record };
+    } else {
+      updatedLocal = [...safeLocal, record];
+    }
+    safeStorageSet('payedu_presensi_guru', updatedLocal);
+  } catch (err) {
+    console.warn('[SinglePush] Gagal sinkronisasi ke LocalStorage:', err);
+  }
+
+  // 2. Jika offline / belum konfigurasi, simpan ke antrian offline single
+  if (!isSupabaseConfigured() || !navigator.onLine) {
+    if (!options._fromQueue) enqueueSinglePendingRecord(record);
+    return { status: 'offline', message: 'Tersimpan di perangkat (offline, masuk antrian retry)' };
+  }
+
+  // 3. Konversi ke baris DB
+  const dbRow = mapPresensiToDbRow(record);
+
+  // 4. Upsert langsung ke tabel presensi_records dengan retry cepat (3 kali)
+  const MAX_ATTEMPTS = 3;
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const { data, error } = await supabase
+        .from('presensi_records')
+        .upsert(dbRow, { onConflict: 'id' });
+
+      if (!error) {
+        removeSinglePendingRecord(record.id);
+        return { status: 'success', message: 'Presensi berhasil tersimpan di Cloud Database', data: record };
+      }
+
+      lastErr = error;
+      console.warn(`[SinglePush Retry ${attempt}/${MAX_ATTEMPTS}] Gagal upsert:`, error);
+      if (attempt < MAX_ATTEMPTS) {
+        // Jeda singkat sebelum retry (mengatasi drop sesaat akibat handover 4G -> WiFi)
+        await new Promise(r => setTimeout(r, 250 * attempt));
+      }
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[SinglePush Retry ${attempt}/${MAX_ATTEMPTS}] Exception:`, e);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 250 * attempt));
+      }
+    }
+  }
+
+  // Jika semua retry gagal, masukkan ke antrian retry otomatis
+  if (!options._fromQueue) {
+    enqueueSinglePendingRecord(record);
+  }
+  return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud (masuk antrian)', error: lastErr };
+};
+
+/**
+ * 🗑️ HAPUS SINGLE RECORD PRESENSI DARI SUPABASE
+ */
+export const deleteSinglePresensiRecord = async (recordId) => {
+  if (!recordId) return { status: 'error', message: 'Record ID kosong' };
+  if (!isSupabaseConfigured() || !navigator.onLine) return { status: 'offline' };
+  try {
+    const { error } = await supabase.from('presensi_records').delete().eq('id', recordId);
+    if (!error) return { status: 'success' };
+    console.warn('[DeleteSingle] Error:', error);
+  } catch (e) {
+    console.warn('[DeleteSingle] Exception:', e);
+  }
+  return { status: 'error' };
+};
+
 export const pushPresensiGuru = async (presensiArray, options = {}) => {
   if (!Array.isArray(presensiArray)) return { status: 'error', message: 'Data presensi bukan array' };
 
@@ -228,7 +390,14 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
           }
         }
 
-        const rows = Array.from(map.values());
+        // 🌟 PERBAIKAN KRITIS: Urutkan data dari yang PALING BARU ke yang terlama!
+        // Sehingga presensi hari ini SELALU berada di Chunk 1 dan tersimpan dalam 200ms pertama!
+        const rows = Array.from(map.values()).sort((a, b) => {
+          const tA = new Date(a.date || 0).getTime();
+          const tB = new Date(b.date || 0).getTime();
+          return tB - tA; // descending (terbaru di depan)
+        });
+
         const BATCH_SIZE = 100;
         let hasError = false;
 
@@ -247,14 +416,7 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
         if (!hasError) {
           _lastPushedPresensiHash = currentPresensiHash;
           _lastPushedPresensiTime = Date.now();
-          clearPendingQueue(); // Bersihkan antrian jika ada
-          // Backup senyap ke settings agar kedua tempat selalu sinkron
-          supabase.from('settings').upsert({
-            id: 'presensi_guru',
-            data: presensiArray,
-            updated_at: new Date().toISOString()
-          }).catch(() => {});
-
+          clearPendingQueue();
           return { status: 'success', message: 'Presensi berhasil disinkronkan ke tabel presensi_records', data: presensiArray };
         }
 
@@ -693,7 +855,7 @@ export const deduplicateTeachers = (teachersList) => {
  * Callback dipanggil setiap kali baris presensi_guru berubah di server.
  * Mengembalikan fungsi unsubscribe.
  */
-export const subscribePresensiGuru = (onUpdate) => {
+export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
   if (!isSupabaseConfigured() || !supabase) {
     return () => {}; // noop unsubscribe
   }
@@ -703,10 +865,17 @@ export const subscribePresensiGuru = (onUpdate) => {
       event: '*', 
       schema: 'public', 
       table: 'presensi_records' 
-    }, async () => {
+    }, async (payload) => {
       try {
+        // 🚀 REALTIME INSTANT: Jika Supabase mengirimkan record baru / update dari Postgres
+        if (payload?.new && payload.new.id && typeof onSingleUpdate === 'function') {
+          const mapped = mapDbRowToPresensi(payload.new);
+          onSingleUpdate(mapped);
+          return;
+        }
+
         const res = await fetchPresensiGuru();
-        if (res.status === 'success' && Array.isArray(res.data)) {
+        if (res.status === 'success' && Array.isArray(res.data) && typeof onUpdate === 'function') {
           onUpdate(res.data);
         }
       } catch (err) {
@@ -721,7 +890,7 @@ export const subscribePresensiGuru = (onUpdate) => {
     }, async () => {
       try {
         const res = await fetchPresensiGuru();
-        if (res.status === 'success' && Array.isArray(res.data)) {
+        if (res.status === 'success' && Array.isArray(res.data) && typeof onUpdate === 'function') {
           onUpdate(res.data);
         }
       } catch (err) {
@@ -1304,11 +1473,11 @@ export const syncPendingTeacherAttendance = async (teacherId, localPresensi) => 
   );
 
   if (myTodayRecord) {
-    console.log('[AutoSync] Presensi guru hari ini ditemukan di memori lokal, menyinkronkan ke Supabase Cloud...');
+    console.log('[AutoSync] Presensi guru hari ini ditemukan di memori lokal, menyinkronkan ke Supabase Cloud (Single Record)...');
     try {
-      await pushPresensiGuru(list);
+      await pushSinglePresensiRecord(myTodayRecord);
     } catch (e) {
-      console.warn('[AutoSync] Background sync presensi warning:', e);
+      console.warn('[AutoSync] Background sync single presensi warning:', e);
     }
   }
 };

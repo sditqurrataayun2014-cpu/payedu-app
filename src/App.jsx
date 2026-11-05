@@ -20,6 +20,7 @@ import {
   pushCloudData as pushToSupabase,
   fetchPresensiGuru,
   pushPresensiGuru,
+  pushSinglePresensiRecord,
   subscribePresensiGuru,
   subscribeAllChanges,
   checkCloudTimestamp,
@@ -1042,6 +1043,33 @@ export default function App() {
         lastSavedPresensiRef.current = JSON.stringify(updatedPresensi);
         safeStorageSet('payedu_presensi_guru', updatedPresensi);
       }
+    }, (singleRecord) => {
+      if (!singleRecord || !singleRecord.id) return;
+      setPresensiGuru(prev => {
+        const currentList = Array.isArray(prev) ? prev : [];
+        const norm = (v) => String(v || '').trim().toLowerCase();
+        const idx = currentList.findIndex(r => {
+          if (!r) return false;
+          if (r.id && singleRecord.id && r.id === singleRecord.id) return true;
+          if (norm(r.date) === norm(singleRecord.date)) {
+            const idA = norm(r.teacherId);
+            const idB = norm(singleRecord.teacherId);
+            const sesiA = norm(r.sesiId || 'pagi');
+            const sesiB = norm(singleRecord.sesiId || 'pagi');
+            if (idA && idB && idA === idB && sesiA === sesiB) return true;
+          }
+          return false;
+        });
+        let nextList;
+        if (idx >= 0) {
+          nextList = [...currentList];
+          nextList[idx] = { ...nextList[idx], ...singleRecord };
+        } else {
+          nextList = [...currentList, singleRecord];
+        }
+        safeStorageSet('payedu_presensi_guru', nextList);
+        return nextList;
+      });
     });
     return () => {
       unsubscribe();
@@ -1298,6 +1326,7 @@ export default function App() {
   // Ini adalah safety net: jika push langsung saat upsertRecord() gagal, auto-save ini akan mengirim ulang.
   useEffect(() => {
     if (!isDataLoaded || !user) return;
+    if (user.role === 'guru') return; // HP Guru bebas dari beban bulk upload!
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
@@ -10777,7 +10806,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       setPresensiGuru(updated);
     }
     safeStorageSet('payedu_presensi_guru', updated);
-    pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
+    pushSinglePresensiRecord(patch).catch(e => console.warn('[PortalGuru] Single push error:', e));
     alert(status === 'Terlambat' ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
   };
 
@@ -10820,7 +10849,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
         setPresensiGuru(updated);
       }
       safeStorageSet('payedu_presensi_guru', updated);
-      pushPresensiGuru(updated).catch(e => console.warn('[PortalGuru] Push error:', e));
+      pushSinglePresensiRecord(updated[idx]).catch(e => console.warn('[PortalGuru] Single push error:', e));
       alert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
     }
   };
