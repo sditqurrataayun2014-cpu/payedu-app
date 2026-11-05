@@ -46,36 +46,23 @@ export const getHardwareFingerprint = () => {
     const dpr = Math.round((window.devicePixelRatio || 1) * 100);
     const colorDepth = window.screen?.colorDepth || 24;
 
-    // 2. Platform & CPU
-    const cores = navigator.hardwareConcurrency || 0;
-    const memory = navigator.deviceMemory || 0;
+    // 2. Platform & User Agent
     const ua = navigator.userAgent || '';
     
+    // 🛡️ PERBAIKAN PATEN: Deteksi platform OS yang tegas & stabil
     let platformOs = 'Android';
     if (/iPhone|iPad|iPod/i.test(ua)) platformOs = 'iOS';
+    else if (/Android/i.test(ua)) platformOs = 'Android';
     else if (/Windows/i.test(ua)) platformOs = 'Win';
-    else if (/Mac/i.test(ua)) platformOs = 'Mac';
-    else if (/Linux/i.test(ua)) platformOs = 'Linux';
+    else if (/Macintosh|Mac OS/i.test(ua)) platformOs = 'Mac';
+    else if (/Linux/i.test(ua)) platformOs = 'Android'; // Browser mobile Linux di HP hampir selalu Android
 
-    // 3. GPU WebGL Physical Renderer (Sangat unik untuk setiap chip SoC HP fisik)
-    let gpuRenderer = '';
-    let gpuVendor = '';
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-      if (gl) {
-        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-        if (debugInfo) {
-          gpuRenderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '').trim();
-          gpuVendor = String(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '').trim();
-        }
-      }
-    } catch {
-      // WebGL not available or blocked
-    }
+    // Hardware Concurrency dengan fallback stabil
+    const cores = navigator.hardwareConcurrency || 4;
 
-    // Buat hash deterministik
-    const raw = `${platformOs}|${maxDim}x${minDim}|${dpr}|${colorDepth}|c${cores}|m${memory}|${gpuVendor}|${gpuRenderer}`;
+    // 🛡️ PERBAIKAN PATEN: Hash stabil tanpa parameter volatil yang hilang di WebView/WhatsApp
+    // (deviceMemory & WEBGL_debug_renderer_info diblokir/dimask di WhatsApp & in-app browser)
+    const raw = `${platformOs}|${maxDim}x${minDim}|${dpr}|${colorDepth}|c${cores}`;
     let hash = 0;
     for (let i = 0; i < raw.length; i++) {
       hash = ((hash << 5) - hash) + raw.charCodeAt(i);
@@ -230,28 +217,55 @@ export const verifyTeacherDevice = (teacher, isDeviceLockEnabled = true) => {
     };
   }
 
-  // Kasus 3: Token ID beda (misal buka dari WhatsApp in-app browser, Samsung Internet, atau cache dibersihkan),
-  // TAPI Hardware Signature HP-nya SAMA PERSIS!
-  // Ini membuktikan bahwa guru menggunakan HP fisik yang sama!
-  if (registeredHw && registeredHw === currentHwFingerprint) {
-    // Sinkronkan token lama ke storage browser baru ini agar selanjutnya match langsung
+  // Kasus 3: Token ID beda (misal buka dari link WhatsApp, Samsung Internet, atau cache dibersihkan)
+  // Periksa apakah perangkat memiliki Sidik Hardware yang sama ATAU Karakteristik HP Fisik yang Selaras
+  const isHwExactMatch = registeredHw && registeredHw === currentHwFingerprint;
+
+  // Deteksi kecocokan keluarga OS mobile (Android dengan Android, iPhone dengan iPhone)
+  const isCurAndroid = /HP Android/i.test(currentDeviceName) || /Android/i.test(navigator.userAgent || '') || currentHwFingerprint.includes('ANDROID');
+  const isRegAndroid = /HP Android/i.test(teacher?.registeredDeviceName || '') || registeredHw.includes('ANDROID') || registeredHw.includes('LINUX');
+
+  const isCurApple = /Apple iPhone/i.test(currentDeviceName) || /iPhone|iPad/i.test(navigator.userAgent || '') || currentHwFingerprint.includes('IOS');
+  const isRegApple = /Apple iPhone/i.test(teacher?.registeredDeviceName || '') || registeredHw.includes('IOS');
+
+  const isSameOsFamily = (isCurAndroid && isRegAndroid) || (isCurApple && isRegApple);
+
+  // Ekstrak dimensi layar dari token (misal: 854x384)
+  const curDims = currentHwFingerprint.match(/(\d+)x(\d+)$/);
+  const regDims = registeredHw.match(/(\d+)x(\d+)$/);
+
+  let isScreenFamilyMatch = false;
+  if (curDims && regDims) {
+    const curW = parseInt(curDims[2], 10);
+    const regW = parseInt(regDims[2], 10);
+    const curH = parseInt(curDims[1], 10);
+    const regH = parseInt(regDims[1], 10);
+    // Di HP fisik yang sama, lebar layar (viewport width) selalu konsisten (toleransi ±25px untuk scrollbar/skala)
+    if (Math.abs(curW - regW) <= 25 && Math.abs(curH - regH) <= 120) {
+      isScreenFamilyMatch = true;
+    }
+  }
+
+  // 🛡️ KEPUTUSAN PATEN: Jika hardware identik ATAU HP fisik yang sama (sama-sama Android / iPhone di layar yang selaras)
+  // Guru DIANGGAP SAH & DIIZINKAN presensi, dan token otomatis diselaraskan!
+  if (isHwExactMatch || (isSameOsFamily && isScreenFamilyMatch)) {
     try {
-      localStorage.setItem(DEVICE_STORAGE_KEY, registeredId);
-      setCookie(DEVICE_STORAGE_KEY, registeredId);
+      localStorage.setItem(DEVICE_STORAGE_KEY, registeredId || currentDeviceId);
+      setCookie(DEVICE_STORAGE_KEY, registeredId || currentDeviceId);
     } catch {}
 
     return {
       isAllowed: true,
       needsEnroll: false,
       needsUpdate: true,
-      currentDeviceId: registeredId, // Pertahankan token utama
+      currentDeviceId: registeredId || currentDeviceId,
       currentDeviceName,
       currentHwFingerprint,
-      reason: 'MATCH_HARDWARE_CROSS_BROWSER'
+      reason: isHwExactMatch ? 'MATCH_HARDWARE_EXACT' : 'MATCH_HARDWARE_CROSS_BROWSER'
     };
   }
 
-  // Kasus 4: Benar-benar perangkat berbeda (titip absen dari HP guru lain atau komputer)
+  // Kasus 4: Benar-benar perangkat berbeda (misal HP terdaftar Android tapi coba absen dari Komputer Windows, atau HP guru lain yang berbeda)
   return {
     isAllowed: false,
     needsEnroll: false,
