@@ -2100,7 +2100,12 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
   // Inisialisasi state history browser pada saat aplikasi pertama kali dimuat
   useEffect(() => {
-    window.history.replaceState({ tab: rootInitialTab, isRoot: true, isAppNav: true }, '');
+    try {
+      window.history.replaceState({ isRootGuard: true }, '');
+      window.history.pushState({ tab: rootInitialTab, isAppNav: true }, '');
+    } catch (e) {
+      console.warn('[Navigation] History init error:', e);
+    }
   }, [rootInitialTab]);
 
   // Handler navigasi tab yang sinkron dengan History Stack Browser/Android
@@ -2324,7 +2329,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     }
 
     switch (activeTab) {
-      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
+      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); handleNavigateTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} user={user} saveAuditLog={saveAuditLog} />;
       case 'presensiguru': 
         return (
@@ -2380,7 +2385,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
             feedbacks={feedbacks} 
             setFeedbacks={setFeedbacks} 
             activeSection={activeTab} 
-            setActiveTab={setActiveTab} 
+            setActiveTab={handleNavigateTab} 
             archives={archives} 
             presensiGuru={presensiGuru} 
             setPresensiGuru={setPresensiGuru} 
@@ -10701,6 +10706,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   const slip = calculatePayroll(myData, settings);
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
 
+  // 🪄 FITUR PRIVASI: Sembunyikan / Tampilkan Nominal Gaji
+  const [showNominalGaji, setShowNominalGaji] = useState(true);
+
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [feedbackSubject, setFeedbackSubject] = useState('Saran & Masukan Umum');
@@ -11470,8 +11478,8 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
       {/* Modal Slip Gaji */}
       {isSlipModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
             <div className="p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
                 <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
@@ -11485,13 +11493,13 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
               </button>
             </div>
             
-            <div className="overflow-auto p-2 sm:p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 touch-pan-x">
+            <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {/* Petunjuk khusus pengguna ponsel */}
-              <div className="md:hidden mb-2.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-bold rounded-xl border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
-                <span>💡</span>
-                <span>Geser ke samping untuk melihat seluruh lembar cetak A4 atau klik Unduh PDF.</span>
+              <div className="md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
+                <span className="text-base">💡</span>
+                <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
               </div>
-              <div className="min-w-fit flex justify-center">
+              <div className="min-w-fit flex justify-center pb-10">
                 {selectedHistorySlip ? (
                    <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
                 ) : (
@@ -12381,49 +12389,79 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
             </div>
           ) : (
             <>
-              {/* KARTU 1: HERO TAKE HOME PAY (THP) */}
-              <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-lg relative overflow-hidden border border-emerald-400/30">
-                <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-                <div className="absolute -left-8 -bottom-8 w-44 h-44 bg-black/15 rounded-full blur-2xl pointer-events-none"></div>
+              {/* KARTU 1: HERO TAKE HOME PAY (THP) - ULTRA LUXURY FINTECH EDITION */}
+              <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-[0_20px_45px_-12px_rgba(16,185,129,0.35)] relative overflow-hidden border border-emerald-400/30">
+                {/* Latar Belakang Dekoratif & Ambient Aura */}
+                <div className="absolute -right-10 -top-10 w-52 h-52 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -left-10 -bottom-10 w-52 h-52 bg-teal-400/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute right-4 bottom-4 text-white/[0.04] pointer-events-none select-none">
+                  <Wallet size={160} strokeWidth={1} />
+                </div>
 
                 <div className="relative z-10 flex flex-col items-center text-center">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/25 shadow-xs">
-                      Periode: {bulan}
+                  {/* Badge Header Periode & Status Resmi */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black/25 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5 text-emerald-100">
+                      <Calendar size={13} className="text-emerald-300" />
+                      <span>Periode: {bulan}</span>
                     </span>
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400/25 text-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300/30 flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-emerald-300" /> Disahkan
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400/20 backdrop-blur-md text-emerald-200 px-3 py-1 rounded-full border border-emerald-300/30 flex items-center gap-1.5 shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <ShieldCheck size={13} className="text-emerald-300" />
+                      <span>Disahkan &amp; Resmi</span>
                     </span>
                   </div>
 
-                  <p className="text-xs font-bold text-emerald-100/90 uppercase tracking-wider mt-1">
-                    Gaji Bersih / Take Home Pay (THP)
-                  </p>
-
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-3 drop-shadow-md">
-                    {formatRp(slip.totalBersih)}
+                  {/* Label THP dengan Tombol Privasi Mata (Show/Hide) */}
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <span className="text-[11px] font-black tracking-widest text-emerald-100/90 uppercase">
+                      Total Gaji Bersih (Take Home Pay)
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => setShowNominalGaji(!showNominalGaji)} 
+                      className="p-1 rounded-full hover:bg-white/15 text-emerald-200 hover:text-white transition-colors cursor-pointer"
+                      title={showNominalGaji ? "Sembunyikan Nominal" : "Tampilkan Nominal"}
+                    >
+                      {showNominalGaji ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
                   </div>
 
-                  {/* Dua Kotak Perbandingan: Penerimaan Kotor vs Total Potongan */}
+                  {/* Nominal Utama THP */}
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-3 drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] select-none">
+                    {showNominalGaji ? formatRp(slip.totalBersih) : 'Rp ••••••••'}
+                  </div>
+
+                  {/* Dua Kapsul Fintech: Penerimaan Kotor vs Total Potongan */}
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                    <div className="bg-white/15 backdrop-blur-md rounded-xl p-3 border border-white/20 text-left">
-                      <span className="block text-[10px] sm:text-xs text-emerald-100 font-bold mb-0.5">Penerimaan Kotor</span>
-                      <span className="font-mono text-xs sm:text-sm font-black text-white">{formatRp(slip.totalKotor)}</span>
+                    <div className="bg-emerald-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-emerald-400/30 text-left shadow-inner relative overflow-hidden group">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-200 font-bold mb-1">
+                        <TrendingUp size={14} className="text-emerald-400" />
+                        <span>Penerimaan Kotor</span>
+                      </div>
+                      <span className="font-mono text-xs sm:text-sm font-black text-white">
+                        {showNominalGaji ? formatRp(slip.totalKotor) : 'Rp ••••••'}
+                      </span>
                     </div>
-                    <div className="bg-white/15 backdrop-blur-md rounded-xl p-3 border border-white/20 text-left">
-                      <span className="block text-[10px] sm:text-xs text-rose-100 font-bold mb-0.5">Total Potongan</span>
-                      <span className="font-mono text-xs sm:text-sm font-black text-rose-200">-{formatRp(slip.totalPotongan)}</span>
+                    <div className="bg-rose-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-rose-400/30 text-left shadow-inner relative overflow-hidden group">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-rose-200 font-bold mb-1">
+                        <CreditCard size={14} className="text-rose-400" />
+                        <span>Total Potongan</span>
+                      </div>
+                      <span className="font-mono text-xs sm:text-sm font-black text-rose-200">
+                        {showNominalGaji ? `-${formatRp(slip.totalPotongan)}` : '-Rp ••••'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Tombol Aksi Utama: Lihat Slip Cetak & Unduh PDF */}
+                  {/* Tombol Aksi Utama: Cetak Lembar A4 & Unduh PDF Resmi */}
                   <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-md">
                     <button 
                       type="button"
                       onClick={() => setIsSlipModalOpen(true)}
-                      className="flex-1 min-w-[135px] bg-white text-emerald-800 hover:bg-emerald-50 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className="flex-1 min-w-[140px] bg-white hover:bg-emerald-50 text-emerald-900 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/50"
                     >
-                      <Printer size={15} className="text-emerald-600" />
+                      <Printer size={16} className="text-emerald-700" />
                       <span>Cetak Slip (A4)</span>
                     </button>
                     <button 
@@ -12437,9 +12475,9 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                         }
                       }}
                       disabled={isExportingPDF}
-                      className="flex-1 min-w-[135px] bg-emerald-800/80 hover:bg-emerald-800 text-white border border-white/25 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="flex-1 min-w-[140px] bg-emerald-900/80 hover:bg-emerald-900 text-white border border-emerald-400/30 backdrop-blur-md px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={15} />}
+                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16} className="text-emerald-300" />}
                       <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
                     </button>
                   </div>
