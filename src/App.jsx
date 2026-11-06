@@ -11128,12 +11128,13 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   const NotificationBell = (settings?.payrollStatus === 'Approved' || myData.payroll?.isNotified) && !myData.payroll?.isConfirmed ? (
     <button 
       onClick={() => setActiveTab('portal_gaji')} 
-      className="absolute top-4 right-4 md:top-6 md:right-6 w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 rounded-full shadow-[0_8px_16px_-6px_rgba(245,158,11,0.8)] flex items-center justify-center animate-bounce border-2 border-white/50 z-30 hover:scale-110 transition-transform cursor-pointer"
+      className="absolute top-3 right-3 sm:top-4 sm:right-4 md:top-6 md:right-6 w-9 h-9 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 rounded-full shadow-[0_8px_16px_-6px_rgba(245,158,11,0.8)] flex items-center justify-center animate-bounce border-2 border-white/50 z-30 hover:scale-110 transition-transform cursor-pointer"
       title="Notifikasi Gaji Baru! Mohon Konfirmasi Kesesuaian."
     >
       <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.6)]"></div>
-      <BellRing size={24} className="text-white drop-shadow-lg relative z-10" />
-      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+      <BellRing size={18} className="text-white drop-shadow-lg relative z-10 sm:hidden" />
+      <BellRing size={24} className="text-white drop-shadow-lg relative z-10 hidden sm:block" />
+      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
     </button>
   ) : null;
 
@@ -11411,80 +11412,80 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       {/* DIPERBARUI: Header "portal_dashboard" & "portal_presensi" digabung ke dalam Card di bawahnya agar tidak ganda */}
 
       {activeSection === 'portal_jadwal' && (
-        <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><CalendarDays className="text-pink-100" size={32} /> Jadwal Mengajar & Penugasan</h1>
-            <p className="text-pink-50 text-sm md:text-base max-w-xl">Pantau jadwal rutin mingguan (Roster) dan riwayat penugasan kegiatan insidental Anda secara transparan.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CalendarDays className="text-pink-100 shrink-0" size={24} /> Jadwal Mengajar & Penugasan</h1>
+            <p className="text-pink-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau jadwal rutin mingguan (Roster) dan riwayat penugasan kegiatan insidental Anda secara transparan.</p>
           </div>
-          <CalendarDays size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
+          <CalendarDays size={90} className="absolute -right-4 -bottom-4 text-white/10 transform rotate-12 pointer-events-none" />
         </div>
       )}
 
       {/* TAMBAHAN: Mengembalikan Header Banner Portal Kehadiran yang hilang */}
       {activeSection === 'portal_kehadiran' && (
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><Clock className="text-amber-100" size={32} /> Rekap Kehadiran & Jam Mengajar ({bulan})</h1>
-            <p className="text-amber-50 text-sm md:text-base max-w-xl">Pantau detail kehadiran harian, riwayat keterlambatan, dan pencapaian target jam mengajar Anda untuk periode bulan ini.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Clock className="text-amber-100 shrink-0" size={24} /> Rekap Kehadiran & Jam Mengajar ({bulan})</h1>
+            <p className="text-amber-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau detail kehadiran harian, riwayat keterlambatan, dan pencapaian target jam mengajar Anda untuk periode bulan ini.</p>
           </div>
-          <Clock size={120} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
+          <Clock size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
       {activeSection === 'portal_gaji' && (
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><Wallet className="text-emerald-100" size={32} /> Slip Gaji & Estimasi THP ({bulan})</h1>
-            <p className="text-emerald-50 text-sm md:text-base max-w-xl">Transparansi rincian tunjangan, insentif, dan potongan gaji Anda pada periode pencairan ini.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Wallet className="text-emerald-100 shrink-0" size={24} /> Slip Gaji & Estimasi THP ({bulan})</h1>
+            <p className="text-emerald-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Transparansi rincian tunjangan, insentif, dan potongan gaji Anda pada periode pencairan ini.</p>
           </div>
-          <Wallet size={120} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
+          <Wallet size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
       {activeSection === 'portal_pinjaman' && (
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><CreditCard className="text-teal-100" size={32} /> Dashboard Pemantauan Pinjaman</h1>
-            <p className="text-teal-50 text-sm md:text-base max-w-xl">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100 shrink-0" size={24} /> Dashboard Pemantauan Pinjaman</h1>
+            <p className="text-teal-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
           </div>
-          <CreditCard size={120} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
+          <CreditCard size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
       {activeSection === 'portal_riwayat' && (
-        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><History className="text-indigo-100" size={32} /> Riwayat Penerimaan Gaji</h1>
-            <p className="text-indigo-50 text-sm md:text-base max-w-xl">Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><History className="text-indigo-100 shrink-0" size={24} /> Riwayat Penerimaan Gaji</h1>
+            <p className="text-indigo-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.</p>
           </div>
-          <History size={120} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
+          <History size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
       {activeSection === 'portal_info' && (
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><Info className="text-purple-100" size={32} /> Informasi Sistem Penggajian</h1>
-            <p className="text-purple-50 text-sm md:text-base max-w-xl">Pelajari pedoman, aturan kedisiplinan, dan rincian kebijakan komponen perhitungan sistem penggajian.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Info className="text-purple-100 shrink-0" size={24} /> Informasi Sistem Penggajian</h1>
+            <p className="text-purple-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pelajari pedoman, aturan kedisiplinan, dan rincian kebijakan komponen perhitungan sistem penggajian.</p>
           </div>
-          <Info size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
+          <Info size={90} className="absolute -right-4 -bottom-4 text-white/10 transform rotate-12 pointer-events-none" />
         </div>
       )}
 
       {activeSection === 'portal_saran' && (
-        <div className="bg-gradient-to-r from-rose-600 to-red-500 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-rose-600 to-red-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
           {NotificationBell}
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-3"><MessageSquare className="text-rose-100" size={32} /> Form Kritik & Saran</h1>
-            <p className="text-rose-50 text-sm md:text-base max-w-xl">Sampaikan masukan, aspirasi, atau kendala Anda secara langsung dan aman ke pihak manajemen sekolah.</p>
+          <div className="relative z-10 pr-2">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><MessageSquare className="text-rose-100 shrink-0" size={24} /> Form Kritik & Saran</h1>
+            <p className="text-rose-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Sampaikan masukan, aspirasi, atau kendala Anda secara langsung dan aman ke pihak manajemen sekolah.</p>
           </div>
-          <MessageSquare size={120} className="absolute -right-6 -bottom-6 text-white/10 transform -rotate-12 pointer-events-none" />
+          <MessageSquare size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
@@ -11495,14 +11496,14 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
           <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg relative animate-in fade-in slide-in-from-bottom-4 duration-500">
              
              {/* Banner Cover Profile (DIPERBARUI: Desain Terpadu) */}
-             <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 relative pt-12 pb-14 md:pt-16 md:pb-16 px-6 md:px-10 flex flex-col md:flex-row items-center gap-6 md:gap-8 text-center md:text-left">
+             <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 relative pt-6 pb-7 sm:pt-10 sm:pb-12 md:pt-14 md:pb-16 px-4 sm:px-6 md:px-10 flex flex-col md:flex-row items-center gap-4 sm:gap-6 md:gap-8 text-center md:text-left">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay"></div>
                 
                 {/* Lonceng Notifikasi */}
                 {NotificationBell}
 
                 {/* Avatar */}
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/30 shadow-2xl bg-white/10 backdrop-blur-sm overflow-hidden shrink-0 relative z-10 transition-transform hover:scale-105 duration-300">
+                <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-full border-4 border-white/30 shadow-2xl bg-white/10 backdrop-blur-sm overflow-hidden shrink-0 relative z-10 transition-transform hover:scale-105 duration-300">
                    <img 
                       src={myData.gender === 'P' 
                         ? (settings?.avatarFemaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png')
@@ -11515,19 +11516,19 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
                 {/* Info Text inside Banner */}
                 <div className="relative z-10 flex-1">
-                   <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight drop-shadow-md mb-2">{myData.name}</h2>
-                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-3 text-blue-100 font-medium">
-                      <span className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded-full border border-white/10 shadow-sm"><Briefcase size={14}/> {myData.position}</span>
-                      <span className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded-full border border-white/10 shadow-sm"><CheckCircle size={14}/> Guru {myData.status}</span>
-                      <span className="flex items-center gap-1 bg-black/20 px-3 py-1 rounded-full border border-white/10 shadow-sm font-mono text-xs">{myData.nipy}</span>
+                   <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md mb-1.5">{myData.name}</h2>
+                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2 text-blue-100 font-medium text-xs sm:text-sm">
+                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><Briefcase size={12}/> {myData.position}</span>
+                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><CheckCircle size={12}/> Guru {myData.status}</span>
+                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm font-mono text-[11px] sm:text-xs">{myData.nipy}</span>
                    </div>
                 </div>
                 
                 {/* Aksen transisi di bagian bawah banner */}
-                <div className="absolute -bottom-1 -left-1 -right-1 h-12 bg-gradient-to-t from-white dark:from-slate-800 to-transparent pointer-events-none z-10"></div>
+                <div className="absolute -bottom-1 -left-1 -right-1 h-8 sm:h-12 bg-gradient-to-t from-white dark:from-slate-800 to-transparent pointer-events-none z-10"></div>
              </div>
 
-              <div className="px-5 md:px-8 pb-8 pt-8 md:pb-10 relative">
+              <div className="px-3.5 sm:px-6 md:px-8 pb-6 pt-5 sm:pt-7 md:pb-10 relative">
                   
                   {/* 🪄 WIDGET PRESENSI CEPAT GURU (KOMPAK, RAPI & ERGONOMIS) */}
                   {(() => {
@@ -11547,14 +11548,14 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
 
                            {/* 1. BARIS HEADER: SESI SELECTOR, TANGGAL & JAM REALTIME, CLOUD BADGE */}
-                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-200/70 dark:border-slate-700/60 relative z-10">
+                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-200/70 dark:border-slate-700/60 relative z-10">
                               {/* Pilihan Sesi (Pagi, Sore/Halaqoh, Rapat) */}
-                              <div className="flex items-center gap-2 flex-wrap">
-                                 <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
-                                    <Clock3 size={15} className={currentTheme.type === 'sore' ? 'text-purple-600' : currentTheme.type === 'rapat' ? 'text-rose-600' : 'text-teal-600'} />
+                              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                 <span className="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 uppercase tracking-wider">
+                                    <Clock3 size={13} className={currentTheme.type === 'sore' ? 'text-purple-600' : currentTheme.type === 'rapat' ? 'text-rose-600' : 'text-teal-600'} />
                                     Presensi:
                                  </span>
-                                 <div className="flex flex-wrap items-center gap-1 bg-white/90 dark:bg-slate-900/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+                                 <div className="flex items-center gap-1 bg-white/90 dark:bg-slate-900/80 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs overflow-x-auto hide-scrollbar max-w-full">
                                     {sesiList.map(s => {
                                        const isSel = s.id === currentQuickSesi.id;
                                        const theme = getSesiTheme(s);
@@ -11564,19 +11565,21 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                                           (r.sesiId === s.id || (!r.sesiId && s.id === sesiList[0]?.id))
                                        );
                                        const isDone = !!sRec?.jamMasuk;
+                                       const namaSingkat = s.nama ? s.nama.split(' ')[0] : 'Sesi';
                                        return (
                                           <button
                                              key={s.id}
                                              type="button"
                                              onClick={() => setSelectedQuickSesiId(s.id)}
-                                             className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                                             className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
                                                 isSel 
                                                    ? `${theme.bgActive} shadow-xs scale-102` 
                                                    : `${theme.bgInactive}`
                                              }`}
                                           >
-                                             <span className="text-xs">{theme.iconEmoji}</span>
-                                             <span>{s.nama}</span>
+                                             <span className="text-[11px]">{theme.iconEmoji}</span>
+                                             <span className="sm:inline hidden">{s.nama}</span>
+                                             <span className="sm:hidden inline">{namaSingkat}</span>
                                              {isDone && <span className={`w-1.5 h-1.5 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : theme.dotPulse}`}></span>}
                                           </button>
                                        );
@@ -11585,22 +11588,22 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                               </div>
 
                               {/* Jam Realtime & Tanggal & Cloud Badge */}
-                              <div className="flex items-center justify-between sm:justify-end gap-2.5">
-                                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+                                 <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
                                     {liveDateStr}
                                  </span>
-                                 <div className="flex items-center gap-2">
-                                    <div className={`font-mono text-base sm:text-lg font-black tracking-tight ${
+                                 <div className="flex items-center gap-1.5 shrink-0">
+                                    <div className={`font-mono text-sm sm:text-base font-black tracking-tight ${
                                        currentTheme.type === 'sore'
                                           ? 'text-purple-700 dark:text-purple-300'
                                           : currentTheme.type === 'rapat'
                                           ? 'text-rose-700 dark:text-rose-300'
                                           : 'text-teal-700 dark:text-teal-300'
                                     }`}>
-                                       {liveTimeStr} <span className="text-[10px] font-sans font-bold text-slate-400">WIB</span>
+                                       {liveTimeStr} <span className="text-[9px] font-sans font-bold text-slate-400">WIB</span>
                                     </div>
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-black text-[10px] border border-emerald-300/80 dark:border-emerald-800/70" title="Data presensi tersimpan permanen di Cloud Database">
-                                       <Cloud size={10} className="text-emerald-600 dark:text-emerald-400" /> Cloud
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-black text-[9px] border border-emerald-300/80 dark:border-emerald-800/70" title="Data presensi tersimpan permanen di Cloud Database">
+                                       <Cloud size={9} className="text-emerald-600 dark:text-emerald-400" /> Cloud
                                     </span>
                                  </div>
                               </div>
@@ -12528,29 +12531,29 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       </div>
     </div>
 
-    {/* 📱 PREMIUM FLOATING CUTOUT BOTTOM NAVIGATION (KHUSUS MOBILE) */}
+    {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
       
-      {/* Background Dasar Nav Bar (Yang akan 'dipotong' oleh ilusi cincin) */}
-      <div className="absolute bottom-0 w-full h-[70px] bg-white dark:bg-slate-800 rounded-t-[2rem] shadow-[0_-15px_40px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-100 dark:border-slate-700/50"></div>
+      {/* Background Dasar Nav Bar */}
+      <div className="absolute bottom-0 w-full h-[62px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-200/80 dark:border-slate-700/80"></div>
       
-      {/* Scrollable Container dengan Tinggi Ekstra untuk Ruang Melayang */}
-      <div className="relative flex justify-between px-2 h-[100px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto items-end pb-3">
+      {/* Scrollable Container dengan Tinggi Ergonomis */}
+      <div className="relative flex items-center justify-between px-1.5 h-[62px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto gap-0.5">
         {bottomNavItems.map(item => {
            const isActive = activeSection === item.id;
 
            // Helper penentuan warna dinamis
            const getGradient = (id) => {
              switch(id) {
-               case 'portal_dashboard': return 'from-blue-400 to-blue-600';
-               case 'portal_jadwal': return 'from-pink-400 to-pink-600';
-               case 'portal_kehadiran': return 'from-amber-400 to-orange-500';
-               case 'portal_gaji': return 'from-emerald-400 to-emerald-600';
-               case 'portal_pinjaman': return 'from-teal-400 to-teal-600';
-               case 'portal_riwayat': return 'from-indigo-400 to-indigo-600';
-               case 'portal_info': return 'from-purple-400 to-purple-600';
-               case 'portal_saran': return 'from-rose-400 to-rose-600';
-               default: return 'from-slate-400 to-slate-600';
+               case 'portal_dashboard': return 'from-blue-500 to-indigo-600';
+               case 'portal_jadwal': return 'from-pink-500 to-rose-600';
+               case 'portal_kehadiran': return 'from-amber-500 to-orange-600';
+               case 'portal_gaji': return 'from-emerald-500 to-teal-600';
+               case 'portal_pinjaman': return 'from-teal-500 to-cyan-600';
+               case 'portal_riwayat': return 'from-indigo-500 to-blue-600';
+               case 'portal_info': return 'from-purple-500 to-pink-600';
+               case 'portal_saran': return 'from-rose-500 to-red-600';
+               default: return 'from-slate-500 to-slate-700';
              }
            };
 
@@ -12572,37 +12575,37 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
              <button 
                key={item.id} 
                onClick={() => setActiveTab(item.id)}
-               className="snap-center relative flex flex-col items-center justify-end shrink-0 min-w-[72px] sm:min-w-[80px] h-full outline-none group"
+               className="snap-center relative flex flex-col items-center justify-center shrink-0 min-w-[58px] sm:min-w-[66px] h-full outline-none group py-1"
              >
-               {/* 🪄 Floating Circle & Cutout Ring Illusion (DIPERBARUI: Animasi Lebih Mulus) 🪄 */}
-               <div className={`absolute flex items-center justify-center transition-all duration-300 ease-out z-20 ${
+               {/* Icon Container */}
+               <div className={`flex items-center justify-center transition-all duration-200 relative ${
                  isActive 
-                   ? `w-[56px] h-[56px] rounded-full bottom-8 bg-gradient-to-br ${getGradient(item.id)} text-white ring-[8px] ring-slate-50 dark:ring-slate-900 shadow-[0_10px_20px_rgba(0,0,0,0.3)]` 
-                   : 'w-10 h-10 rounded-2xl bottom-[18px] bg-transparent text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/50 ring-0 ring-transparent shadow-none'
+                   ? `w-9 h-9 rounded-xl bg-gradient-to-br ${getGradient(item.id)} text-white shadow-md shadow-blue-500/20 scale-105` 
+                   : 'w-8 h-8 rounded-lg bg-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
                }`}>
                  <item.icon 
-                   size={isActive ? 24 : 22} 
+                   size={isActive ? 19 : 18} 
                    strokeWidth={isActive ? 2.5 : 2} 
-                   className={`transition-transform duration-300 ease-out ${isActive ? 'drop-shadow-md scale-100' : 'scale-90 group-hover:scale-100'}`} 
+                   className="transition-transform duration-200" 
                  />
                  
                  {/* Red Dot Notifikasi */}
                  {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
-                    <span className={`absolute w-3 h-3 bg-red-500 rounded-full border-2 animate-pulse shadow-sm ${isActive ? '-top-0.5 -right-0.5 border-emerald-400' : 'top-0 right-0 border-white dark:border-slate-800'}`}></span>
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs"></span>
                  )}
                </div>
 
-               {/* Teks Label (Muncul dari bawah) */}
-               <span className={`text-[10px] tracking-tight transition-all duration-300 ease-out absolute bottom-1 w-full text-center ${
+               {/* Teks Label (Selalu terbaca, rapi & presisi) */}
+               <span className={`text-[10px] tracking-tight mt-0.5 transition-colors duration-200 truncate max-w-[56px] text-center ${
                  isActive 
-                   ? `font-extrabold ${getTextColor(item.id)} opacity-100 translate-y-0` 
-                   : 'font-semibold text-slate-400 dark:text-slate-500 opacity-0 translate-y-4'
+                   ? `font-black ${getTextColor(item.id)}` 
+                   : 'font-semibold text-slate-400 dark:text-slate-500'
                }`}>
                  {item.label}
                </span>
                
-               {/* Indikator Titik Aktif (Opsional, mempertegas status) */}
-               <div className={`absolute -bottom-1.5 w-1 h-1 rounded-full transition-all duration-300 ease-out delay-75 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
+               {/* Indikator Titik Aktif */}
+               <div className={`w-1 h-1 rounded-full mt-0.5 transition-all duration-200 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
              </button>
            );
         })}

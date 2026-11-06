@@ -1073,23 +1073,25 @@ function TeacherSelfService({
     <div className="space-y-5 animate-in fade-in duration-500">
       {/* PEMILIH SESI MULTI (Pagi, Sore, Rapat) - HANYA TAMPIL JIKA ADA LEBIH DARI 1 SESI */}
       {multiSesi && sesiList.length > 1 && (
-        <div className="flex flex-wrap items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1.5 gap-2 shadow-xs w-fit">
+        <div className="flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1 gap-1.5 shadow-xs w-fit max-w-full overflow-x-auto hide-scrollbar">
           {sesiList.map(s => {
             const theme = getSesiTheme(s);
             const isSel = sesiAktif.id === s.id;
+            const namaSingkat = s.nama ? s.nama.split(' ')[0] : 'Sesi';
             return (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSelectedSesiId(s.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
                   isSel
                     ? `${theme.bgActive} shadow-sm scale-102`
                     : `${theme.bgInactive}`
                 }`}
               >
-                <span className="text-base leading-none">{theme.iconEmoji}</span>
-                <span>{s.nama}</span>
+                <span className="text-sm sm:text-base leading-none">{theme.iconEmoji}</span>
+                <span className="hidden sm:inline">{s.nama}</span>
+                <span className="sm:hidden inline">{namaSingkat}</span>
               </button>
             );
           })}
@@ -1097,7 +1099,7 @@ function TeacherSelfService({
       )}
 
       {/* KARTU UTAMA PRESENSI MANDIRI (RINGKAS, MODERN & ERGONOMIC) */}
-      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-3xl shadow-xl p-5 sm:p-7 text-white relative overflow-hidden transition-all duration-500`}>
+      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-2xl sm:rounded-3xl shadow-xl p-4 sm:p-6 md:p-7 text-white relative overflow-hidden transition-all duration-500`}>
         <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-sm pointer-events-none" />
         <div className="absolute -right-4 bottom-[-30px] w-28 h-28 bg-white/10 rounded-full blur-sm pointer-events-none" />
 
@@ -1123,7 +1125,7 @@ function TeacherSelfService({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl sm:text-5xl font-black tracking-tight font-mono drop-shadow-sm">
+                <span className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight font-mono drop-shadow-sm">
                   {now.toTimeString().slice(0, 8)}
                 </span>
                 <span className="text-sm font-bold text-white/80 font-mono">WIB</span>
