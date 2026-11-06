@@ -11569,15 +11569,23 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
         </div>
       )}
 
-      {/* TAMBAHAN: Mengembalikan Header Banner Portal Kehadiran yang hilang */}
+      {/* Header Banner Portal Kehadiran (Responsive & Mobile Ergonomic) */}
       {activeSection === 'portal_kehadiran' && (
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-amber-400/30">
           {NotificationBell}
           <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Clock className="text-amber-100 shrink-0" size={24} /> Rekap Kehadiran & Jam Mengajar ({bulan})</h1>
-            <p className="text-amber-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau detail kehadiran harian, riwayat keterlambatan, dan pencapaian target jam mengajar Anda untuk periode bulan ini.</p>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+              <Calendar size={11} className="text-amber-100" />
+              <span>Periode: {bulan}</span>
+            </div>
+            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+              <Clock className="text-amber-100 shrink-0" size={20} /> Rekap Kehadiran &amp; Jam Mengajar
+            </h1>
+            <p className="text-amber-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+              Detail kehadiran harian, ketepatan waktu, dan pencapaian target jam mengajar Anda bulan ini.
+            </p>
           </div>
-          <Clock size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
+          <Clock size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
@@ -12287,104 +12295,298 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
         {/* 2. Rekap Kehadiran */}
         {activeSection === 'portal_kehadiran' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800/30 shadow-inner">
-              <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mb-1">Total Hari Hadir</span>
-              <span className="text-2xl font-black text-amber-800 dark:text-amber-300">{autoHadir} <span className="text-sm font-medium text-amber-600">Hari</span></span>
-            </div>
-            
-            <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-800/30 shadow-inner">
-              <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider block mb-1">Terlambat</span>
-              <span className="text-2xl font-black text-red-800 dark:text-red-300">{telatDisiplin} <span className="text-sm font-medium text-red-600">Kali</span></span>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Target Wajib</span>
-              <span className="text-2xl font-black text-slate-700 dark:text-slate-200">{wajibJam} <span className="text-sm font-medium text-slate-500">JPL</span></span>
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 shadow-inner">
-              <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block mb-1">Total Realisasi</span>
-              <span className="text-2xl font-black text-blue-800 dark:text-blue-300">{realJam} <span className="text-sm font-medium text-blue-600">JPL</span></span>
-            </div>
-          </div>
-
-          {/* 🪄 TAMBALAN CERDAS: Kartu Rincian Sakit, Izin, Alpa Otomatis */}
-          <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6">
-             <div className="bg-amber-100/50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
-                <span className="text-xs md:text-sm font-bold text-amber-700 dark:text-amber-400">Sakit (S)</span>
-                <span className="text-lg md:text-xl font-black text-amber-600">{autoSakit} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
-             </div>
-             <div className="bg-blue-100/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
-                <span className="text-xs md:text-sm font-bold text-blue-700 dark:text-blue-400">Izin (I)</span>
-                <span className="text-lg md:text-xl font-black text-blue-600">{autoIzin} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
-             </div>
-             <div className="bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 rounded-xl flex justify-between items-center hover:scale-[1.02] transition-transform">
-                <span className="text-xs md:text-sm font-bold text-red-700 dark:text-red-400">Alpa (A)</span>
-                <span className="text-lg md:text-xl font-black text-red-600">{autoAlpa} <span className="text-[10px] md:text-xs font-medium">Hari</span></span>
-             </div>
-          </div>
-
-          <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800">
-            <div className="bg-slate-50 dark:bg-slate-900/50 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-               <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm">Rincian Jam Mengajar (Tanggal 1 - 31)</h4>
-               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${selisihJam < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                 Selisih: {selisihJam > 0 ? `+${selisihJam}` : selisihJam} JPL
-               </span>
-            </div>
-            <div className="p-4 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
-              {dailyData.map((jam, i) => (
-                <div key={i} className="flex flex-col border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/50">
-                   <span className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-center py-1 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                     Tgl {i + 1}
-                   </span>
-                   <span className={`text-center py-2 text-sm font-bold ${jam === 'S' ? 'text-amber-500' : jam === 'I' ? 'text-blue-500' : jam === 'A' ? 'text-red-500' : jam ? 'text-blue-600 dark:text-blue-400' : 'text-slate-300 dark:text-slate-600 font-light'}`}>
-                     {jam || '-'}
-                   </span>
+        <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+          {/* KARTU 1: 4 KPI METRICS UTAMA (Responsive 2x2 di Mobile, 4 Kolom di Tablet/Desktop) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            {/* Realisasi Jam */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-blue-400/50 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Realisasi Jam</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Award size={16} />
                 </div>
-              ))}
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{realJam}</span>
+                  <span className="text-xs font-bold text-slate-400">JPL</span>
+                </div>
+                {/* Progress bar pencapaian target */}
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                    <span>Target: {wajibJam} JPL</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">
+                      {wajibJam > 0 ? Math.round((realJam / wajibJam) * 100) : 100}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.min(100, wajibJam > 0 ? (realJam / wajibJam) * 100 : 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Hari Hadir */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-emerald-400/50 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Hadir</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400">{autoHadir}</span>
+                  <span className="text-xs font-bold text-slate-400">Hari</span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>Tercatat aktif mengajar</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Terlambat */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-red-400/50 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Terlambat</span>
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${telatDisiplin > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'} flex items-center justify-center shrink-0`}>
+                  <AlertCircle size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className={`text-xl sm:text-2xl font-black ${telatDisiplin > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{telatDisiplin}</span>
+                  <span className="text-xs font-bold text-slate-400">Kali</span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${telatDisiplin > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                  <span>{telatDisiplin > 0 ? 'Potongan disiplin berlaku' : 'Disiplin tepat waktu'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Selisih Jam */}
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-amber-400/50 transition-colors">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Selisih JPL</span>
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${selisihJam >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'} flex items-center justify-center shrink-0`}>
+                  <TrendingUp size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className={`text-xl sm:text-2xl font-black ${selisihJam >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {selisihJam > 0 ? `+${selisihJam}` : selisihJam}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400">JPL</span>
+                </div>
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${selisihJam >= 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                  <span>{selisihJam >= 0 ? 'Target terpenuhi' : 'Kurang dari target'}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* 🪄 TAMBAHAN CERDAS: Tabel Riwayat Kegiatan Insidental di Tab Kehadiran */}
-          <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
-             <div className="bg-slate-50 dark:bg-slate-900/50 px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm flex items-center gap-2">
-                   <Star className="text-amber-500" size={16}/> Rincian Kegiatan Insidental & Tambahan (Bulan Ini)
-                </h4>
-             </div>
-             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                   <thead className="bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                      <tr>
-                        <th className="p-3 font-semibold w-24 text-center">Tanggal</th>
-                        <th className="p-3 font-semibold">Keterangan Kegiatan Khusus</th>
-                        <th className="p-3 font-semibold text-center">Tambahan Jam</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                      {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
-                         myData.payroll.kegiatanInsidental.map((keg, i) => (
-                           <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                              <td className="p-3 text-center font-bold text-slate-600 dark:text-slate-400">Tgl {keg.tgl}</td>
-                              <td className="p-3 font-medium text-slate-700 dark:text-slate-300">{keg.ket}</td>
-                              <td className="p-3 text-center">
-                                 <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-[11px] shadow-sm">+{keg.jam} JPL</span>
-                              </td>
-                           </tr>
-                         ))
-                      ) : (
-                         <tr>
-                            <td colSpan="3" className="p-6 text-center text-slate-500 italic">Belum ada kegiatan insidental/massal yang tercatat di bulan ini.</td>
-                         </tr>
-                      )}
-                   </tbody>
-                </table>
-             </div>
+          {/* KARTU 2: RINCIAN SAKIT, IZIN, ALPA (Kapsul Presisi Mobile) */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                <span className="text-[11px] sm:text-xs font-bold text-amber-800 dark:text-amber-300">Sakit (S)</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-400">{autoSakit}</span>
+                <span className="text-[10px] sm:text-xs font-medium text-amber-600 dark:text-amber-400">Hari</span>
+              </div>
+            </div>
+
+            <div className="bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                <span className="text-[11px] sm:text-xs font-bold text-blue-800 dark:text-blue-300">Izin (I)</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-400">{autoIzin}</span>
+                <span className="text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400">Hari</span>
+              </div>
+            </div>
+
+            <div className="bg-red-50/70 dark:bg-red-950/20 border border-red-200/80 dark:border-red-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+                <span className="text-[11px] sm:text-xs font-bold text-red-800 dark:text-red-300">Alpa (A)</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-base sm:text-lg font-black text-red-700 dark:text-red-400">{autoAlpa}</span>
+                <span className="text-[10px] sm:text-xs font-medium text-red-600 dark:text-red-400">Hari</span>
+              </div>
+            </div>
           </div>
 
-          <p className="text-xs text-slate-500 mt-4 text-center">Data ini disinkronisasi otomatis dari rekapitulasi sekolah. Hubungi admin jika terdapat ketidaksesuaian jam.</p>
+          {/* KARTU 3: KALENDER / MATRIX RINCIAN JAM MENGAJAR HARIAN (TANGGAL 1 - 31) */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                  <CalendarDays size={16} className="text-amber-500" />
+                  <span>Rincian Jam Mengajar Harian</span>
+                  <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">(Tgl 1 - 31)</span>
+                </h4>
+                <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Angka menunjukkan jam tatap muka (JPL) yang diajarkan pada tanggal tersebut.
+                </p>
+              </div>
+
+              {/* Legend Ringkas */}
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Mengajar</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Sakit (S)</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Izin (I)</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Alpa (A)</span>
+              </div>
+            </div>
+
+            {/* Grid Kalender Presisi 7 Kolom (Format Mingguan Standar) */}
+            <div className="p-2.5 sm:p-4 grid grid-cols-7 gap-1 sm:gap-2">
+              {dailyData.map((jam, i) => {
+                const str = String(jam || '').trim().toUpperCase();
+                const isSakit = str === 'S';
+                const isIzin = str === 'I';
+                const isAlpa = str === 'A';
+                const numVal = !isNaN(Number(str)) && Number(str) > 0 ? Number(str) : 0;
+                const hasHours = numVal > 0;
+
+                return (
+                  <div 
+                    key={i} 
+                    className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${
+                      hasHours 
+                        ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 shadow-xs' 
+                        : isSakit 
+                        ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40' 
+                        : isIzin 
+                        ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40' 
+                        : isAlpa 
+                        ? 'bg-red-50/80 dark:bg-red-950/30 border-red-200 dark:border-red-800/40' 
+                        : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
+                    }`}
+                  >
+                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+                      {i + 1}
+                    </span>
+                    
+                    {hasHours ? (
+                      <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400">
+                        {numVal}
+                        <span className="text-[8px] font-medium ml-0.5 text-emerald-600/70 hidden sm:inline">JPL</span>
+                      </span>
+                    ) : isSakit ? (
+                      <span className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400">S</span>
+                    ) : isIzin ? (
+                      <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">I</span>
+                    ) : isAlpa ? (
+                      <span className="text-xs sm:text-sm font-black text-red-600 dark:text-red-400">A</span>
+                    ) : (
+                      <span className="text-xs sm:text-sm font-normal text-slate-300 dark:text-slate-600">-</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* KARTU 4: KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Cards + Desktop Table) */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                <Star size={16} className="text-amber-500" />
+                <span>Rincian Kegiatan Insidental &amp; Tambahan</span>
+              </h4>
+              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                {(myData.payroll?.kegiatanInsidental || []).length} Kegiatan
+              </span>
+            </div>
+
+            {/* Mobile View: Clean Card Feed (md:hidden) */}
+            <div className="p-3 space-y-2 md:hidden">
+              {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                myData.payroll.kegiatanInsidental.map((keg, i) => (
+                  <div key={i} className="p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/70 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold mb-1">
+                        <Calendar size={10} />
+                        <span>Tgl {keg.tgl}</span>
+                      </div>
+                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">
+                        {keg.ket}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-black text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
+                        +{keg.jam} JPL
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-6 px-4 text-center">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                    <Star size={18} />
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada kegiatan insidental/massal yang tercatat di bulan ini.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop View: Full Table (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
+                  <tr>
+                    <th className="p-3.5 font-semibold w-28 text-center">Tanggal</th>
+                    <th className="p-3.5 font-semibold">Keterangan / Nama Kegiatan Khusus</th>
+                    <th className="p-3.5 font-semibold text-center w-36">Tambahan Jam</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                    myData.payroll.kegiatanInsidental.map((keg, i) => (
+                      <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5 text-center font-bold text-slate-600 dark:text-slate-300">
+                          <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+                            Tgl {keg.tgl}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">{keg.ket}</td>
+                        <td className="p-3.5 text-center">
+                          <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
+                            +{keg.jam} JPL
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
+                        Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Catatan Sinkronisasi */}
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
+            <Info size={13} className="shrink-0" />
+            <span>Data disinkronisasi secara otomatis dari pembukuan sekolah. Hubungi admin jika terdapat selisih jam.</span>
+          </div>
         </div>
         )}
 
