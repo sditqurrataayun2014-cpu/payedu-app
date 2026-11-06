@@ -36,6 +36,7 @@ import {
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import PresensiGuruView, { getSesiTheme } from './PresensiGuruView';
 import { verifyTeacherDevice } from './services/deviceService';
+import { registerBackModal, popAndCloseTopBackModal } from './services/navigationService';
 
 // 🪄 HELPER UNIVERSAL: Mengecek status keaktifan pegawai (Mencegah pegawai Non-Aktif / Resign muncul di operasional gaji & presensi)
 export const isTeacherActive = (t) => {
@@ -2118,9 +2119,12 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   useEffect(() => {
     let lastBackPress = 0;
 
-    const onPopState = (event) => {
-      // 1. Jika popstate berasal dari modal (ditangani oleh listener modal masing-masing), abaikan
-      if (event.state?.modal) return;
+    const onPopState = () => {
+      // 1. Prioritas Utama: Jika ada modal yang aktif terbuka di layar, tutup modal tersebut
+      if (popAndCloseTopBackModal()) {
+        window.history.pushState({ tab: activeTab, isAppNav: true }, '');
+        return;
+      }
 
       // 2. Jika sidebar di mobile sedang terbuka, tutup sidebar terlebih dahulu
       if (window.innerWidth < 768 && isSidebarOpen) {
@@ -10721,48 +10725,16 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   // Menutup modal dengan mulus saat tombol Back HP ditekan, tanpa keluar dari aplikasi
   useEffect(() => {
     if (!isSlipModalOpen) return;
-    const modalKey = 'modal_slip_' + Date.now();
-    window.history.pushState({ modal: modalKey }, '');
-    const onPop = () => {
+    return registerBackModal(() => {
       setIsSlipModalOpen(false);
       setSelectedHistorySlip(null);
-    };
-    window.addEventListener('popstate', onPop, { once: true });
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      if (window.history.state?.modal === modalKey) {
-        window.history.back();
-      }
-    };
+    });
   }, [isSlipModalOpen]);
 
   useEffect(() => {
     if (!isKomplainModalOpen) return;
-    const modalKey = 'modal_komplain_' + Date.now();
-    window.history.pushState({ modal: modalKey }, '');
-    const onPop = () => setIsKomplainModalOpen(false);
-    window.addEventListener('popstate', onPop, { once: true });
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      if (window.history.state?.modal === modalKey) {
-        window.history.back();
-      }
-    };
+    return registerBackModal(() => setIsKomplainModalOpen(false));
   }, [isKomplainModalOpen]);
-
-  useEffect(() => {
-    if (!isEditBiodataOpen) return;
-    const modalKey = 'modal_biodata_' + Date.now();
-    window.history.pushState({ modal: modalKey }, '');
-    const onPop = () => setIsEditBiodataOpen(false);
-    window.addEventListener('popstate', onPop, { once: true });
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      if (window.history.state?.modal === modalKey) {
-        window.history.back();
-      }
-    };
-  }, [isEditBiodataOpen]);
 
   // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini (Mendukung Sesi Pagi & Sore / Seluruh Sesi)
   const [liveNow, setLiveNow] = useState(new Date());
@@ -10987,6 +10959,10 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
   // 🪄 FITUR BARU: State & Handler Mandiri Edit Biodata Guru
   const [isEditBiodataOpen, setIsEditBiodataOpen] = useState(false);
+  useEffect(() => {
+    if (!isEditBiodataOpen) return;
+    return registerBackModal(() => setIsEditBiodataOpen(false));
+  }, [isEditBiodataOpen]);
   const [isSavingBiodata, setIsSavingBiodata] = useState(false);
   const [biodataForm, setBiodataForm] = useState({
      name: '', pob: '', dob: '', phone: '', address: '', education: 'S1', bankName: '', bankAccount: ''

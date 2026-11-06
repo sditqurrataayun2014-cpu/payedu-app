@@ -8,6 +8,7 @@ import {
 import jsQR from 'jsqr';
 import { pushPresensiGuru, fetchPresensiGuru, pushSinglePresensiRecord, deleteSinglePresensiRecord } from './services/dbService';
 import { getOrCreateDeviceId, verifyTeacherDevice } from './services/deviceService';
+import { registerBackModal } from './services/navigationService';
 
 // ==========================================
 // KONSTANTA & HELPER LOKAL
@@ -408,18 +409,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth }) => {
   // 🛡️ ANDROID HARDWARE BACK BUTTON HANDLER FOR MODAL
   useEffect(() => {
     if (!isOpen || typeof onClose !== 'function') return;
-    const modalKey = 'modal_presensi_' + Math.random().toString(36).slice(2);
-    window.history.pushState({ modal: modalKey }, '');
-    const onPop = () => {
-      onClose();
-    };
-    window.addEventListener('popstate', onPop, { once: true });
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      if (window.history.state?.modal === modalKey) {
-        window.history.back();
-      }
-    };
+    return registerBackModal(onClose);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
