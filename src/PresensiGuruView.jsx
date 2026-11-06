@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
-  CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
+  Calendar, CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone, MessageCircle, BellRing, Cloud
 } from 'lucide-react';
 import jsQR from 'jsqr';
@@ -436,24 +436,25 @@ const StatCard = ({ icon: Icon, label, value, gradient, iconBg, onClick, isClick
   <button
     type="button"
     onClick={onClick}
-    className={`w-full text-left rounded-2xl shadow-sm p-4 flex items-center gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden transition-all group ${
+    className={`w-full text-left rounded-2xl shadow-sm p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden transition-all group ${
       isClickable ? 'cursor-pointer hover:scale-[1.03] hover:shadow-md active:scale-[0.98]' : ''
     }`}
   >
     <div className="absolute -right-4 -bottom-6 w-20 h-20 bg-white/10 rounded-full pointer-events-none group-hover:scale-125 transition-transform" />
-    <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10 ${iconBg} group-hover:rotate-6 transition-transform shadow-xs`}>
-      <Icon size={20} strokeWidth={2.5} className="text-white" />
+    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10 ${iconBg} group-hover:rotate-6 transition-transform shadow-xs`}>
+      <Icon size={18} strokeWidth={2.5} className="text-white sm:hidden" />
+      <Icon size={20} strokeWidth={2.5} className="text-white hidden sm:block" />
     </div>
     <div className="min-w-0 relative z-10 flex-1">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-black text-white/80 uppercase tracking-widest truncate">{label}</p>
+        <p className="text-[9px] sm:text-[10px] font-black text-white/80 uppercase tracking-wider truncate">{label}</p>
         {isClickable && (
           <span className="text-[8px] bg-white/20 hover:bg-white/30 text-white font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs transition-colors hidden sm:inline-block">
             Lihat Nama &rarr;
           </span>
         )}
       </div>
-      <p className="text-xl font-black text-white mt-0.5">{value}</p>
+      <p className="text-lg sm:text-xl font-black text-white mt-0.5">{value}</p>
     </div>
   </button>
 );
@@ -723,22 +724,22 @@ export default function PresensiGuruView({
 
       {/* HEADER PRESENSI GURU MODERN */}
       {isTeacher ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs animate-in fade-in duration-500">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-400/20 dark:text-teal-300 flex items-center justify-center shrink-0">
-              <Fingerprint size={22} />
+        <div className="flex items-center justify-between gap-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs animate-in fade-in duration-500">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-400/20 dark:text-teal-300 flex items-center justify-center shrink-0">
+              <Fingerprint size={20} className="sm:size-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-slate-800 dark:text-white tracking-tight">
-                  Presensi Mandiri Pegawai
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white tracking-tight">
+                  Presensi Mandiri
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50">
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800/50 truncate max-w-[150px] sm:max-w-none">
                   {currentUser?.name || 'Guru'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pencatatan absensi harian digital terhubung langsung ke database & sistem penggajian.
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                Pencatatan absensi harian digital terhubung ke database.
               </p>
             </div>
           </div>
@@ -1271,40 +1272,91 @@ function TeacherSelfService({
 
       {/* RIWAYAT */}
       <div className={cx.card3xl}>
-        <div className="p-5 border-b border-slate-100 dark:border-slate-700">
-          <h3 className="font-black text-slate-800 dark:text-white">Riwayat Presensi Saya</h3>
-          <p className="text-xs text-slate-400 font-bold mt-0.5">30 catatan terakhir</p>
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex items-center justify-between">
+          <div>
+            <h3 className="font-black text-sm sm:text-base text-slate-800 dark:text-white">Riwayat Presensi Saya</h3>
+            <p className="text-[11px] sm:text-xs text-slate-400 font-bold mt-0.5">30 catatan terakhir</p>
+          </div>
+          <span className="text-[10px] sm:text-xs font-black uppercase px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+            {myHistory.length} Catatan
+          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <th className="p-3 pl-6 text-left">Tanggal</th>
-                <th className="p-3 text-center">Jam Masuk</th>
-                <th className="p-3 text-center">Jam Pulang</th>
-                <th className="p-3 text-center">Status</th>
-                <th className="p-3 pr-6 text-left">Keterangan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
-              {myHistory.length === 0 ? (
-                <tr><td colSpan="5" className="p-10 text-center text-slate-400 italic">Belum ada riwayat presensi.</td></tr>
-              ) : myHistory.map(r => (
-                <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                  <td className="p-3 pl-6 font-bold text-slate-700 dark:text-white">{new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                  <td className="p-3 text-center font-mono">{formatJam(r.jamMasuk)}</td>
-                  <td className="p-3 text-center font-mono">{formatJam(r.jamPulang)}</td>
-                  <td className="p-3 text-center">
+
+        {myHistory.length === 0 ? (
+          <div className="p-8 sm:p-10 text-center text-slate-400 italic text-xs sm:text-sm">
+            Belum ada riwayat presensi.
+          </div>
+        ) : (
+          <>
+            {/* Tampilan Ponsel (Card Feed - Rapi, Nyaman & Tidak Perlu Scroll Horizontal) */}
+            <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700/60 p-2 sm:p-3">
+              {myHistory.map(r => (
+                <div key={r.id} className="p-3 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 rounded-2xl transition-colors space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Calendar size={13} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
                     <Badge colorClass={STATUS_BADGE[r.status] || STATUS_BADGE['Belum Absen']}>
                       {r.status}{r.status === 'Terlambat' ? ` ${r.terlambatMenit}m` : ''}
                     </Badge>
-                  </td>
-                  <td className="p-3 pr-6 text-slate-500 text-xs italic">{r.keterangan || '-'}</td>
-                </tr>
+                  </div>
+                  
+                  <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 px-3 py-2 rounded-xl text-xs font-mono border border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <LogIn size={13} className="text-emerald-500 shrink-0" />
+                      <span className="text-slate-400 text-[10px]">Masuk:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatJam(r.jamMasuk)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <LogOut size={13} className="text-indigo-500 shrink-0" />
+                      <span className="text-slate-400 text-[10px]">Pulang:</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{formatJam(r.jamPulang)}</span>
+                    </div>
+                  </div>
+
+                  {r.keterangan && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 italic pl-1 flex items-center gap-1">
+                      <span>💬</span> <span>{r.keterangan}</span>
+                    </p>
+                  )}
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+
+            {/* Tampilan Desktop / Tablet (Full Table) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                    <th className="p-3 pl-6 text-left">Tanggal</th>
+                    <th className="p-3 text-center">Jam Masuk</th>
+                    <th className="p-3 text-center">Jam Pulang</th>
+                    <th className="p-3 text-center">Status</th>
+                    <th className="p-3 pr-6 text-left">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
+                  {myHistory.map(r => (
+                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <td className="p-3 pl-6 font-bold text-slate-700 dark:text-white">{new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="p-3 text-center font-mono">{formatJam(r.jamMasuk)}</td>
+                      <td className="p-3 text-center font-mono">{formatJam(r.jamPulang)}</td>
+                      <td className="p-3 text-center">
+                        <Badge colorClass={STATUS_BADGE[r.status] || STATUS_BADGE['Belum Absen']}>
+                          {r.status}{r.status === 'Terlambat' ? ` ${r.terlambatMenit}m` : ''}
+                        </Badge>
+                      </td>
+                      <td className="p-3 pr-6 text-slate-500 text-xs italic">{r.keterangan || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       <Modal isOpen={showIzinModal} onClose={() => setShowIzinModal(false)} title="Ajukan Sakit / Izin Hari Ini">

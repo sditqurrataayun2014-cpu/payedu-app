@@ -11175,6 +11175,20 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     p.ket.toLowerCase().includes('pinjaman')
   );
 
+  const totalSisaHutang = useMemo(() => {
+    return loanItems.reduce((acc, loan) => {
+      const sisa = loan.sisaHutang !== undefined ? Number(loan.sisaHutang) : (Number(loan.nominal) * 4);
+      return acc + (isNaN(sisa) ? 0 : sisa);
+    }, 0);
+  }, [loanItems]);
+
+  const totalCicilanBulanan = useMemo(() => {
+    return loanItems.reduce((acc, loan) => {
+      const nom = Number(loan.nominal) || 0;
+      return acc + nom;
+    }, 0);
+  }, [loanItems]);
+
   // Helper cerdas untuk merender teks kebijakan menjadi UI Card elegan (Tanpa mengubah format data Admin)
   const renderElegantInfo = (text) => {
     if (!text) return <div className="flex flex-col items-center justify-center p-8 text-slate-400"><Info size={40} className="mb-3 opacity-50"/><p className="text-sm italic font-medium">Belum ada informasi sistem penggajian.</p></div>;
@@ -12694,99 +12708,177 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
         {/* 4. Dashboard Pemantauan Pinjaman / Buku Kasbon */}
         {activeSection === 'portal_pinjaman' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {loanItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-10 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700">
-               <CheckCircle size={48} className="text-emerald-400 mb-4 opacity-70" />
-               <h4 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">Tidak Ada Pinjaman Aktif</h4>
-               <p className="text-sm text-slate-500 max-w-md">Alhamdulillah, saat ini Anda tidak memiliki tanggungan kasbon, cicilan koperasi, atau pinjaman lainnya yang terdaftar di sistem pemotongan otomatis.</p>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
+               <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                 <CheckCircle size={32} />
+               </div>
+               <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Alhamdulillah, Tidak Ada Pinjaman Aktif</h4>
+               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                 Saat ini Anda tidak memiliki tanggungan kasbon, cicilan koperasi, atau kewajiban pinjaman lain yang terdaftar pada sistem pemotongan otomatis.
+               </p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {loanItems.map((loan, idx) => {
-                const cicilanBulanan = loan.nominal;
-                const totalPinjamanAwal = loan.totalPinjaman !== undefined ? loan.totalPinjaman : (loan.nominal * 10);
-                const sisaSaldo = loan.sisaHutang !== undefined ? loan.sisaHutang : (loan.nominal * 4); 
-                const totalTerbayar = Math.max(0, totalPinjamanAwal - sisaSaldo);
-                const persentase = totalPinjamanAwal > 0 ? ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0) : 0;
+            <>
+              {/* HERO KARTU BUKU PINJAMAN PEGAWAI */}
+              <div className="bg-gradient-to-br from-teal-700 via-teal-800 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-[0_20px_45px_-12px_rgba(20,184,166,0.35)] relative overflow-hidden border border-teal-400/30">
+                <div className="absolute -right-8 -top-8 w-44 h-44 bg-teal-400/20 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -left-8 -bottom-8 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute right-4 bottom-4 text-white/[0.04] pointer-events-none select-none">
+                  <CreditCard size={150} strokeWidth={1} />
+                </div>
 
-                return (
-                  <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
-                    <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/30">
-                       <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                         <CreditCard className="text-teal-500" size={18}/> {loan.ket}
-                       </h3>
-                       <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Status: Aktif</span>
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black/25 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5 text-teal-100">
+                      <CreditCard size={13} className="text-teal-300" />
+                      <span>Buku Kasbon &amp; Pinjaman</span>
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-teal-400/20 backdrop-blur-md text-teal-200 px-3 py-1 rounded-full border border-teal-300/30 flex items-center gap-1.5 shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                      <span>{loanItems.length} Tagihan Aktif</span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-bold text-teal-100/90 uppercase tracking-wider mt-1">
+                    Total Sisa Saldo Pinjaman Anda
+                  </p>
+
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-2.5 drop-shadow-md">
+                    {formatRp(totalSisaHutang)}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
+                    <div className="bg-teal-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-teal-400/30 text-left shadow-inner">
+                      <span className="block text-[10px] sm:text-xs text-teal-200 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
+                      <span className="font-mono text-xs sm:text-sm font-black text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
                     </div>
-                    
-                    <div className="p-5 md:p-6">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/50 text-center">
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">Plafon Pinjaman</p>
-                          <p className="text-base font-bold text-slate-800 dark:text-slate-200">{formatRp(totalPinjamanAwal)}</p>
-                        </div>
-                        <div className="bg-emerald-50 dark:bg-emerald-900/10 p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-800/30 text-center">
-                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-widest font-bold mb-1">Telah Dicicil</p>
-                          <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">{formatRp(totalTerbayar)}</p>
-                        </div>
-                        <div className="bg-rose-50 dark:bg-rose-900/10 p-3.5 rounded-xl border border-rose-100 dark:border-rose-800/30 text-center">
-                          <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase tracking-widest font-bold mb-1">Potongan / Bulan</p>
-                          <p className="text-base font-bold text-rose-700 dark:text-rose-300">{formatRp(cicilanBulanan)}</p>
-                        </div>
-                        <div className="bg-teal-50 dark:bg-teal-900/10 p-3.5 rounded-xl border border-teal-100 dark:border-teal-800/30 text-center shadow-inner">
-                          <p className="text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-widest font-bold mb-1">Sisa Hutang</p>
-                          <p className="text-base font-black text-teal-700 dark:text-teal-300">{formatRp(sisaSaldo)}</p>
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <div className="flex justify-between items-end mb-2">
-                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
-                          <span className="text-sm font-black text-teal-600 dark:text-teal-400">{persentase}%</span>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden shadow-inner">
-                          <div className="bg-gradient-to-r from-teal-400 to-emerald-500 h-full rounded-full transition-all duration-1000 relative" style={{ width: `${persentase}%` }}>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Simulasi Riwayat Potongan Terbaru</h4>
-                        {/* PERBAIKAN: Mengubah 'overflow-hidden' menjadi 'overflow-x-auto' agar tabel di HP bisa digeser ke samping */}
-                        <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-                          <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
-                            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                              <tr>
-                                <th className="p-3 font-semibold">Periode Gaji</th>
-                                <th className="p-3 font-semibold">Keterangan Transfer</th>
-                                <th className="p-3 font-semibold text-right">Potongan Masuk</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                                <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</td>
-                                <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
-                                <td className="p-3 text-right font-bold text-red-500">-{formatRp(cicilanBulanan)}</td>
-                              </tr>
-                              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                                <td className="p-3 font-medium text-slate-800 dark:text-slate-200">Bulan Sebelumnya</td>
-                                <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
-                                <td className="p-3 text-right font-bold text-red-500">-{formatRp(cicilanBulanan)}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
+                    <div className="bg-teal-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-teal-400/30 text-left shadow-inner">
+                      <span className="block text-[10px] sm:text-xs text-teal-200 font-bold mb-0.5">Metode Pelunasan</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-300">Potong Slip Gaji</span>
                     </div>
                   </div>
-                );
-              })}
-              <p className="text-[10px] text-slate-500 mt-4 flex items-start gap-1">
-                 <Info size={14} className="shrink-0" />
-                 Catatan: Rincian ini adalah proyeksi berdasarkan pengaturan bendahara. Sisa hutang dihitung dari saldo pemotongan gaji yang telah disahkan. Apabila Anda melakukan pembayaran tunai pelunasan di luar slip gaji, harap hubungi bendahara untuk memperbarui data ini.
-              </p>
-            </div>
+                </div>
+              </div>
+
+              {/* DAFTAR RINCIAN PINJAMAN */}
+              <div className="space-y-4">
+                {loanItems.map((loan, idx) => {
+                  const cicilanBulanan = loan.nominal;
+                  const totalPinjamanAwal = loan.totalPinjaman !== undefined ? loan.totalPinjaman : (loan.nominal * 10);
+                  const sisaSaldo = loan.sisaHutang !== undefined ? loan.sisaHutang : (loan.nominal * 4); 
+                  const totalTerbayar = Math.max(0, totalPinjamanAwal - sisaSaldo);
+                  const persentase = totalPinjamanAwal > 0 ? ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0) : 0;
+
+                  return (
+                    <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
+                      <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex justify-between items-center bg-slate-50/70 dark:bg-slate-900/30">
+                         <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                           <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                             <CreditCard size={15} />
+                           </div>
+                           <span>{loan.ket}</span>
+                         </h3>
+                         <span className="text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
+                           Status: Aktif
+                         </span>
+                      </div>
+                      
+                      <div className="p-4 sm:p-6 space-y-4">
+                        {/* 4 Kotak Metrik yang Nyaman di HP */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                          <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-left">
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">Plafon Pinjaman</p>
+                            <p className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 font-mono">{formatRp(totalPinjamanAwal)}</p>
+                          </div>
+                          <div className="bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 text-left">
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold mb-0.5">Telah Dicicil</p>
+                            <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 font-mono">{formatRp(totalTerbayar)}</p>
+                          </div>
+                          <div className="bg-rose-50 dark:bg-rose-950/20 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/40 text-left">
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase tracking-wider font-bold mb-0.5">Potongan / Bulan</p>
+                            <p className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300 font-mono">{formatRp(cicilanBulanan)}</p>
+                          </div>
+                          <div className="bg-teal-50 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-200/80 dark:border-teal-700/60 text-left shadow-xs">
+                            <p className="text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-wider font-bold mb-0.5">Sisa Hutang</p>
+                            <p className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 font-mono">{formatRp(sisaSaldo)}</p>
+                          </div>
+                        </div>
+
+                        {/* Progres Pelunasan */}
+                        <div className="bg-slate-50/70 dark:bg-slate-900/30 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
+                            <span className="text-xs font-black font-mono text-teal-600 dark:text-teal-400">{persentase}%</span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, persentase))}%` }}>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Riwayat Pemotongan: Mobile-Friendly Cards + Desktop Table */}
+                        <div>
+                          <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            Simulasi Pemotongan Terbaru
+                          </h4>
+                          
+                          {/* Tampilan Ponsel (Card Feed - No Scroll Horisontal) */}
+                          <div className="sm:hidden space-y-2">
+                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
+                              <div>
+                                <p className="font-bold text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</p>
+                                <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
+                              </div>
+                              <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
+                            </div>
+                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
+                              <div>
+                                <p className="font-bold text-slate-800 dark:text-slate-200">Bulan Sebelumnya</p>
+                                <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
+                              </div>
+                              <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
+                            </div>
+                          </div>
+
+                          {/* Tampilan Tablet / Laptop (Table View) */}
+                          <div className="hidden sm:block overflow-hidden border border-slate-200 dark:border-slate-700 rounded-xl">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                  <th className="p-3 font-semibold">Periode Gaji</th>
+                                  <th className="p-3 font-semibold">Keterangan Transfer</th>
+                                  <th className="p-3 font-semibold text-right">Potongan Masuk</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                                  <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</td>
+                                  <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
+                                  <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
+                                </tr>
+                                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                                  <td className="p-3 font-medium text-slate-800 dark:text-slate-200">Bulan Sebelumnya</td>
+                                  <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
+                                  <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2 leading-relaxed">
+                   <Info size={15} className="shrink-0 text-teal-500 mt-0.5" />
+                   <span>Catatan: Rincian ini adalah proyeksi berdasarkan data bendahara. Sisa hutang berkurang setiap kali slip gaji bulanan disahkan. Apabila melakukan pelunasan tunai di luar slip gaji, harap konfirmasi ke Bendahara Sekolah.</span>
+                </div>
+              </div>
+            </>
           )}
         </div>
         )}
