@@ -405,6 +405,23 @@ const Badge = ({ children, colorClass }) => (
 );
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth }) => {
+  // 🛡️ ANDROID HARDWARE BACK BUTTON HANDLER FOR MODAL
+  useEffect(() => {
+    if (!isOpen || typeof onClose !== 'function') return;
+    const modalKey = 'modal_presensi_' + Math.random().toString(36).slice(2);
+    window.history.pushState({ modal: modalKey }, '');
+    const onPop = () => {
+      onClose();
+    };
+    window.addEventListener('popstate', onPop, { once: true });
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (window.history.state?.modal === modalKey) {
+        window.history.back();
+      }
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">

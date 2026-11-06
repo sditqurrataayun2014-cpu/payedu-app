@@ -2083,13 +2083,86 @@ function MaintenanceScreen({ onLogout, appName, schoolName, appVersion }) {
 // --- MAIN LAYOUT & NAVIGATION ---
 function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, auditLogs, setAuditLogs, saveAuditLog, isOnline, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
   const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
-  const [activeTab, setActiveTab] = useState(user.role === 'admin' ? 'dashboard' : user.role === 'Kepala Sekolah' ? 'dashboard' : 'portal_dashboard');
+  const rootInitialTab = (user.role === 'admin' || user.role === 'Kepala Sekolah') ? 'dashboard' : 'portal_dashboard';
+  const [activeTab, setActiveTab] = useState(rootInitialTab);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
   const [selectedGajiTab, setSelectedGajiTab] = useState(null); // 🪄 TAMBAHAN: Menyimpan tab spesifik form gaji
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [absensiFilter, setAbsensiFilter] = useState('all');
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  // 🛡️ ANDROID HARDWARE BACK NAVIGATION MANAGER:
+  // Riwayat navigasi tab internal agar tombol Back HP tidak langsung keluar aplikasi
+  const tabHistoryRef = useRef([rootInitialTab]);
+  const [showExitToast, setShowExitToast] = useState(false);
+
+  // Inisialisasi state history browser pada saat aplikasi pertama kali dimuat
+  useEffect(() => {
+    window.history.replaceState({ tab: rootInitialTab, isRoot: true, isAppNav: true }, '');
+  }, [rootInitialTab]);
+
+  // Handler navigasi tab yang sinkron dengan History Stack Browser/Android
+  const handleNavigateTab = useCallback((targetTabOrUpdater) => {
+    setActiveTab(prev => {
+      const nextTab = typeof targetTabOrUpdater === 'function' ? targetTabOrUpdater(prev) : targetTabOrUpdater;
+      if (nextTab !== prev) {
+        window.history.pushState({ tab: nextTab, isAppNav: true }, '');
+        tabHistoryRef.current.push(nextTab);
+      }
+      return nextTab;
+    });
+  }, []);
+
+  // Listener tombol fisik / gestur Back HP (popstate event)
+  useEffect(() => {
+    let lastBackPress = 0;
+
+    const onPopState = (event) => {
+      // 1. Jika popstate berasal dari modal (ditangani oleh listener modal masing-masing), abaikan
+      if (event.state?.modal) return;
+
+      // 2. Jika sidebar di mobile sedang terbuka, tutup sidebar terlebih dahulu
+      if (window.innerWidth < 768 && isSidebarOpen) {
+        setIsSidebarOpen(false);
+        window.history.pushState({ tab: activeTab, isAppNav: true }, '');
+        return;
+      }
+
+      // 3. Jika dropdown profil terbuka, tutup dropdown
+      if (isProfileDropdownOpen) {
+        setIsProfileDropdownOpen(false);
+        window.history.pushState({ tab: activeTab, isAppNav: true }, '');
+        return;
+      }
+
+      // 4. Jika ada riwayat tab sebelumnya, kembali ke tab / menu sebelumnya
+      if (tabHistoryRef.current.length > 1) {
+        tabHistoryRef.current.pop(); // buang tab saat ini
+        const prevTab = tabHistoryRef.current[tabHistoryRef.current.length - 1];
+        if (prevTab) {
+          setActiveTab(prevTab);
+          return;
+        }
+      }
+
+      // 5. Jika sudah berada di halaman awal (Beranda / Profil Guru / Dashboard Admin):
+      // Standar Android App: Tekan sekali lagi dalam 2 detik untuk keluar aplikasi
+      const now = Date.now();
+      if (now - lastBackPress < 2000) {
+        // User menekan back 2x berturut-turut -> izinkan keluar aplikasi
+        window.history.back();
+      } else {
+        lastBackPress = now;
+        window.history.pushState({ tab: rootInitialTab, isRoot: true, isAppNav: true }, '');
+        setShowExitToast(true);
+        setTimeout(() => setShowExitToast(false), 2000);
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isSidebarOpen, isProfileDropdownOpen, activeTab, rootInitialTab]);
 
   // 🪄 FITUR BARU & DIPERBARUI: Mesin Audit Log Cloud & Anti-Spam Ketikan (Debounce)
   const latestTeachersRef = useRef(teachers);
@@ -2228,7 +2301,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const navigateToGaji = (teacherId, subTab = 'masaKerja') => {
     setSelectedGajiId(teacherId);
     setSelectedGajiTab(subTab);
-    setActiveTab('gaji');
+    handleNavigateTab('gaji');
   };
 
   const [auditInitialCategory, setAuditInitialCategory] = useState('ALL');
@@ -2237,7 +2310,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
   const handleOpenAuditLog = (category = 'ALL') => {
     setPengaturanInitialTab('audit');
     setAuditInitialCategory(category);
-    setActiveTab('pengaturan');
+    handleNavigateTab('pengaturan');
   };
 
   const renderContent = () => {
@@ -2247,7 +2320,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
     }
 
     switch (activeTab) {
-      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={setActiveTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
+      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); setActiveTab('rekapabsensi'); }} />;
       case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} user={user} saveAuditLog={saveAuditLog} />;
       case 'presensiguru': 
         return (
@@ -2393,7 +2466,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
               <button
                 key={item.id}
                 onClick={() => { 
-                  setActiveTab(item.id); 
+                  handleNavigateTab(item.id); 
                   if (window.innerWidth < 768) {
                     setIsSidebarOpen(false);
                   }
@@ -2525,7 +2598,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                     {user.role === 'admin' ? (
                       <button 
                         onClick={() => {
-                           setActiveTab('pengaturan');
+                           handleNavigateTab('pengaturan');
                            setIsProfileDropdownOpen(false);
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 flex items-center gap-2 transition-colors font-medium"
@@ -2646,6 +2719,13 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
           </div>
         )}
       </main>
+
+      {/* 📱 ANDROID NATIVE DOUBLE-BACK TOAST NOTIFICATION */}
+      {showExitToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[300] bg-slate-900/90 dark:bg-slate-800/95 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl backdrop-blur-md border border-slate-700/80 animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2 pointer-events-none">
+          <span>Tekan tombol kembali sekali lagi untuk keluar aplikasi</span>
+        </div>
+      )}
       </div>
     </div>
   );
@@ -10637,6 +10717,53 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
   // 🪄 FITUR BARU: Auto Trigger Verifikasi Modal Presensi saat klik Absen dari Kartu Profil
   const [autoTriggerPresensiMode, setAutoTriggerPresensiMode] = useState(null);
 
+  // 🛡️ ANDROID HARDWARE BACK BUTTON HANDLERS FOR PORTAL GURU MODALS:
+  // Menutup modal dengan mulus saat tombol Back HP ditekan, tanpa keluar dari aplikasi
+  useEffect(() => {
+    if (!isSlipModalOpen) return;
+    const modalKey = 'modal_slip_' + Date.now();
+    window.history.pushState({ modal: modalKey }, '');
+    const onPop = () => {
+      setIsSlipModalOpen(false);
+      setSelectedHistorySlip(null);
+    };
+    window.addEventListener('popstate', onPop, { once: true });
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (window.history.state?.modal === modalKey) {
+        window.history.back();
+      }
+    };
+  }, [isSlipModalOpen]);
+
+  useEffect(() => {
+    if (!isKomplainModalOpen) return;
+    const modalKey = 'modal_komplain_' + Date.now();
+    window.history.pushState({ modal: modalKey }, '');
+    const onPop = () => setIsKomplainModalOpen(false);
+    window.addEventListener('popstate', onPop, { once: true });
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (window.history.state?.modal === modalKey) {
+        window.history.back();
+      }
+    };
+  }, [isKomplainModalOpen]);
+
+  useEffect(() => {
+    if (!isEditBiodataOpen) return;
+    const modalKey = 'modal_biodata_' + Date.now();
+    window.history.pushState({ modal: modalKey }, '');
+    const onPop = () => setIsEditBiodataOpen(false);
+    window.addEventListener('popstate', onPop, { once: true });
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (window.history.state?.modal === modalKey) {
+        window.history.back();
+      }
+    };
+  }, [isEditBiodataOpen]);
+
   // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini (Mendukung Sesi Pagi & Sore / Seluruh Sesi)
   const [liveNow, setLiveNow] = useState(new Date());
   useEffect(() => {
@@ -11367,23 +11494,42 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
       {/* Modal Slip Gaji */}
       {isSlipModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
-            <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji Saya</h3>
-              <button onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
+                <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
+              </h3>
+              <button 
+                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                title="Tutup (Esc / Back)"
+              >
+                <X size={18}/>
+              </button>
             </div>
-            <div className="overflow-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1">
-              {/* PERBAIKAN: Jika ada data historis yang dipilih, render itu. Jika tidak, render data bulan ini. */}
-              {selectedHistorySlip ? (
-                 <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
-              ) : (
-                 <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
-              )}
+            
+            <div className="overflow-auto p-2 sm:p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 touch-pan-x">
+              {/* Petunjuk khusus pengguna ponsel */}
+              <div className="md:hidden mb-2.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[11px] font-bold rounded-xl border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                <span>💡</span>
+                <span>Geser ke samping untuk melihat seluruh lembar cetak A4 atau klik Unduh PDF.</span>
+              </div>
+              <div className="min-w-fit flex justify-center">
+                {selectedHistorySlip ? (
+                   <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
+                ) : (
+                   <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
+                )}
+              </div>
             </div>
-            <div className="p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors">
-                <Printer size={18}/> Print
+
+            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
+              <button 
+                onClick={() => window.print()} 
+                className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              >
+                <Printer size={16}/> Print
               </button>
               <button 
                 onClick={async () => {
@@ -11395,12 +11541,15 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                   }
                 }} 
                 disabled={isExportingPDF}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={18}/>}
-                {isExportingPDF ? 'Memproses...' : 'Unduh PDF Asli'}
+                {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
+                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
               </button>
-              <button onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors">
+              <button 
+                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
+                className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              >
                 Tutup
               </button>
             </div>
@@ -12243,73 +12392,288 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
         {/* 3. Rekap & Slip Gaji */}
         {activeSection === 'portal_gaji' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {settings?.payrollStatus !== 'Approved' ? (
-            <div className="flex flex-col items-center justify-center p-10 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700">
-               <Lock size={48} className="text-slate-400 mb-4 opacity-50" />
-               <h4 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">Informasi Gaji Terkunci</h4>
-               <p className="text-sm text-slate-500 max-w-md">Rincian slip gaji untuk periode <strong className="text-slate-600 dark:text-slate-400">{bulan}</strong> saat ini sedang dalam proses rekapitulasi oleh Bendahara dan menunggu persetujuan (Approval) dari Kepala Sekolah.</p>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
+              <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-700/60">
+                <Lock size={32} className="text-amber-500" />
+              </div>
+              <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Informasi Gaji Masih Terkunci</h4>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                Rincian slip gaji untuk periode <b className="text-slate-700 dark:text-slate-200">{bulan}</b> saat ini sedang dalam proses verifikasi &amp; rekapitulasi oleh Bendahara dan menunggu persetujuan resmi (Approval) dari Kepala Sekolah.
+              </p>
             </div>
           ) : (
-            <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl p-6 border border-emerald-200 dark:border-emerald-800/30 flex flex-col items-center justify-center text-center relative overflow-hidden">
-               <div className="absolute -left-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-2xl"></div>
-               <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/20 rounded-full blur-2xl"></div>
-               
-               <h4 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 relative z-10">Take Home Pay (THP)</h4>
-               <div className="text-4xl md:text-5xl font-extrabold text-slate-800 dark:text-white mb-6 relative z-10 drop-shadow-sm">
-                 {formatRp(slip.totalBersih)}
-               </div>
-               
-               <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md relative z-10 mb-6">
-                  <div className="flex-1 bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-                    <span className="block text-xs text-slate-500 mb-1">Total Penerimaan Kotor</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalKotor)}</span>
-                  </div>
-                  <div className="flex-1 bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-                    <span className="block text-xs text-slate-500 mb-1">Total Potongan</span>
-                    <span className="font-bold text-red-600 dark:text-red-400">-{formatRp(slip.totalPotongan)}</span>
-                  </div>
-               </div>
+            <>
+              {/* KARTU 1: HERO TAKE HOME PAY (THP) */}
+              <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-lg relative overflow-hidden border border-emerald-400/30">
+                <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -left-8 -bottom-8 w-44 h-44 bg-black/15 rounded-full blur-2xl pointer-events-none"></div>
 
-               <button 
-                 onClick={() => setIsSlipModalOpen(true)}
-                 className="relative z-10 flex items-center justify-center gap-2 w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-emerald-500/30 transition-all hover:scale-105"
-               >
-                 <Printer size={18} /> Lihat & Cetak Rincian Slip
-               </button>
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/25 shadow-xs">
+                      Periode: {bulan}
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400/25 text-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300/30 flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-emerald-300" /> Disahkan
+                    </span>
+                  </div>
 
-               {/* Blok Notifikasi & Aksi Konfirmasi */}
-               {!myData.payroll?.isConfirmed ? (
-                  <div className="mt-6 w-full max-w-md p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/30 border-2 border-amber-300 dark:border-amber-700/70 rounded-2xl relative z-10 animate-in zoom-in slide-in-from-bottom-2 shadow-xl text-center">
-                     <div className="flex items-center justify-center gap-2 mb-2">
-                        <BellRing className="text-amber-600 dark:text-amber-400 animate-bounce" size={20} />
-                        <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Konfirmasi Penerimaan Gaji</span>
-                     </div>
-                     <p className="text-sm text-slate-700 dark:text-slate-200 font-bold mb-4">🔔 Silakan periksa rincian slip di atas dan konfirmasikan kesesuaian nominal penerimaan Anda.</p>
-                     <div className="flex flex-col sm:flex-row gap-3">
-                       <button 
-                         onClick={handleKonfirmasi} 
-                         disabled={isConfirming} 
-                         className="flex-1 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-3 px-4 rounded-xl text-sm font-extrabold shadow-lg shadow-emerald-500/30 transition-all hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-                       >
-                         {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckCircle size={18} />}
-                         {isConfirming ? 'Memproses...' : 'Ya, Nominal Sesuai'}
-                       </button>
-                       <button 
-                         onClick={handleKomplain} 
-                         className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-3 px-4 rounded-xl text-sm font-bold shadow-sm transition-all border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-2 cursor-pointer hover:scale-[1.02]" 
-                         title="Akan dialihkan ke WhatsApp Bendahara"
-                       >
-                         <MessageSquare size={18} /> WA Bendahara
-                       </button>
-                     </div>
+                  <p className="text-xs font-bold text-emerald-100/90 uppercase tracking-wider mt-1">
+                    Gaji Bersih / Take Home Pay (THP)
+                  </p>
+
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-3 drop-shadow-md">
+                    {formatRp(slip.totalBersih)}
                   </div>
-               ) : (
-                  <div className="mt-6 w-full max-w-md p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-sm font-bold rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center flex justify-center items-center gap-2 relative z-10 shadow-sm">
-                     <CheckCircle size={20} className="text-emerald-500" /> Penerimaan Gaji Bulan Ini Telah Dikonfirmasi
+
+                  {/* Dua Kotak Perbandingan: Penerimaan Kotor vs Total Potongan */}
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
+                    <div className="bg-white/15 backdrop-blur-md rounded-xl p-3 border border-white/20 text-left">
+                      <span className="block text-[10px] sm:text-xs text-emerald-100 font-bold mb-0.5">Penerimaan Kotor</span>
+                      <span className="font-mono text-xs sm:text-sm font-black text-white">{formatRp(slip.totalKotor)}</span>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur-md rounded-xl p-3 border border-white/20 text-left">
+                      <span className="block text-[10px] sm:text-xs text-rose-100 font-bold mb-0.5">Total Potongan</span>
+                      <span className="font-mono text-xs sm:text-sm font-black text-rose-200">-{formatRp(slip.totalPotongan)}</span>
+                    </div>
                   </div>
-               )}
-            </div>
+
+                  {/* Tombol Aksi Utama: Lihat Slip Cetak & Unduh PDF */}
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-md">
+                    <button 
+                      type="button"
+                      onClick={() => setIsSlipModalOpen(true)}
+                      className="flex-1 min-w-[135px] bg-white text-emerald-800 hover:bg-emerald-50 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Printer size={15} className="text-emerald-600" />
+                      <span>Cetak Slip (A4)</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        setIsExportingPDF(true);
+                        try {
+                          await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${bulan.replace(/\s+/g, '_')}.pdf`);
+                        } finally {
+                          setIsExportingPDF(false);
+                        }
+                      }}
+                      disabled={isExportingPDF}
+                      className="flex-1 min-w-[135px] bg-emerald-800/80 hover:bg-emerald-800 text-white border border-white/25 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={15} />}
+                      <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 2: RINCIAN PENGHASILAN & TUNJANGAN */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                      <Wallet size={15} />
+                    </div>
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
+                      Rincian Penerimaan (Pendapatan)
+                    </h3>
+                  </div>
+                  <span className="font-mono text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                    {formatRp(slip.totalKotor)}
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
+                  {/* Tunjangan Masa Kerja */}
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Masa Kerja</span>
+                      <p className="text-[10px] text-slate-400">Status {myData.status} • TMT {formatDateId(myData.tmt)}</p>
+                    </div>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMasaKerja)}</span>
+                  </div>
+
+                  {/* Tunjangan Jabatan */}
+                  {slip.tJabatan > 0 && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Jabatan</span>
+                        <p className="text-[10px] text-slate-400">{myData.position}</p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tJabatan)}</span>
+                    </div>
+                  )}
+
+                  {/* Tunjangan Pendidikan */}
+                  {slip.tPendidikan > 0 && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Pendidikan</span>
+                        <p className="text-[10px] text-slate-400">Kualifikasi {myData.education}</p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tPendidikan)}</span>
+                    </div>
+                  )}
+
+                  {/* Tunjangan Keluarga */}
+                  {slip.tKeluarga > 0 && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Keluarga</span>
+                        <p className="text-[10px] text-slate-400">
+                          {myData.family?.wife === 1 ? 'Suami/Istri' : ''} {myData.family?.children > 0 ? `• ${myData.family.children} Anak` : ''}
+                        </p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tKeluarga)}</span>
+                    </div>
+                  )}
+
+                  {/* Insentif Kehadiran (Tepat Waktu) */}
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Kehadiran Tepat Waktu</span>
+                      <p className="text-[10px] text-slate-400">Total kehadiran tepat waktu bulan ini</p>
+                    </div>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.bonusHadir)}</span>
+                  </div>
+
+                  {/* Tunjangan Jam Mengajar / Kelebihan Jam */}
+                  {slip.tMengajar > 0 && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Honor Jam Mengajar</span>
+                        <p className="text-[10px] text-slate-400">Realisasi jam mengajar &amp; kelebihan jam</p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMengajar)}</span>
+                    </div>
+                  )}
+
+                  {/* Insentif Tugas Tambahan */}
+                  {slip.tTambahan > 0 && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Tugas Tambahan</span>
+                        <p className="text-[10px] text-slate-400">Penugasan khusus / kepanitiaan</p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tTambahan)}</span>
+                    </div>
+                  )}
+
+                  {/* Total Penerimaan Kotor Footer */}
+                  <div className="flex items-center justify-between pt-2 text-emerald-700 dark:text-emerald-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
+                    <span>Subtotal Penerimaan Kotor</span>
+                    <span className="font-mono text-sm sm:text-base">{formatRp(slip.totalKotor)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 3: RINCIAN PEMOTONGAN GAJI */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+                      <CreditCard size={15} />
+                    </div>
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
+                      Rincian Pemotongan
+                    </h3>
+                  </div>
+                  <span className="font-mono text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-400">
+                    -{formatRp(slip.totalPotongan)}
+                  </span>
+                </div>
+
+                <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
+                  {/* Potongan Keterlambatan */}
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Pemotongan Kedisiplinan (Telat)</span>
+                      <p className="text-[10px] text-slate-400">{myData.payroll?.disiplin?.telat || 0} kali keterlambatan</p>
+                    </div>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {slip.potongTelat > 0 ? `-${formatRp(slip.potongTelat)}` : 'Rp 0'}
+                    </span>
+                  </div>
+
+                  {/* Potongan Lainnya / Kasbon */}
+                  {(myData.payroll?.potonganLainnya || []).map((pot, pIdx) => (
+                    <div key={pIdx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                      <div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">{pot.ket || 'Potongan Lainnya'}</span>
+                        <p className="text-[10px] text-slate-400">Angsuran / iuran otomatis</p>
+                      </div>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                        -{formatRp(Number(pot.nominal) || 0)}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Total Potongan Footer */}
+                  <div className="flex items-center justify-between pt-2 text-rose-600 dark:text-rose-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
+                    <span>Subtotal Pemotongan</span>
+                    <span className="font-mono text-sm sm:text-base">-{formatRp(slip.totalPotongan)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 4: INFORMASI REKENING PENERIMA */}
+              <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs sm:text-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Building size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Rekening Tujuan Transfer</p>
+                    <p className="font-black text-slate-800 dark:text-slate-200 font-mono truncate">
+                      {myData.bankName ? `${myData.bankName} • ${myData.bankAccount}` : 'Penerimaan via Tunai'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">a.n. {myData.name}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 5: KONFIRMASI GAJI */}
+              {!myData.payroll?.isConfirmed ? (
+                <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700/60 rounded-2xl text-center space-y-3 shadow-sm">
+                  <div className="flex items-center justify-center gap-2">
+                    <BellRing className="text-amber-600 dark:text-amber-400 animate-bounce" size={18} />
+                    <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                      Konfirmasi Penerimaan Gaji
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 font-bold">
+                    Silakan periksa rincian di atas. Jika sudah sesuai, klik tombol konfirmasi di bawah ini.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2.5 max-w-md mx-auto">
+                    <button 
+                      type="button"
+                      onClick={handleKonfirmasi} 
+                      disabled={isConfirming} 
+                      className="flex-1 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold shadow-md shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckCircle size={16} />}
+                      {isConfirming ? 'Menyimpan...' : 'Ya, Nominal Sesuai'}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleKomplain} 
+                      className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-2 cursor-pointer hover:scale-[1.02]" 
+                      title="Akan dialihkan ke WhatsApp Bendahara"
+                    >
+                      <MessageSquare size={16} /> WA Bendahara
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-bold rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-center flex justify-center items-center gap-2 shadow-xs">
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                  <span>Alhamdulillah, Penerimaan Gaji Periode Ini Telah Dikonfirmasi Resmi.</span>
+                </div>
+              )}
+            </>
           )}
         </div>
         )}
