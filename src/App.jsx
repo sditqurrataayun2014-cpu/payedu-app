@@ -9886,89 +9886,91 @@ function ArsipView({ archives, setArchives, settings }) {
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col min-h-full">
 
           {/* 🪄 TAB TAHUNAN DINAMIS */}
-          <div className="bg-slate-100 dark:bg-slate-900/80 p-2 flex overflow-x-auto hide-scrollbar gap-2 border-b border-slate-200 dark:border-slate-700">
+          <div className="bg-slate-100 dark:bg-slate-900/80 p-1.5 sm:p-2 flex overflow-x-auto hide-scrollbar gap-1.5 sm:gap-2 border-b border-slate-200 dark:border-slate-700">
              {availableYears.map(year => (
                 <button
                    key={year}
                    onClick={() => setActiveYear(year)}
-                   className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-all whitespace-nowrap shadow-sm ${activeYear === year ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 border border-transparent'}`}
+                   className={`px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap shadow-xs ${activeYear === year ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 border border-transparent'}`}
                 >
                    Arsip Tahun {year}
                 </button>
              ))}
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mx-4 mt-4 rounded-xl flex gap-3 shadow-sm items-start">
-             <Info size={20} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-2.5 sm:p-4 mx-2 sm:mx-4 mt-2 sm:mt-4 rounded-xl flex gap-2.5 sm:gap-3 shadow-xs items-start">
+             <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
              <div>
-               <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-1">Optimasi Database Otomatis</h4>
-               <p className="text-xs text-blue-700 dark:text-blue-400/80 leading-relaxed">
+               <h4 className="text-xs sm:text-sm font-bold text-blue-800 dark:text-blue-300 mb-0.5 sm:mb-1">Optimasi Database Otomatis</h4>
+               <p className="text-[11px] sm:text-xs text-blue-700 dark:text-blue-400/80 leading-relaxed">
                  Sistem ini telah dirancang untuk menjaga performa memuat agar tetap secepat kilat. Biasakan untuk melakukan <strong className="font-extrabold text-blue-800 dark:text-blue-300">Backup Database Tahunan</strong> secara berkala, lalu klik <strong className="font-extrabold text-red-600 dark:text-red-400">Bersihkan Server</strong> untuk mengosongkan tahun yang sudah lampau.
                </p>
              </div>
           </div>
 
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shrink-0 mt-2">
-            <h3 className="text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Buku Gaji {activeYear}</h3>
+          <div className="p-2.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-4 shrink-0 mt-1 sm:mt-2">
+            <h3 className="text-base sm:text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Buku Gaji {activeYear}</h3>
             
-            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
               <div className="relative w-full lg:w-48">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+                <Search className="absolute left-3 top-2 sm:top-2.5 text-slate-400" size={15} />
                 <input 
                   type="text" 
                   placeholder="Cari Periode..." 
                   value={search} onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-sm"
+                  className="w-full pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-xs"
                 />
               </div>
-              <button onClick={handleBackupYearly} className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
-                 <Download size={14}/> Backup Database {activeYear}
-              </button>
-              <button onClick={() => setConfirmPurge(true)} className="flex-1 lg:flex-none bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-3 py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-sm">
-                 <Trash2 size={14}/> Bersihkan Server
-              </button>
+              <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
+                <button onClick={handleBackupYearly} className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs">
+                   <Download size={13}/> Backup {activeYear}
+                </button>
+                <button onClick={() => setConfirmPurge(true)} className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-xs">
+                   <Trash2 size={13}/> Bersihkan Server
+                </button>
+              </div>
             </div>
           </div>
           
-          <div className="p-4 sm:p-5 flex-1">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="p-2.5 sm:p-5 flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
               {filteredArchives.length === 0 ? (
-                <div className="col-span-full p-10 text-center text-slate-500 flex flex-col items-center">
-                  <FolderOpen size={48} className="mb-3 opacity-20" />
-                  <p className="font-bold">Belum ada arsip buku gaji yang tersimpan untuk tahun {activeYear}.</p>
-                  <p className="text-sm mt-1">Lakukan <span className="font-semibold text-slate-600 dark:text-slate-300">"Tutup Buku"</span> di menu Rekap Gaji terlebih dahulu.</p>
+                <div className="col-span-full p-8 sm:p-10 text-center text-slate-500 flex flex-col items-center">
+                  <FolderOpen size={40} className="mb-2 sm:mb-3 opacity-20" />
+                  <p className="font-bold text-sm sm:text-base">Belum ada arsip buku gaji yang tersimpan untuk tahun {activeYear}.</p>
+                  <p className="text-xs sm:text-sm mt-1">Lakukan <span className="font-semibold text-slate-600 dark:text-slate-300">"Tutup Buku"</span> di menu Rekap Gaji terlebih dahulu.</p>
                 </div>
               ) : (
                 filteredArchives.map(arc => (
-                  <div key={arc.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 transition-all group flex flex-col animate-in zoom-in-95 duration-200">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-12 h-12 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-xl flex items-center justify-center">
-                        <Archive size={24} />
+                  <div key={arc.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 sm:p-5 shadow-xs hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 transition-all group flex flex-col animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-start mb-2.5 sm:mb-4">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <Archive size={20} />
                       </div>
                       <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen 1 Bulan Ini">
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
-                    <h4 className="text-lg font-bold text-slate-800 dark:text-white">{arc.periode}</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5 mb-5 font-medium">Diarsipkan: {arc.dateArchived}</p>
+                    <h4 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{arc.periode}</h4>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 mb-3 sm:mb-5 font-medium">Diarsipkan: {arc.dateArchived}</p>
                     
-                    <div className="mt-auto space-y-2 mb-5">
-                      <div className="flex justify-between text-sm items-center">
+                    <div className="mt-auto space-y-1.5 sm:space-y-2 mb-3 sm:mb-5">
+                      <div className="flex justify-between text-xs sm:text-sm items-center">
                         <span className="text-slate-500 dark:text-slate-400">Total Pegawai</span>
                         <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">{(arc?.dataGuru || []).length} Orang</span>
                       </div>
-                      <div className="flex justify-between text-sm items-center">
+                      <div className="flex justify-between text-xs sm:text-sm items-center">
                         <span className="text-slate-500 dark:text-slate-400">Total THP Bersih</span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatRp(arc.totalGaji)}</span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
-                      <button onClick={() => { setSelectedArchive(arc); setDetailSearch(''); }} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
+                    <div className="flex gap-1.5 sm:gap-2">
+                      <button onClick={() => { setSelectedArchive(arc); setDetailSearch(''); }} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-xs">
                         Buka Arsip
                       </button>
-                      <button onClick={() => handleExportCSV(arc)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors shadow-sm" title="Export CSV Bulanan">
-                        <Download size={18} />
+                      <button onClick={() => handleExportCSV(arc)} className="p-1.5 sm:p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-lg transition-colors shadow-xs" title="Export CSV Bulanan">
+                        <Download size={16} />
                       </button>
                     </div>
                   </div>
@@ -9978,65 +9980,65 @@ function ArsipView({ archives, setArchives, settings }) {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col min-h-full animate-in slide-in-from-right-4">
-          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col min-h-full animate-in slide-in-from-right-4">
+          <div className="p-3 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5 sm:gap-4 shrink-0">
             <div>
               <button 
                 onClick={() => { setSelectedArchive(null); setDetailSearch(''); }} 
-                className="text-xs sm:text-sm text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1.5 mb-1.5 font-bold transition-colors"
+                className="text-xs sm:text-sm text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1.5 mb-1 sm:mb-1.5 font-bold transition-colors"
               >
-                <ChevronRight size={16} className="rotate-180" /> Kembali ke Daftar Arsip
+                <ChevronRight size={15} className="rotate-180" /> Kembali ke Daftar Arsip
               </button>
-              <h3 className="text-base sm:text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <FolderOpen className="text-teal-500 shrink-0" size={22} /> Rincian Arsip: {selectedArchive.periode}
+              <h3 className="text-sm sm:text-xl font-bold text-slate-800 dark:text-white flex items-center gap-1.5 sm:gap-2">
+                <FolderOpen className="text-teal-500 shrink-0" size={18} /> Rincian Arsip: {selectedArchive.periode}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
                 Diarsipkan pada {selectedArchive.dateArchived || '-'} • Dokumen Sah Keuangan
               </p>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex items-center gap-2 w-full md:w-auto">
               <div className="relative flex-1 md:w-56">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                <Search className="absolute left-2.5 top-2 sm:top-2.5 text-slate-400" size={14} />
                 <input 
                   type="text" 
-                  placeholder="Cari nama / NIPY guru..." 
+                  placeholder="Cari nama / NIPY..." 
                   value={detailSearch} 
                   onChange={e => setDetailSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-sm"
+                  className="w-full pl-8 sm:pl-9 pr-2.5 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-xs"
                 />
               </div>
               <button 
                 onClick={() => handleExportCSV(selectedArchive)} 
-                className="bg-teal-600 hover:bg-teal-700 text-white px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0"
               >
-                <Download size={15} /> Export CSV
+                <Download size={14} /> Export CSV
               </button>
             </div>
           </div>
 
           {/* Kartu Ringkasan Metrik Arsip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 sm:p-5 bg-slate-100/60 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-700/60">
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Pegawai</span>
-              <span className="text-base sm:text-xl font-black text-slate-800 dark:text-white">{archiveMetrics.totalPegawai} Orang</span>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 p-2.5 sm:p-5 bg-slate-100/60 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-700/60">
+            <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Pegawai</span>
+              <span className="text-sm sm:text-xl font-black text-slate-800 dark:text-white">{archiveMetrics.totalPegawai} Orang</span>
             </div>
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Gaji Bersih</span>
-              <span className="text-base sm:text-xl font-black text-emerald-600 dark:text-emerald-400">{formatRp(archiveMetrics.totalBersih)}</span>
+            <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Gaji Bersih</span>
+              <span className="text-sm sm:text-xl font-black text-emerald-600 dark:text-emerald-400">{formatRp(archiveMetrics.totalBersih)}</span>
             </div>
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Kotor</span>
-              <span className="text-base sm:text-xl font-black text-slate-700 dark:text-slate-300">{formatRp(archiveMetrics.totalKotor)}</span>
+            <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Kotor</span>
+              <span className="text-sm sm:text-xl font-black text-slate-700 dark:text-slate-300">{formatRp(archiveMetrics.totalKotor)}</span>
             </div>
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Potongan</span>
-              <span className="text-base sm:text-xl font-black text-red-500">-{formatRp(archiveMetrics.totalPotongan)}</span>
+            <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+              <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Potongan</span>
+              <span className="text-sm sm:text-xl font-black text-red-500">-{formatRp(archiveMetrics.totalPotongan)}</span>
             </div>
           </div>
 
           {/* TAMPILAN KARTU RESPONSIP HP (< md) */}
-          <div className="md:hidden space-y-3 p-3 no-print">
+          <div className="md:hidden space-y-2.5 p-2.5 no-print">
             {filteredDetailGuru.map(t => {
               const slip = calculatePayroll(t, settings);
               const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
@@ -10051,43 +10053,43 @@ function ArsipView({ archives, setArchives, settings }) {
               const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
               return (
-                <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
+                <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col gap-2.5">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-bold text-base text-slate-800 dark:text-white">
+                      <h4 className="font-bold text-sm text-slate-800 dark:text-white">
                         {t.name}
                       </h4>
-                      <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                       {t.status || 'Pegawai'}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-emerald-50/60 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800/40">
+                  <div className="flex items-center justify-between bg-emerald-50/60 dark:bg-emerald-900/20 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-800/40">
                     <div>
-                      <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block uppercase">THP Bersih</span>
-                      <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</span>
+                      <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-300 block uppercase">THP Bersih</span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</span>
                     </div>
                     <div className="text-right">
                       {prevTHP !== null ? (
                         diffIndividu !== 0 ? (
-                          <div className={`text-xs font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
-                            <TrendingUp size={12} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
+                          <div className={`text-[11px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                            <TrendingUp size={11} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
                             {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
                           </div>
                         ) : (
-                          <div className="text-xs font-bold text-slate-400 flex items-center justify-end gap-0.5">
-                            <Activity size={12}/> Sama
+                          <div className="text-[11px] font-bold text-slate-400 flex items-center justify-end gap-0.5">
+                            <Activity size={11}/> Sama
                           </div>
                         )
                       ) : prevArchive ? (
-                        <div className="text-xs font-bold text-slate-400">Data Baru</div>
+                        <div className="text-[11px] font-bold text-slate-400">Data Baru</div>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700/50">
                     <div><span className="text-slate-400">Total Kotor:</span> <span className="font-bold block dark:text-slate-200">{formatRp(slip.totalKotor)}</span></div>
                     <div><span className="text-slate-400">Total Potongan:</span> <span className="font-bold text-red-500 block">-{formatRp(slip.totalPotongan)}</span></div>
                     <div><span className="text-slate-400">T. Masa Kerja:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tMasaKerja)}</span></div>
@@ -10101,9 +10103,9 @@ function ArsipView({ archives, setArchives, settings }) {
                       setSelectedSlip(t);
                       setIsSlipModalOpen(true);
                     }}
-                    className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2.5 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                    className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    <FileText size={15} /> Lihat Slip Gaji
+                    <FileText size={14} /> Lihat Slip Gaji
                   </button>
                 </div>
               );
@@ -10452,7 +10454,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
       )}
 
       {/* Header Laporan */}
-      <div className="bg-gradient-to-br from-indigo-800 via-indigo-600 to-purple-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 shrink-0 no-print mb-4 sm:mb-6">
+      <div className="bg-gradient-to-br from-indigo-800 via-indigo-600 to-purple-700 rounded-2xl p-3.5 sm:p-6 md:p-8 text-white shadow-xl relative flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-6 shrink-0 no-print mb-3 sm:mb-6">
         {/* TAMBAHAN: Wrapper Background Khusus agar elemen yang membesar saat hover tidak terpotong (clipped) */}
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
            {/* Dekorasi Background */}
@@ -10461,27 +10463,27 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
         </div>
 
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1.5 sm:mb-2 tracking-tight flex items-center gap-2.5 sm:gap-3">
-            <BarChart3 className="text-indigo-300" size={28} /> Laporan & Analitik Penggajian
+          <h1 className="text-lg sm:text-2xl md:text-3xl font-bold mb-1 sm:mb-2 tracking-tight flex items-center gap-2 sm:gap-3">
+            <BarChart3 className="text-indigo-300" size={24} /> Laporan &amp; Analitik Penggajian
           </h1>
-          <p className="text-indigo-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base">
+          <p className="text-indigo-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed">
             Analisis menyeluruh tentang distribusi komponen gaji, perbandingan status pegawai, dan ringkasan finansial periode ini.
           </p>
         </div>
-        <div className="relative z-10 flex flex-wrap sm:flex-nowrap gap-3 w-full md:w-auto">
-           <div className="flex-1 sm:flex-none flex items-center gap-3 bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/20 shadow-inner">
-             <div className="bg-indigo-500/50 p-2 rounded-lg">
-               <Calendar size={20} className="text-indigo-50" />
+        <div className="relative z-10 flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 w-full md:w-auto">
+           <div className="flex-1 sm:flex-none flex items-center gap-2.5 sm:gap-3 bg-white/10 p-2 sm:p-3 rounded-xl backdrop-blur-md border border-white/20 shadow-inner">
+             <div className="bg-indigo-500/50 p-1.5 sm:p-2 rounded-lg">
+               <Calendar size={18} className="text-indigo-50" />
              </div>
-             <div className="pr-2">
-               <div className="text-[10px] text-indigo-200 uppercase tracking-wider font-semibold mb-0.5">Periode Laporan</div>
-               <div className="text-base font-bold whitespace-nowrap">{bulan}</div>
+             <div className="pr-1 sm:pr-2">
+               <div className="text-[9px] sm:text-[10px] text-indigo-200 uppercase tracking-wider font-semibold mb-0.5">Periode Laporan</div>
+               <div className="text-xs sm:text-base font-bold whitespace-nowrap">{bulan}</div>
              </div>
            </div>
            {/* TAMBAHAN: Tombol Ekspor PDF yang Terintegrasi di Header */}
-           <div className="flex gap-2 w-full sm:w-auto">
-             <button onClick={() => window.print()} className="flex-1 sm:flex-none bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 px-4 py-2 rounded-xl text-sm font-bold transition-colors flex flex-col items-center justify-center gap-1 shadow-lg cursor-pointer hover:-translate-y-1">
-                <Printer size={20} />
+           <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
+             <button onClick={() => window.print()} className="flex-1 sm:flex-none bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/30 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors flex flex-row sm:flex-col items-center justify-center gap-1 shadow-lg cursor-pointer hover:-translate-y-0.5">
+                <Printer size={16} />
                 <span>Cetak</span>
              </button>
              <button 
@@ -10494,9 +10496,9 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
                  }
                }} 
                disabled={isExportingPDF}
-               className="flex-1 sm:flex-none bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-xl text-sm font-extrabold transition-transform hover:-translate-y-1 shadow-lg cursor-pointer flex flex-col items-center justify-center gap-1 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+               className="flex-1 sm:flex-none bg-white text-indigo-700 hover:bg-indigo-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-transform hover:-translate-y-0.5 shadow-lg cursor-pointer flex flex-row sm:flex-col items-center justify-center gap-1 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
              >
-                {isExportingPDF ? <div className="w-5 h-5 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin mb-0.5"></div> : <Download size={20} />}
+                {isExportingPDF ? <div className="w-4 h-4 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin mb-0.5"></div> : <Download size={16} />}
                 <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
              </button>
            </div>
@@ -10513,145 +10515,145 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
         </div>
 
         {/* 4 Kartu Metrik Ringkasan */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-6">
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Gaji Kotor</p>
-            <h4 className="text-2xl font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalKotor)}</h4>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 md:gap-5 mb-3 sm:mb-6">
+          <div className="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
+            <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 sm:mb-1">Total Gaji Kotor</p>
+            <h4 className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalKotor)}</h4>
           </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Potongan</p>
-            <h4 className="text-2xl font-extrabold text-red-600 dark:text-red-400">-{formatRp(reportData.totalPotongan)}</h4>
+          <div className="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
+            <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 sm:mb-1">Total Potongan</p>
+            <h4 className="text-base sm:text-2xl font-extrabold text-red-600 dark:text-red-400">-{formatRp(reportData.totalPotongan)}</h4>
           </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-emerald-500 dark:border-emerald-500/50 flex flex-col justify-center relative overflow-hidden">
-            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1 relative z-10">Total Gaji Bersih (THP)</p>
-            <h4 className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 relative z-10">{formatRp(reportData.totalBersih)}</h4>
+          <div className="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl shadow-xs border border-emerald-500 dark:border-emerald-500/50 flex flex-col justify-center relative overflow-hidden">
+            <p className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-0.5 sm:mb-1 relative z-10">Total Gaji Bersih (THP)</p>
+            <h4 className="text-base sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 relative z-10">{formatRp(reportData.totalBersih)}</h4>
             <div className="absolute -right-4 -bottom-4 bg-emerald-100 dark:bg-emerald-900/30 w-20 h-20 rounded-full blur-xl"></div>
           </div>
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Rata-Rata THP Pegawai</p>
-            <h4 className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatRp(reportData.rataRata)}</h4>
+          <div className="bg-white dark:bg-slate-800 p-3 sm:p-5 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col justify-center">
+            <p className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5 sm:mb-1">Rata-Rata THP Pegawai</p>
+            <h4 className="text-base sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatRp(reportData.rataRata)}</h4>
           </div>
         </div>
 
         {/* TAMBAHAN BARU: Dampak Penyesuaian Manual (Sistem vs Edit Manual) */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 print:break-inside-avoid animate-in fade-in zoom-in-95">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
-            <h3 className="text-base font-bold dark:text-white flex items-center gap-2">
-              <History size={18} className="text-amber-500"/> Riwayat Perbandingan Total Gaji Kotor
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 overflow-hidden mb-3 sm:mb-6 print:break-inside-avoid animate-in fade-in zoom-in-95">
+          <div className="p-3 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+            <h3 className="text-xs sm:text-base font-bold dark:text-white flex items-center gap-1.5 sm:gap-2">
+              <History size={16} className="text-amber-500"/> Riwayat Perbandingan Total Gaji Kotor
             </h3>
           </div>
-          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-             <div className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 text-center">Total Sebelum Perbaikan</span>
-                <span className="text-2xl font-black text-slate-800 dark:text-slate-200">{formatRp(reportData.totalKotorDefault)}</span>
+          <div className="p-3 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6">
+             <div className="flex flex-col items-center justify-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-inner">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 sm:mb-2 text-center">Total Sebelum Perbaikan</span>
+                <span className="text-base sm:text-2xl font-black text-slate-800 dark:text-slate-200">{formatRp(reportData.totalKotorDefault)}</span>
              </div>
              
              <div className="flex flex-col items-center justify-center">
                 <div className="flex items-center justify-center w-full">
                    <div className="h-px flex-1 bg-slate-300 dark:bg-slate-600 hidden sm:block"></div>
-                   <div className={`px-4 py-2 mx-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shadow-sm ${reportData.selisihManual > 0 ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : reportData.selisihManual < 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400' : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}>
-                      {reportData.selisihManual > 0 ? <TrendingUp size={14}/> : reportData.selisihManual < 0 ? <TrendingUp size={14} className="rotate-180"/> : <Activity size={14}/>}
+                   <div className={`px-3 sm:px-4 py-1.5 sm:py-2 mx-1 sm:mx-2 rounded-full border text-[11px] sm:text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shadow-xs ${reportData.selisihManual > 0 ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : reportData.selisihManual < 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400' : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}>
+                      {reportData.selisihManual > 0 ? <TrendingUp size={13}/> : reportData.selisihManual < 0 ? <TrendingUp size={13} className="rotate-180"/> : <Activity size={13}/>}
                       {reportData.selisihManual > 0 ? `+${formatRp(reportData.selisihManual)} (Beban Naik)` : reportData.selisihManual < 0 ? `${formatRp(reportData.selisihManual)} (Beban Turun)` : 'Tidak Ada Perubahan'}
                    </div>
                    <div className="h-px flex-1 bg-slate-300 dark:bg-slate-600 hidden sm:block"></div>
                 </div>
-                <p className="text-[10px] text-slate-400 text-center mt-3 max-w-[250px]">Akumulasi dampak selisih dari riwayat perbaikan/perubahan data yang dilakukan oleh Admin di menu Kelola Gaji.</p>
+                <p className="text-[9px] sm:text-[10px] text-slate-400 text-center mt-2 sm:mt-3 max-w-[250px]">Akumulasi dampak selisih dari riwayat perbaikan/perubahan data yang dilakukan oleh Admin di menu Kelola Gaji.</p>
              </div>
 
-             <div className="flex flex-col items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800/50 shadow-inner">
-                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2 text-center">Total Setelah Perbaikan</span>
-                <span className="text-2xl font-black text-blue-700 dark:text-blue-300">{formatRp(reportData.totalKotor)}</span>
+             <div className="flex flex-col items-center justify-center p-3 sm:p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800/50 shadow-inner">
+                <span className="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1 sm:mb-2 text-center">Total Setelah Perbaikan</span>
+                <span className="text-base sm:text-2xl font-black text-blue-700 dark:text-blue-300">{formatRp(reportData.totalKotor)}</span>
              </div>
           </div>
         </div>
 
         {/* TAMBAHAN: Analisis Distribusi Anggaran & Beban Potongan */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 print:break-inside-avoid">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 mb-3 sm:mb-6 print:break-inside-avoid">
           {/* Panel Distribusi Status */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col">
-             <div className="flex items-center gap-2 mb-6">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Users size={18}/></div>
-                <h3 className="font-bold text-slate-800 dark:text-white">Alokasi Gaji Berdasarkan Status</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 p-3.5 sm:p-6 flex flex-col">
+             <div className="flex items-center gap-2 mb-3.5 sm:mb-6">
+                <div className="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Users size={16}/></div>
+                <h3 className="font-bold text-xs sm:text-base text-slate-800 dark:text-white">Alokasi Gaji Berdasarkan Status</h3>
              </div>
-             <div className="space-y-6 flex-1 flex flex-col justify-center">
+             <div className="space-y-3.5 sm:space-y-6 flex-1 flex flex-col justify-center">
                 {reportData.distribusiStatus.map((item, idx) => (
                    <div key={idx}>
-                      <div className="flex justify-between items-center mb-2">
-                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
-                         <span className={`text-sm font-bold ${item.textClass}`}>{formatRp(item.value)}</span>
+                      <div className="flex justify-between items-center mb-1 sm:mb-2">
+                         <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
+                         <span className={`text-xs sm:text-sm font-bold ${item.textClass}`}>{formatRp(item.value)}</span>
                       </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 flex overflow-hidden shadow-inner">
+                      <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 sm:h-3 flex overflow-hidden shadow-inner">
                          <div className={`${item.color} h-full rounded-full transition-all duration-1000`} style={{ width: `${item.persentase}%` }}></div>
                       </div>
-                      <p className="text-xs text-slate-500 text-right mt-1.5 font-medium">{item.persentase}% dari Total THP</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 text-right mt-1 font-medium">{item.persentase}% dari Total THP</p>
                    </div>
                 ))}
              </div>
           </div>
 
           {/* Panel Rincian Pemotongan */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col">
-             <div className="flex items-center gap-2 mb-6">
-                <div className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg"><Trash2 size={18}/></div>
-                <h3 className="font-bold text-slate-800 dark:text-white">Pembedahan Arus Pemotongan</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 p-3.5 sm:p-6 flex flex-col">
+             <div className="flex items-center gap-2 mb-3.5 sm:mb-6">
+                <div className="p-1.5 sm:p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg"><Trash2 size={16}/></div>
+                <h3 className="font-bold text-xs sm:text-base text-slate-800 dark:text-white">Pembedahan Arus Pemotongan</h3>
              </div>
              {reportData.totalPotongan > 0 ? (
-               <div className="space-y-6 flex-1 flex flex-col justify-center">
+               <div className="space-y-3.5 sm:space-y-6 flex-1 flex flex-col justify-center">
                   {reportData.pembedahanPotongan.map((item, idx) => (
                      <div key={idx}>
-                        <div className="flex justify-between items-center mb-2">
-                           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
-                           <span className={`text-sm font-bold ${item.textClass}`}>-{formatRp(item.value)}</span>
+                        <div className="flex justify-between items-center mb-1 sm:mb-2">
+                           <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
+                           <span className={`text-xs sm:text-sm font-bold ${item.textClass}`}>-{formatRp(item.value)}</span>
                         </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 flex overflow-hidden shadow-inner">
+                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 sm:h-3 flex overflow-hidden shadow-inner">
                            <div className={`${item.color} h-full rounded-full transition-all duration-1000`} style={{ width: `${item.persentase}%` }}></div>
                         </div>
-                        <p className="text-xs text-slate-500 text-right mt-1.5 font-medium">{item.persentase}% dari Total Potongan</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 text-right mt-1 font-medium">{item.persentase}% dari Total Potongan</p>
                      </div>
                   ))}
                </div>
              ) : (
                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 flex items-center justify-center mb-3">
-                     <CheckCircle size={32}/>
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 flex items-center justify-center mb-2.5 sm:mb-3">
+                     <CheckCircle size={28}/>
                   </div>
-                  <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">Bersih Sempurna!</p>
-                  <p className="text-xs text-slate-500">Tidak ada pemotongan kedisiplinan maupun kasbon pada periode ini.</p>
+                  <p className="font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-0.5">Bersih Sempurna!</p>
+                  <p className="text-[11px] sm:text-xs text-slate-500">Tidak ada pemotongan kedisiplinan maupun kasbon pada periode ini.</p>
                </div>
              )}
           </div>
         </div>
 
         {/* Komposisi Komponen Gaji Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 print:break-inside-avoid">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-            <h3 className="text-base font-bold dark:text-white flex items-center gap-2">
-              <PieChartIcon size={18} className="text-indigo-500"/> Komposisi Komponen Gaji
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 overflow-hidden mb-3 sm:mb-6 print:break-inside-avoid">
+          <div className="p-3 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+            <h3 className="text-xs sm:text-base font-bold dark:text-white flex items-center gap-2">
+              <PieChartIcon size={16} className="text-indigo-500"/> Komposisi Komponen Gaji
             </h3>
           </div>
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-             <div className="space-y-5">
+          <div className="p-3.5 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
+             <div className="space-y-3 sm:space-y-5">
                {reportData.komposisi.map((item, idx) => (
                  <div key={idx}>
-                   <div className="flex justify-between items-center mb-1.5">
-                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
-                     <span className="text-sm font-bold text-slate-800 dark:text-white">{formatRp(item.value)}</span>
+                   <div className="flex justify-between items-center mb-1">
+                     <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
+                     <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">{formatRp(item.value)}</span>
                    </div>
-                   <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 flex overflow-hidden">
-                     <div className={`${item.warna} h-2.5 rounded-full`} style={{ width: `${item.persentase}%` }}></div>
+                   <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 sm:h-2.5 flex overflow-hidden">
+                     <div className={`${item.warna} h-full rounded-full`} style={{ width: `${item.persentase}%` }}></div>
                    </div>
-                   <p className="text-xs text-slate-500 text-right mt-1">{item.persentase}% dari total komponen</p>
+                   <p className="text-[10px] sm:text-xs text-slate-500 text-right mt-0.5 sm:mt-1">{item.persentase}% dari total komponen</p>
                  </div>
                ))}
              </div>
              <div className="flex justify-center">
-                 <div className="relative w-64 h-64">
+                 <div className="relative w-48 h-48 sm:w-64 sm:h-64">
                      <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={reportData.komposisi}
                             cx="50%" cy="50%"
-                            innerRadius={70} outerRadius={100}
+                            innerRadius={55} outerRadius={80}
                             paddingAngle={3} dataKey="value"
                             nameKey="name"
                           >
@@ -10663,8 +10665,8 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                         <span className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Total Gaji</span>
-                         <span className="text-lg font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalKotor)}</span>
+                         <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Total Gaji</span>
+                         <span className="text-sm sm:text-lg font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalKotor)}</span>
                       </div>
                  </div>
              </div>
@@ -10672,38 +10674,38 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
         </div>
 
         {/* Sumber Gaji Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden mb-6 print:break-inside-avoid">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
-            <h3 className="text-base font-bold dark:text-white flex items-center gap-2">
-              <Wallet className="text-emerald-500" /> Sumber Alokasi Dana Penggajian
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 overflow-hidden mb-3 sm:mb-6 print:break-inside-avoid">
+          <div className="p-3 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
+            <h3 className="text-xs sm:text-base font-bold dark:text-white flex items-center gap-1.5 sm:gap-2">
+              <Wallet size={16} className="text-emerald-500" /> Sumber Alokasi Dana Penggajian
             </h3>
-            <button onClick={handleOpenEdit} className="no-print text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-400 px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 transition-colors">
-              <Edit size={14} /> Atur Sumber Dana
+            <button onClick={handleOpenEdit} className="no-print text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-400 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold flex items-center gap-1 transition-colors">
+              <Edit size={13} /> Atur Sumber Dana
             </button>
           </div>
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-             <div className="space-y-5">
+          <div className="p-3.5 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
+             <div className="space-y-3 sm:space-y-5">
                {reportData.sumberDana.map((sumber, idx) => (
                  <div key={idx}>
-                   <div className="flex justify-between items-center mb-1.5">
-                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{sumber.nama}</span>
-                     <span className="text-sm font-bold text-slate-800 dark:text-white">{formatRp(sumber.nominal)}</span>
+                   <div className="flex justify-between items-center mb-1">
+                     <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{sumber.nama}</span>
+                     <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">{formatRp(sumber.nominal)}</span>
                    </div>
-                   <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 flex overflow-hidden">
-                     <div className={`${sumber.warna} h-2.5 rounded-full`} style={{ width: `${sumber.persentase}%` }}></div>
+                   <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 sm:h-2.5 flex overflow-hidden">
+                     <div className={`${sumber.warna} h-full rounded-full`} style={{ width: `${sumber.persentase}%` }}></div>
                    </div>
-                   <p className="text-xs text-slate-500 text-right mt-1">{sumber.persentase}% dari total pengeluaran</p>
+                   <p className="text-[10px] sm:text-xs text-slate-500 text-right mt-0.5 sm:mt-1">{sumber.persentase}% dari total pengeluaran</p>
                  </div>
                ))}
              </div>
              <div className="flex justify-center">
-                 <div className="relative w-64 h-64">
+                 <div className="relative w-48 h-48 sm:w-64 sm:h-64">
                      <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={reportData.sumberDana}
                             cx="50%" cy="50%"
-                            innerRadius={70} outerRadius={100}
+                            innerRadius={55} outerRadius={80}
                             paddingAngle={3} dataKey="nominal"
                             nameKey="nama"
                           >
@@ -10715,14 +10717,13 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                         <span className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Total Dana</span>
-                         <span className="text-lg font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalPendanaan)}</span>
+                         <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Total Dana</span>
+                         <span className="text-sm sm:text-lg font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalPendanaan)}</span>
                       </div>
                  </div>
              </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -14661,53 +14662,55 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       )}
 
       {/* Header Abu Muda Cerah yang Profesional */}
-      <div className="bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 rounded-2xl p-4 sm:p-6 md:p-8 shadow-sm border border-slate-300 dark:border-slate-600 relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 rounded-2xl p-3.5 sm:p-6 md:p-8 shadow-xs border border-slate-300 dark:border-slate-600 relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold mb-1.5 sm:mb-2 tracking-tight flex items-center gap-2.5 sm:gap-3 text-slate-800 dark:text-white">
-            <Settings className="text-slate-600 dark:text-slate-400" size={28} /> Pengaturan Sistem
+          <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold mb-1 sm:mb-2 tracking-tight flex items-center gap-2 sm:gap-3 text-slate-800 dark:text-white">
+            <Settings className="text-slate-600 dark:text-slate-400" size={24} /> Pengaturan Sistem
           </h1>
-          <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm md:text-base">
-            Konfigurasi informasi umum aplikasi dan manajemen hak akses *login* secara terpusat.
+          <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm md:text-base leading-relaxed">
+            Konfigurasi informasi umum aplikasi dan manajemen hak akses login secara terpusat.
           </p>
         </div>
-        <Settings size={140} className="absolute -right-10 -bottom-10 text-slate-300/50 dark:text-slate-600/30 transform rotate-12 pointer-events-none hidden sm:block" />
+        <Settings size={140} className="hidden sm:block absolute -right-10 -bottom-10 text-slate-300/50 dark:text-slate-600/30 transform rotate-12 pointer-events-none" />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-6 flex-1 min-h-0">
          
-         {/* Navigasi Tab Vertikal & Dropdown */}
+         {/* Navigasi Tab Vertikal (Desktop) & Swipeable Tab Pills (Mobile) */}
          <div className="w-full md:w-64 xl:w-72 shrink-0">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:sticky md:top-0">
-               
-               {/* Dropdown Mobile (Tampil di Layar Kecil) */}
-               <div className="md:hidden">
-                  <div className="relative">
-                     <select
-                        value={activeTabSetting}
-                        onChange={(e) => setActiveTabSetting(e.target.value)}
-                        className="w-full p-3.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-bold outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none cursor-pointer"
-                     >
-                        {settingTabs.map(tab => (
-                           <option key={tab.id} value={tab.id}>{tab.label} - {tab.desc}</option>
-                        ))}
-                     </select>
-                     <ChevronDown size={18} className="absolute right-4 top-4 text-slate-500 pointer-events-none" />
-                  </div>
-               </div>
+            {/* Tab Bar Horizontal Mobile */}
+            <div className="flex md:hidden overflow-x-auto hide-scrollbar gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl mb-1">
+               {settingTabs.map(tab => (
+                  <button
+                     key={tab.id}
+                     type="button"
+                     onClick={() => setActiveTabSetting(tab.id)}
+                     className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 ${
+                        activeTabSetting === tab.id
+                           ? 'bg-blue-600 text-white shadow-xs'
+                           : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                     }`}
+                  >
+                     <tab.icon size={13} />
+                     <span>{tab.label}</span>
+                  </button>
+               ))}
+            </div>
 
-               {/* Sidebar Desktop (Tampil di Layar Menengah ke Atas) */}
-               <nav className="hidden md:flex flex-col gap-1.5">
+            <div className="hidden md:block bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:sticky md:top-0">
+               {/* Sidebar Desktop */}
+               <nav className="flex flex-col gap-1.5">
                   {settingTabs.map(tab => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTabSetting(tab.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
                         activeTabSetting === tab.id
-                          ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-sm'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-xs'
                           : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
                       }`}
                     >
-                      <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
+                      <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
                         <tab.icon size={18} />
                       </div>
                       <div>
@@ -15194,7 +15197,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                 </div>
 
                 {/* 📱 KARTU KONTROL PENUH KUNCI HP GURU (DEVICE LOCK) */}
-                <div className="mx-5 mt-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-900/40 dark:to-slate-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="mx-3 sm:mx-5 mt-2 sm:mt-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-900/40 dark:to-slate-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-xs">
                    <div className="flex items-center gap-3">
                       <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
                          isGlobalDeviceLockActive 
