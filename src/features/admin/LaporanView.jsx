@@ -455,7 +455,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
              </div>
              <div className="flex justify-center">
                  <div className="relative w-48 h-48 sm:w-64 sm:h-64">
-                     <ResponsiveContainer width="100%" height="100%">
+                     <ResponsiveContainer width="100%" height="100%" minWidth={160} minHeight={160}>
                         <PieChart>
                           <Pie
                             data={reportData.komposisi}
@@ -507,7 +507,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
              </div>
              <div className="flex justify-center">
                  <div className="relative w-48 h-48 sm:w-64 sm:h-64">
-                     <ResponsiveContainer width="100%" height="100%">
+                     <ResponsiveContainer width="100%" height="100%" minWidth={160} minHeight={160}>
                         <PieChart>
                           <Pie
                             data={reportData.sumberDana}

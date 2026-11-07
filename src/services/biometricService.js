@@ -203,3 +203,4 @@ export const authenticateWithBiometrics = async (teachers = []) => {
     throw err;
   }
 };
+

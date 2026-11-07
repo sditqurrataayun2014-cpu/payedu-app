@@ -3739,18 +3739,6 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
     closeModal();
   };
 
-  const handleExportExcelPure = () => {
-    try {
-      exportPayrollToExcel({
-        teachers: filtered,
-        settings,
-        periode: settings?.payrollPeriod
-      });
-    } catch (err) {
-      console.error("Gagal ekspor Excel:", err);
-      alert("Gagal mengekspor file Excel: " + (err.message || 'Error tidak diketahui'));
-    }
-  };
 
   const handleExportCSV = () => {
     // TAMBAHAN: Memasukkan No WA dan Keaktifan ke dalam export CSV
@@ -8565,6 +8553,20 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
   };
 
   // TAMBAHAN: Ekspor Tabel Rekap ke CSV sebagai alternatif Print yang tangguh
+  // 📊 FITUR BARU: Ekspor Rekap Gaji Lengkap ke Excel (.xlsx) Murni
+  const handleExportExcelPure = () => {
+    try {
+      exportPayrollToExcel({
+        teachers: filtered,
+        settings,
+        periode: settings?.payrollPeriod
+      });
+    } catch (err) {
+      console.error("Gagal ekspor Excel:", err);
+      alert("Gagal mengekspor file Excel: " + (err.message || "Error tidak diketahui"));
+    }
+  };
+
   const handleExportCSV = () => {
     const headers = ['Nama Pegawai', 'NIPY', 'Status', 'Jabatan', 'T. Masa Kerja', 'T. Jabatan', 'T. Pendidikan', 'T. Kompetensi', 'T. Keluarga', 'Insentif Tamb.', 'Bonus Hadir', 'Kelebihan Jam', 'Total Kotor', 'Potongan', 'THP Bersih', 'Bulan Sebelumnya', 'Selisih'];
     const csvRows = [headers.join(';')];
