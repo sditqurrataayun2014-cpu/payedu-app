@@ -1,4 +1,10 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { 
+  saveOfflineAttendance, 
+  removeOfflineAttendance, 
+  syncOfflineAttendanceQueue,
+  registerOfflineSyncListeners 
+} from './offlineSyncService';
 
 // Helper Failsafe untuk Penyimpanan Lokal
 const safeStorageGet = (key, fallback) => {
@@ -157,7 +163,16 @@ export const flushPendingPresensi = async () => {
   } catch (e) {
     console.warn('[Antrian Offline] Gagal flush antrian:', e);
   }
+
+  // 3. Flush antrian IndexedDB (Background Sync Queue)
+  try {
+    await syncOfflineAttendanceQueue(pushSinglePresensiRecord);
+  } catch (e) {
+    console.warn('[OfflineSync] Gagal flush antrian IndexedDB:', e);
+  }
 };
+
+export { registerOfflineSyncListeners };
 
 /**
  * Mengecek ketersediaan tabel mandiri `presensi_records` di Supabase.
@@ -280,9 +295,12 @@ export const pushSinglePresensiRecord = async (record, options = {}) => {
     console.warn('[SinglePush] Gagal sinkronisasi ke LocalStorage:', err);
   }
 
-  // 2. Jika offline / belum konfigurasi, simpan ke antrian offline single
+  // 2. Jika offline / belum konfigurasi, simpan ke antrian offline single (LocalStorage + IndexedDB Background Sync)
   if (!isSupabaseConfigured() || !navigator.onLine) {
-    if (!options._fromQueue) enqueueSinglePendingRecord(record);
+    if (!options._fromQueue) {
+      enqueueSinglePendingRecord(record);
+      saveOfflineAttendance(record);
+    }
     return { status: 'offline', message: 'Tersimpan di perangkat (offline, masuk antrian retry)' };
   }
 
@@ -301,6 +319,7 @@ export const pushSinglePresensiRecord = async (record, options = {}) => {
 
       if (!error) {
         removeSinglePendingRecord(record.id);
+        removeOfflineAttendance(record.id);
         return { status: 'success', message: 'Presensi berhasil tersimpan di Cloud Database', data: record };
       }
 
@@ -319,9 +338,10 @@ export const pushSinglePresensiRecord = async (record, options = {}) => {
     }
   }
 
-  // Jika semua retry gagal, masukkan ke antrian retry otomatis
+  // Jika semua retry gagal, masukkan ke antrian retry otomatis (LocalStorage + IndexedDB)
   if (!options._fromQueue) {
     enqueueSinglePendingRecord(record);
+    saveOfflineAttendance(record);
   }
   return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud (masuk antrian)', error: lastErr };
 };
