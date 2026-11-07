@@ -242,7 +242,7 @@ function ArsipView({ archives, setArchives, settings }) {
               </div>
               <h3 className="text-xl font-black dark:text-white mb-2 text-red-600">Hapus Data Tahun {activeYear}?</h3>
               <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto text-sm leading-relaxed">
-                Pastikan Anda telah melakukan <strong className="text-slate-700 dark:text-slate-200">"Backup Database"</strong> terlebih dahulu. Tindakan ini akan mengosongkan memori Server Google Sheets dari seluruh arsip tahun {activeYear} agar performa aplikasi kembali secepat kilat.
+                Pastikan Anda telah melakukan <strong className="text-slate-700 dark:text-slate-200">"Backup Database"</strong> terlebih dahulu. Tindakan ini akan mengosongkan memori Cloud Database Supabase dari seluruh arsip tahun {activeYear} agar performa aplikasi kembali secepat kilat.
               </p>
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-center gap-3 shrink-0">

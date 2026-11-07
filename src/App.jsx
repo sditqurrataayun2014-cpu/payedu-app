@@ -200,9 +200,6 @@ const initialTeachers = [];
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 // --- KONFIGURASI DATABASE SUPABASE (CLOUD & OFFLINE FALLBACK) ---
-const postToGoogleSheets = async (action, payload) => {
-  return await pushToSupabase(action, payload);
-};
 
 // 🪄 TAMBALAN CERDAS: Menambahkan Perisai Data utama pada kalkulasi
 const calculatePayroll = (teacher, settings) => {
@@ -1825,7 +1822,7 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
 
     // 2. Tembak langsung ke Supabase Cloud (Real-time)
     try {
-       await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
     } catch(err) {
        console.warn("Gagal simpan registrasi ke cloud:", err);
     }
@@ -2973,7 +2970,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
     const newSettings = { ...settings, payrollStatus: 'Approved', lastModified: Date.now() };
     setSettings(newSettings);
     safeStorageSet('payedu_settings', newSettings);
-    postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan approval ke server:", e));
+    pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.error("Gagal simpan approval ke server:", e));
     
     setNotification({ isOpen: true, type: 'success', message: 'Berhasil! Rincian gaji bulan ini telah disahkan secara permanen.' });
   };
@@ -6717,7 +6714,7 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
      safeStorageSet('payedu_teachers', updatedTeachers);
 
      try {
-        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
      } catch (err) {
         console.warn("Gagal publish roster ke cloud:", err);
      }
@@ -8236,7 +8233,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     try {
         // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga
         safeStorageSet('payedu_teachers', updatedTeachers);
-        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
         setNotification({ isOpen: true, type: 'success', message: 'Notifikasi transfer gaji berhasil dikirim ke portal guru.' });
     } catch (e) {
         console.error(e);
@@ -8269,7 +8266,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
     try {
         // 🪄 TAMBALAN CERDAS: Push Langsung ke Cloud Saat Itu Juga secara Massal
         safeStorageSet('payedu_teachers', updatedTeachers);
-        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
         
         setIsConfirmNotifMassalOpen(false);
         setNotification({ isOpen: true, type: 'success', message: 'Luar Biasa! Notifikasi berhasil dikirim secara massal ke portal seluruh guru dan disinkronkan ke server.' });
@@ -8296,7 +8293,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
      safeStorageSet('payedu_settings', newSettings);
      
      try {
-         await postToGoogleSheets('SAVE_SETTINGS', newSettings);
+         await pushToSupabase('SAVE_SETTINGS', newSettings);
          setNotification({ isOpen: true, type: 'success', message: 'Draft Gaji berhasil diajukan! Status telah dikunci ke server.' });
      } catch (e) {
          console.error("Gagal simpan ajuan ke server:", e);
@@ -8367,11 +8364,11 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         dataGuru: optimizedTeachers
       };
 
-      // Tentukan array arsip final (Maksimal 12 bulan terakhir agar JSON Google Sheets tidak jebol)
+      // Tentukan array arsip final untuk Cloud Database Supabase
       const updatedArchivesArray = [newArchive, ...(archives || [])].slice(0, 12);
 
       // 🪄 TAMBALAN CERDAS: Menggunakan endpoint "SAVE_ARCHIVES" secara utuh, bukan "ARCHIVE_PAYROLL" yang sudah usang
-      const result = await postToGoogleSheets('SAVE_ARCHIVES', updatedArchivesArray);
+      const result = await pushToSupabase('SAVE_ARCHIVES', updatedArchivesArray);
       
       if (result.status === 'success') {
         // --- TERAPKAN KE STATE LOKAL SECARA PERMANEN ---
@@ -8425,7 +8422,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         const newSettings = { ...settings, payrollStatus: 'Draft', payrollPeriod: nextPeriod, lastModified: Date.now() };
         setSettings(newSettings);
         safeStorageSet('payedu_settings', newSettings);
-        postToGoogleSheets('SAVE_SETTINGS', newSettings).catch(e => console.warn("Sinkronisasi tertunda:", e));
+        pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn("Sinkronisasi tertunda:", e));
         
         setNotification({ isOpen: true, type: 'success', message: 'Tutup buku berhasil! Data telah diarsipkan secara permanen.' });
       } else {
@@ -8551,7 +8548,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
      const newState = { ...current, auditLogs: [], lastModified: Date.now() };
      setSettings(newState);
      safeStorageSet('payedu_settings', newState);
-     postToGoogleSheets('SAVE_SETTINGS', newState).catch(e => console.error("Gagal hapus log:", e));
+     pushToSupabase('SAVE_SETTINGS', newState).catch(e => console.error("Gagal hapus log:", e));
      setIsConfirmClearHistoryOpen(false);
      setNotification({ isOpen: true, type: 'success', message: 'Seluruh riwayat perbaikan berhasil dibersihkan secara permanen.' });
   };
@@ -9638,7 +9635,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
      try {
         safeStorageSet('payedu_teachers', updatedTeachers);
-        await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+        await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
         alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
         setIsEditBiodataOpen(false);
      } catch (err) {
@@ -9704,7 +9701,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     try {
        // Tembak langsung ke awan tanpa menunggu debounce App.jsx
        safeStorageSet('payedu_feedbacks', updatedFeedbacks);
-       await postToGoogleSheets('SAVE_FEEDBACKS', updatedFeedbacks);
+       await pushToSupabase('SAVE_FEEDBACKS', updatedFeedbacks);
        
        alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
        setFeedbackMsg('');
@@ -9729,7 +9726,7 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
     try {
        // PAKSA TEMBAK KE SERVER (BYPASS DEBOUNCE 2 DETIK)
        safeStorageSet('payedu_teachers', updatedTeachers);
-       await postToGoogleSheets('SAVE_TEACHERS', updatedTeachers);
+       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
 
        // Memicu selebrasi
        setShowCelebration(true);

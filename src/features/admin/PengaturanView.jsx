@@ -24,10 +24,6 @@ const sanitizeTeacherList = (list) => {
   return sortTeachersById(deduplicateTeachers(sanitized));
 };
 
-const postToGoogleSheets = async (action, payload) => {
-  return await pushToSupabase(action, payload);
-};
-
 // --- PENGATURAN VIEW ---
 function PengaturanView({ teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, fundingSources, setFundingSources, onToggleMaintenance, auditLogs = [], setAuditLogs, saveAuditLog, presensiGuru = [], setPresensiGuru, initialTab = 'umum', initialAuditCategory = 'ALL' }) {
   const fileInputRef = useRef(null);
@@ -389,7 +385,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     safeStorageSet('payedu_settings', newSettings);
     
     // PAKSA SIMPAN LANGSUNG KE SERVER (Bypass Auto-save)
-    postToGoogleSheets('SAVE_SETTINGS', newSettings)
+    pushToSupabase('SAVE_SETTINGS', newSettings)
     .then(() => {
        setIsSaving(false);
        alert('Pengaturan Umum berhasil disimpan permanen!');
@@ -471,7 +467,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     setSettings(newSettings);
     safeStorageSet('payedu_settings', newSettings);
     
-    postToGoogleSheets('SAVE_SETTINGS', newSettings)
+    pushToSupabase('SAVE_SETTINGS', newSettings)
     .then(() => {
        setIsSaving(false);
        alert('Mantap! Master Tarif dan Variabel berhasil diperbarui secara global!');
@@ -776,13 +772,13 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 
         setConfirmResetDb({ isOpen: false, keyword: '' });
         
-        // 3. Tembak Perintah Sapu Bersih ke Server (Google Sheets)
+        // 3. Tembak Perintah Sapu Bersih ke Cloud Database Supabase
         try {
            await Promise.allSettled([
-              postToGoogleSheets('SAVE_TEACHERS', []),
-              postToGoogleSheets('SAVE_ARCHIVES', []),
-              postToGoogleSheets('SAVE_FEEDBACKS', []),
-              postToGoogleSheets('SAVE_LOGS', [])
+              pushToSupabase('SAVE_TEACHERS', []),
+              pushToSupabase('SAVE_ARCHIVES', []),
+              pushToSupabase('SAVE_FEEDBACKS', []),
+              pushToSupabase('SAVE_LOGS', [])
            ]);
            setIsSaving(false);
            alert("✨ FACTORY RESET BERHASIL! ✨\n\nSeluruh data pegawai, arsip, dan riwayat di perangkat ini maupun di Server Cloud telah dibersihkan secara total.\n\nAplikasi Anda kini kembali seperti baru pertama kali digunakan!");
@@ -810,7 +806,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
      setConfirmMigrate(false);
      
      // Disebabkan ada useEffect di App.jsx yang memantau state 'teachers', sistem 
-     // akan automatik menolak (sync) ID baru ini ke Google Sheets, sekaligus
+     // akan otomatis menolak (sync) ID baru ini ke Cloud Database Supabase, sekaligus
      // mengemas kini username login mereka.
      setTimeout(() => alert("Berjaya! Semua ID pegawai telah ditukar ke format berurutan (G01QA, G02QA, dst). Username login mereka juga telah dikemas kini!"), 300);
   };
@@ -1221,7 +1217,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      safeStorageSet('payedu_settings', newSettings);
                      
                      // PAKSA SIMPAN LANGSUNG KE SERVER (Mutlak Tersimpan)
-                     postToGoogleSheets('SAVE_SETTINGS', newSettings)
+                     pushToSupabase('SAVE_SETTINGS', newSettings)
                      .then(() => {
                         setIsSaving(false);
                         alert('Mantap! Teks Portal Guru berhasil diperbarui dan dikunci ke server database!');
@@ -1789,7 +1785,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                safeStorageSet('payedu_settings', updated);
                                
                                try {
-                                 await postToGoogleSheets('SAVE_SETTINGS', updated);
+                                 await pushToSupabase('SAVE_SETTINGS', updated);
                                  if (isChecked) {
                                     alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
                                  } else {
@@ -2016,7 +2012,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                           localStorage.removeItem('payedu_login_history');
                           safeStorageSet('payedu_loginHistory', []);
                           try {
-                             await postToGoogleSheets('SAVE_LOGS', []);
+                             await pushToSupabase('SAVE_LOGS', []);
                           } catch (err) {
                              console.warn("Gagal clear cloud logs:", err);
                           }

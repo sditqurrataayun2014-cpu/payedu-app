@@ -201,3 +201,4 @@ export const registerOfflineSyncListeners = (pushSingleRecordFn) => {
     clearInterval(intervalId);
   };
 };
+
