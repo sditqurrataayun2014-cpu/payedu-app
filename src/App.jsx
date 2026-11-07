@@ -2449,10 +2449,10 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
 
       <div className="flex flex-1 overflow-hidden relative">
       {isSidebarOpen && window.innerWidth < 768 && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-20 md:hidden no-print animate-in fade-in" onClick={() => setIsSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 md:hidden no-print animate-in fade-in" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      <aside className={`fixed md:static inset-y-0 left-0 z-30 w-64 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-all duration-300 ease-in-out flex flex-col no-print ${isSidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-64'}`}>
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-all duration-300 ease-in-out flex flex-col no-print ${isSidebarOpen ? 'translate-x-0 md:ml-0' : '-translate-x-full md:-ml-64'}`}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
           <div className="flex items-center truncate">
             {settings?.logoUrl ? (
@@ -2557,12 +2557,22 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
                   }
                 }}
                 disabled={isManualSyncing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-300 dark:border-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-300 shadow-sm cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-blue-300 dark:border-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-all duration-300 shadow-sm cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50 shrink-0"
                 title="Klik untuk menyinkronkan seluruh data aplikasi ke Cloud secara langsung"
               >
                 <RefreshCw size={14} className={`text-blue-600 dark:text-blue-400 ${isManualSyncing || syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
                 <span className="text-[11px] font-extrabold tracking-wide uppercase">
-                  {isManualSyncing || syncStatus === 'syncing' ? 'Sinkronisasi...' : 'Sinkronisasi'}
+                  {isManualSyncing || syncStatus === 'syncing' ? (
+                    <>
+                      <span className="hidden sm:inline">Sinkronisasi...</span>
+                      <span className="sm:hidden">Sync...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline">Sinkronisasi</span>
+                      <span className="sm:hidden">Sync</span>
+                    </>
+                  )}
                 </span>
               </button>
             )}
@@ -2982,7 +2992,7 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
       )}
 
       {/* DIPERBARUI: Desain Banner Dashboard Admin Dibuat Lebih Mewah & Personal */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-6 md:p-10 text-white shadow-xl relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-6">
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-4 sm:p-6 md:p-10 text-white shadow-xl relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 md:gap-6 mb-4 sm:mb-6">
         {/* TAMBAHAN: Wrapper Background Khusus agar overflow-hidden tidak memotong Card yang scale saat di-hover */}
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay"></div>
@@ -2993,21 +3003,22 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         
         <div className="relative z-10">
           {/* Sapaan Personal */}
-          <p className="text-blue-200 text-sm md:text-base font-bold mb-1 tracking-widest uppercase drop-shadow-md">
+          <p className="text-blue-200 text-xs sm:text-sm md:text-base font-bold mb-1 tracking-widest uppercase drop-shadow-md">
              {user?.role === 'Kepala Sekolah' ? 'Ruang Kendali Pimpinan' : 'Ruang Kendali Administrator'}
           </p>
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-4 leading-tight">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-2 md:mb-4 leading-tight">
              Halo, {user?.role === 'Kepala Sekolah' || user?.name === 'Kepala Sekolah' ? (settings?.principalName ? `Kepala Sekolah (${settings.principalName.split(',')[0]})` : 'Kepala Sekolah') : (user?.name?.split(' ')[0] || 'User')}!
           </h1>
-          <p className="text-blue-100 opacity-90 max-w-xl text-sm md:text-base">
+          <p className="text-blue-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base">
             Pantau statistik kepegawaian, distribusi status guru, tingkat pendidikan, dan estimasi total pengeluaran gaji sekolah periode ini secara *real-time*.
           </p>
         </div>
         
-        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto mt-4 lg:mt-0">
-          <div className="flex items-center gap-4 bg-white/10 p-3.5 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105 group relative overflow-hidden">
-            <div className="bg-blue-500/50 p-3 rounded-xl shrink-0 shadow-inner group-hover:scale-110 transition-transform">
-              <Calendar size={24} className="text-blue-50" />
+        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto mt-2 lg:mt-0">
+          <div className="flex items-center gap-3 sm:gap-4 bg-white/10 p-2.5 sm:p-3.5 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105 group relative overflow-hidden">
+            <div className="bg-blue-500/50 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-inner group-hover:scale-110 transition-transform">
+              <Calendar size={20} className="text-blue-50 sm:hidden" />
+              <Calendar size={24} className="text-blue-50 hidden sm:block" />
             </div>
             <div className="flex flex-col">
               <div className="text-[10px] text-blue-200 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1">
@@ -3018,21 +3029,22 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
                   type="month" 
                   value={settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} 
                   onChange={e => setSettings({...settings, payrollPeriod: e.target.value})}
-                  className="bg-transparent text-lg md:text-xl font-black text-white outline-none cursor-pointer border-b border-dashed border-white/40 hover:border-white focus:border-white w-36 md:w-44 transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                  className="bg-transparent text-base sm:text-lg md:text-xl font-black text-white outline-none cursor-pointer border-b border-dashed border-white/40 hover:border-white focus:border-white w-32 sm:w-36 md:w-44 transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
                   title="Klik untuk mengubah periode penggajian"
                 />
               ) : (
-                <div className="text-lg md:text-xl font-black truncate">{currentMonthYear}</div>
+                <div className="text-base sm:text-lg md:text-xl font-black truncate">{currentMonthYear}</div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4 bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105">
-            <div className="bg-emerald-500/50 p-3 rounded-xl shrink-0 shadow-inner">
-              <Wallet size={24} className="text-emerald-50" />
+          <div className="flex items-center gap-3 sm:gap-4 bg-white/10 p-2.5 sm:p-4 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105">
+            <div className="bg-emerald-500/50 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-inner">
+              <Wallet size={20} className="text-emerald-50 sm:hidden" />
+              <Wallet size={24} className="text-emerald-50 hidden sm:block" />
             </div>
             <div className="truncate">
               <div className="text-[10px] text-emerald-200 uppercase tracking-widest font-bold mb-0.5">Estimasi Pengeluaran</div>
-              <div className="text-lg md:text-xl font-black truncate">{formatRp(stats.totalKotor)}</div>
+              <div className="text-base sm:text-lg md:text-xl font-black truncate">{formatRp(stats.totalKotor)}</div>
             </div>
           </div>
         </div>
@@ -3211,37 +3223,38 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
 
         {/* Card 1: Total SDM (Desain Berwarna Premium) */}
         <div 
           onClick={() => setActiveTab('dataguru')}
-          className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-blue-500 to-blue-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-blue-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Kelola Data</div>
-          <div className="flex justify-between items-start mb-6 relative z-10">
+          <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-blue-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Kelola Data</div>
+          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-blue-100 uppercase tracking-wider mb-2">Total Guru & Staff</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.total}</h4>
-                <span className="text-sm font-medium text-blue-100">Orang</span>
+              <p className="text-[10px] sm:text-xs font-semibold text-blue-100 uppercase tracking-wider mb-1 sm:mb-2">Total Guru & Staff</p>
+              <div className="flex items-baseline gap-1 sm:gap-1.5">
+                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.total}</h4>
+                <span className="text-xs sm:text-sm font-medium text-blue-100">Orang</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
-              <Users size={24} className="drop-shadow-sm" />
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <Users size={18} className="drop-shadow-sm sm:hidden" />
+              <Users size={24} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto space-y-3 pt-4 border-t border-white/20 relative z-10">
-            <div className="flex justify-between text-sm">
-              <span className="text-blue-50 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-200"></span> Laki-laki</span>
+          <div className="mt-auto space-y-1.5 sm:space-y-3 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
+            <div className="flex justify-between">
+              <span className="text-blue-50 flex items-center gap-1.5 sm:gap-2"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-200"></span> Laki-laki</span>
               <span className="font-bold">{stats.lk}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-blue-50 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-indigo-200"></span> Perempuan</span>
+            <div className="flex justify-between">
+              <span className="text-blue-50 flex items-center gap-1.5 sm:gap-2"><span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-indigo-200"></span> Perempuan</span>
               <span className="font-bold">{stats.pr}</span>
             </div>
-            <div className="w-full bg-black/20 rounded-full h-1.5 mt-2 flex overflow-hidden">
+            <div className="w-full bg-black/20 rounded-full h-1 sm:h-1.5 mt-1 sm:mt-2 flex overflow-hidden">
               <div className="bg-blue-200 h-full transition-all duration-500" style={{ width: `${(stats.lk / stats.total) * 100}%` }}></div>
               <div className="bg-indigo-300 h-full transition-all duration-500" style={{ width: `${(stats.pr / stats.total) * 100}%` }}></div>
             </div>
@@ -3251,30 +3264,31 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 2: Status Kepegawaian (Desain Berwarna Premium) */}
         <div 
           onClick={() => setIsStatusModalOpen(true)}
-          className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-emerald-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-6 relative z-10">
+          <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Lihat Detail</div>
+          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-emerald-100 uppercase tracking-wider mb-2">Status Pegawai</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.tetap}</h4>
-                <span className="text-sm font-medium text-emerald-100">Tetap</span>
+              <p className="text-[10px] sm:text-xs font-semibold text-emerald-100 uppercase tracking-wider mb-1 sm:mb-2">Status Pegawai</p>
+              <div className="flex items-baseline gap-1 sm:gap-1.5">
+                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.tetap}</h4>
+                <span className="text-xs sm:text-sm font-medium text-emerald-100">Tetap</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
-              <Award size={24} className="drop-shadow-sm" />
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <Award size={18} className="drop-shadow-sm sm:hidden" />
+              <Award size={24} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto space-y-2 pt-4 border-t border-white/20 relative z-10">
-             <div className="flex items-center justify-between p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
-                <span className="text-xs font-semibold text-emerald-50 flex items-center gap-1.5"><CheckCircle size={14}/> Guru Tetap</span>
-                <span className="text-sm font-bold text-white">{stats.tetap}</span>
+          <div className="mt-auto space-y-1.5 sm:space-y-2 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
+             <div className="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-[11px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><CheckCircle size={12} className="sm:hidden" /><CheckCircle size={14} className="hidden sm:inline"/> Guru Tetap</span>
+                <span className="text-xs sm:text-sm font-bold text-white">{stats.tetap}</span>
              </div>
-             <div className="flex items-center justify-between p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
-                <span className="text-xs font-semibold text-emerald-50 flex items-center gap-1.5"><Clock size={14}/> Tidak Tetap</span>
-                <span className="text-sm font-bold text-white">{stats.tdkTetap}</span>
+             <div className="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-[11px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><Clock size={12} className="sm:hidden" /><Clock size={14} className="hidden sm:inline"/> Tidak Tetap</span>
+                <span className="text-xs sm:text-sm font-bold text-white">{stats.tdkTetap}</span>
              </div>
           </div>
         </div>
@@ -3282,40 +3296,41 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 3: Kualifikasi Pendidikan (Desain Berwarna Premium) */}
         <div 
           onClick={() => setIsEduModalOpen(true)}
-          className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-purple-500 to-indigo-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-purple-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-4 relative z-10">
+          <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-purple-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Lihat Detail</div>
+          <div className="flex justify-between items-start mb-3 sm:mb-4 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-purple-100 uppercase tracking-wider mb-2">Pendidikan (S1/S2)</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">
+              <p className="text-[10px] sm:text-xs font-semibold text-purple-100 uppercase tracking-wider mb-1 sm:mb-2">Pendidikan (S1/S2)</p>
+              <div className="flex items-baseline gap-1 sm:gap-1.5">
+                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
                   {stats.eduCount['S2'] + stats.eduCount['S1']}
                 </h4>
-                <span className="text-sm font-medium text-purple-100">Sarjana+</span>
+                <span className="text-xs sm:text-sm font-medium text-purple-100">Sarjana+</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <GraduationCap size={24} className="drop-shadow-sm" />
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <GraduationCap size={18} className="drop-shadow-sm sm:hidden" />
+              <GraduationCap size={24} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-white/20 relative z-10">
-             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Magister</span>
-                <span className="block text-base font-bold mt-0.5">{stats.eduCount['S2']}</span>
+          <div className="mt-auto grid grid-cols-2 gap-1.5 sm:gap-2 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10">
+             <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Magister</span>
+                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['S2']}</span>
              </div>
-             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Sarjana</span>
-                <span className="block text-base font-bold mt-0.5">{stats.eduCount['S1']}</span>
+             <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Sarjana</span>
+                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['S1']}</span>
              </div>
-             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">Diploma</span>
-                <span className="block text-base font-bold mt-0.5">{stats.eduCount['Diploma']}</span>
+             <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Diploma</span>
+                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['Diploma']}</span>
              </div>
-             <div className="p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[10px] font-bold text-purple-200 uppercase tracking-wider">SMA/Setara</span>
-                <span className="block text-base font-bold mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
+             <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
+                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">SMA/Setara</span>
+                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
              </div>
           </div>
         </div>
@@ -3323,35 +3338,36 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 4: Staff Operasional (Desain Berwarna Premium) */}
         <div 
           onClick={() => setActiveTab('dataguru')}
-          className="bg-gradient-to-br from-orange-500 to-rose-500 p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-orange-500 to-rose-500 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-orange-700 bg-white/90 px-2 py-1 rounded z-20 shadow-sm">Kelola Data</div>
-          <div className="flex justify-between items-start mb-6 relative z-10">
+          <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-orange-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Kelola Data</div>
+          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
             <div>
-              <p className="text-xs font-semibold text-orange-100 uppercase tracking-wider mb-2">Staff Operasional</p>
-              <div className="flex items-baseline gap-1.5">
-                <h4 className="text-4xl font-extrabold tracking-tight drop-shadow-md">
+              <p className="text-[10px] sm:text-xs font-semibold text-orange-100 uppercase tracking-wider mb-1 sm:mb-2">Staff Operasional</p>
+              <div className="flex items-baseline gap-1 sm:gap-1.5">
+                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
                   {stats.opsCount.security + stats.opsCount.kebersihan + stats.opsCount.pengabdian}
                 </h4>
-                <span className="text-sm font-medium text-orange-100">Orang</span>
+                <span className="text-xs sm:text-sm font-medium text-orange-100">Orang</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300">
-              <HeartHandshake size={24} className="drop-shadow-sm" />
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <HeartHandshake size={18} className="drop-shadow-sm sm:hidden" />
+              <HeartHandshake size={24} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto space-y-2.5 pt-4 border-t border-white/20 relative z-10">
+          <div className="mt-auto space-y-1.5 sm:space-y-2.5 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Shield size={14} className="opacity-70"/> Security</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Shield size={12} className="sm:hidden opacity-70"/><Shield size={14} className="hidden sm:inline opacity-70"/> Security</span>
                 <span className="font-bold">{stats.opsCount.security}</span>
              </div>
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Trash2 size={14} className="opacity-70"/> Kebersihan</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Trash2 size={12} className="sm:hidden opacity-70"/><Trash2 size={14} className="hidden sm:inline opacity-70"/> Kebersihan</span>
                 <span className="font-bold">{stats.opsCount.kebersihan}</span>
              </div>
              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-orange-100 flex items-center gap-2"><Sparkles size={14} className="opacity-70"/> Pengabdian</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Sparkles size={12} className="sm:hidden opacity-70"/><Sparkles size={14} className="hidden sm:inline opacity-70"/> Pengabdian</span>
                 <span className="font-bold">{stats.opsCount.pengabdian}</span>
              </div>
           </div>
@@ -3991,10 +4007,10 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Users className="text-blue-200" /> Manajemen Data Pegawai</h1>
-          <p className="text-blue-100 text-sm">Kelola profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Users className="text-blue-200" size={24} /> Manajemen Data Pegawai</h1>
+          <p className="text-blue-100 text-xs sm:text-sm">Kelola profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.</p>
         </div>
         <Users size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none" />
       </div>
@@ -4096,7 +4112,7 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
           ))}
         </div>
         
-        <div className="overflow-x-auto flex-1 scrollbar-thin">
+        <div className="hidden md:block overflow-x-auto flex-1 scrollbar-thin">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
               <tr>
@@ -4719,10 +4735,10 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><CreditCard className="text-teal-100" /> Buku Pemantauan Kasbon</h1>
-          <p className="text-teal-50 text-sm">Monitor transparansi piutang, kelola pinjaman baru, dan sisa hutang pegawai.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100" size={24} /> Buku Pemantauan Kasbon</h1>
+          <p className="text-teal-50 text-xs sm:text-sm">Monitor transparansi piutang, kelola pinjaman baru, dan sisa hutang pegawai.</p>
         </div>
         <CreditCard size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
@@ -4812,7 +4828,7 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
            ))}
         </div>
 
-        <div className="overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
+        <div className="hidden md:block overflow-x-auto flex-1 relative touch-pan-x scroll-smooth">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm border-b border-slate-200 dark:border-slate-700">
               <tr>
@@ -5991,16 +6007,16 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-orange-600 to-amber-500 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-orange-600 to-amber-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><FileText className="text-orange-100" /> Rekapitulasi Jam Mengajar</h1>
-          <p className="text-orange-50 text-sm">Rincian jurnal harian (Tgl 1 - 31) dan evaluasi target wajib periode {bulan}.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-orange-100" size={24} /> Rekapitulasi Jam Mengajar</h1>
+          <p className="text-orange-50 text-xs sm:text-sm">Rincian jurnal harian (Tgl 1 - 31) dan evaluasi target wajib periode {bulan}.</p>
         </div>
         <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
 
       {/* TAMBAHAN: Kartu Statistik Ringkasan Absensi (INTERAKTIF) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
         <div onClick={() => setActiveFilter('all')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border ${activeFilter === 'all' ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'} flex flex-col justify-center relative overflow-hidden group`}>
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 relative z-10">Total Realisasi Jam Sekolah</p>
           <div className="flex items-baseline gap-2 relative z-10">
@@ -6166,7 +6182,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
           })}
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4 scrollbar-thin">
+        <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 print-area relative p-2 pb-4 scrollbar-thin">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border-2 border-slate-400 dark:border-slate-500">
             <thead className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 sticky top-0 z-20 shadow-sm">
               <tr>
@@ -6965,10 +6981,10 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
       )}
 
       {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><CalendarDays className="text-pink-100" /> Pengaturan Jadwal Mengajar</h1>
-          <p className="text-pink-50 text-sm">Petakan jadwal mingguan (Roster) dan input kegiatan insidental secara massal.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><CalendarDays className="text-pink-100" size={24} /> Pengaturan Jadwal Mengajar</h1>
+          <p className="text-pink-50 text-xs sm:text-sm">Petakan jadwal mingguan (Roster) dan input kegiatan insidental secara massal.</p>
         </div>
         <CalendarDays size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
@@ -7186,17 +7202,55 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
 
             {/* TAB BARU: MANAJEMEN RIWAYAT KEGIATAN MASSAL */}
             {activeTab === 'riwayat_massal' && (
-                  <div className="p-5 md:p-6 flex-1 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden">
-                      <div className="flex items-center justify-between mb-4 shrink-0">
-                         <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-lg">
-                           <History className="text-amber-500"/> Manajemen Riwayat Kegiatan (Bulan Ini)
+                  <div className="p-3.5 sm:p-5 md:p-6 flex-1 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden">
+                      <div className="flex items-center justify-between mb-3 sm:mb-4 shrink-0">
+                         <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-base sm:text-lg">
+                           <History className="text-amber-500"/> <span className="hidden sm:inline">Manajemen Riwayat Kegiatan (Bulan Ini)</span><span className="sm:hidden">Riwayat Kegiatan</span>
                          </h3>
-                         <span className="text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
-                           Total: {massActivities.length} Kegiatan
+                         <span className="text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 shrink-0">
+                           Total: {massActivities.length}
                          </span>
                       </div>
                       
-                      <div className="overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-900/20 shadow-sm flex-1">
+                      {/* Mobile Card Feed (< md) */}
+                      <div className="md:hidden space-y-3 overflow-y-auto flex-1 pr-0.5">
+                         {massActivities.map((act) => (
+                            <div key={act.originalId} className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col gap-2.5">
+                               <div className="flex justify-between items-start">
+                                  <div>
+                                     <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 inline-block mb-1">
+                                        Tgl {act.tgl}
+                                     </span>
+                                     <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{act.ket}</h4>
+                                  </div>
+                                  <span className="text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/50 shrink-0">
+                                     +{act.jam} JPL
+                                  </span>
+                               </div>
+                               <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                                  <button onClick={() => setPreviewActivity(act)} className="text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center gap-1 shadow-xs">
+                                     <Eye size={13} className="text-indigo-500"/> {act.teacherNames.length} Peserta
+                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                     <button onClick={() => setEditActivity(act)} className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 dark:border-blue-800" title="Edit Kegiatan">
+                                        <Edit size={14}/>
+                                     </button>
+                                     <button onClick={() => setDeleteActivity(act)} className="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 rounded-lg transition-colors border border-red-200 dark:border-red-800" title="Batalkan/Hapus Kegiatan">
+                                        <Trash2 size={14}/>
+                                     </button>
+                                  </div>
+                               </div>
+                            </div>
+                         ))}
+                         {massActivities.length === 0 && (
+                            <div className="p-6 text-center text-slate-500 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-700 text-xs italic">
+                               Belum ada kegiatan massal yang dicatat bulan ini.
+                            </div>
+                         )}
+                      </div>
+
+                      {/* Desktop Table (>= md) */}
+                      <div className="hidden md:block overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-900/20 shadow-sm flex-1">
                           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                              <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
                                 <tr>
@@ -7603,10 +7657,10 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
       <datalist id="insentif-list">{insentifList.map(i => <option key={i} value={i} />)}</datalist>
       <datalist id="potongan-list">{potonganList.map(i => <option key={i} value={i} />)}</datalist>
 
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Calculator className="text-emerald-100" /> Input Cepat Komponen Gaji</h1>
-          <p className="text-emerald-50 text-sm">Pilih komponen di menu kiri, lalu sesuaikan nilainya untuk semua pegawai secara berurutan di sebelah kanan.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Calculator className="text-emerald-100" size={24} /> Input Cepat Komponen Gaji</h1>
+          <p className="text-emerald-50 text-xs sm:text-sm">Pilih komponen di menu kiri, lalu sesuaikan nilainya untuk semua pegawai secara berurutan di sebelah kanan.</p>
         </div>
         <Calculator size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none" />
       </div>
@@ -9127,10 +9181,10 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       )}
 
       {/* Header Profesional Rekap Gaji */}
-      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><FileText className="text-pink-100" /> Rekapitulasi Gaji Keseluruhan</h1>
-          <p className="text-pink-50 text-sm">Tinjau rincian pengeluaran gaji sekolah secara transparan, cetak rekap per bulan, dan audit gaji per individu.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-pink-100" size={24} /> Rekapitulasi Gaji Keseluruhan</h1>
+          <p className="text-pink-50 text-xs sm:text-sm">Tinjau rincian pengeluaran gaji sekolah secara transparan, cetak rekap per bulan, dan audit gaji per individu.</p>
         </div>
         <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
@@ -9316,7 +9370,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
           })}
         </div>
 
-        <div className={`overflow-x-auto flex-1 relative print-area pb-4 scrollbar-thin ${isMassPrinting ? 'print:hidden' : ''}`}>
+        <div className={`hidden md:block overflow-x-auto flex-1 relative print-area pb-4 scrollbar-thin ${isMassPrinting ? 'print:hidden' : ''}`}>
           <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
@@ -9804,10 +9858,10 @@ function ArsipView({ archives, setArchives, settings }) {
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-1 flex items-center gap-3"><Archive className="text-teal-100" /> Manajemen Arsip Tahunan</h1>
-          <p className="text-teal-50 text-sm max-w-2xl">Lihat, cetak ulang, dan kelola database penggajian berdasarkan tahun berjalan. Optimalkan kecepatan server dengan fitur Auto-Archiving.</p>
+          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Archive className="text-teal-100" size={24} /> Manajemen Arsip Tahunan</h1>
+          <p className="text-teal-50 text-xs sm:text-sm max-w-2xl">Lihat, cetak ulang, dan kelola database penggajian berdasarkan tahun berjalan. Optimalkan kecepatan server dengan fitur Auto-Archiving.</p>
         </div>
         <FolderOpen size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
       </div>
@@ -10382,7 +10436,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
       )}
 
       {/* Header Laporan */}
-      <div className="bg-gradient-to-br from-indigo-800 via-indigo-600 to-purple-700 rounded-2xl p-6 md:p-8 text-white shadow-xl relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shrink-0 no-print">
+      <div className="bg-gradient-to-br from-indigo-800 via-indigo-600 to-purple-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 shrink-0 no-print mb-4 sm:mb-6">
         {/* TAMBAHAN: Wrapper Background Khusus agar elemen yang membesar saat hover tidak terpotong (clipped) */}
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
            {/* Dekorasi Background */}
@@ -10391,10 +10445,10 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings }) 
         </div>
 
         <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-bold mb-2 tracking-tight flex items-center gap-3">
-            <BarChart3 className="text-indigo-300" size={32} /> Laporan & Analitik Penggajian
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1.5 sm:mb-2 tracking-tight flex items-center gap-2.5 sm:gap-3">
+            <BarChart3 className="text-indigo-300" size={28} /> Laporan & Analitik Penggajian
           </h1>
-          <p className="text-indigo-100 opacity-90 max-w-xl text-sm md:text-base">
+          <p className="text-indigo-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base">
             Analisis menyeluruh tentang distribusi komponen gaji, perbandingan status pegawai, dan ringkasan finansial periode ini.
           </p>
         </div>
@@ -14591,12 +14645,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       )}
 
       {/* Header Abu Muda Cerah yang Profesional */}
-      <div className="bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 rounded-2xl p-6 md:p-8 shadow-sm border border-slate-300 dark:border-slate-600 relative overflow-hidden flex items-center justify-between shrink-0">
+      <div className="bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 rounded-2xl p-4 sm:p-6 md:p-8 shadow-sm border border-slate-300 dark:border-slate-600 relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
         <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-extrabold mb-2 tracking-tight flex items-center gap-3 text-slate-800 dark:text-white">
-            <Settings className="text-slate-600 dark:text-slate-400" size={32} /> Pengaturan Sistem
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold mb-1.5 sm:mb-2 tracking-tight flex items-center gap-2.5 sm:gap-3 text-slate-800 dark:text-white">
+            <Settings className="text-slate-600 dark:text-slate-400" size={28} /> Pengaturan Sistem
           </h1>
-          <p className="text-slate-600 dark:text-slate-300 text-sm md:text-base">
+          <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm md:text-base">
             Konfigurasi informasi umum aplikasi dan manajemen hak akses *login* secara terpusat.
           </p>
         </div>
@@ -15519,8 +15573,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                       <p className="text-xs mt-1">Seluruh aktivitas perubahan gaji, mutasi data, dan presensi akan otomatis tercatat di sini.</p>
                     </div>
                   ) : (
-                    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
-                      <table className="w-full text-left text-xs">
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-x-auto shadow-sm">
+                      <table className="w-full text-left text-xs min-w-max">
                         <thead>
                           <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 uppercase tracking-wider text-[10px] font-black border-b border-slate-200 dark:border-slate-700">
                             <th className="p-3 pl-4">Waktu</th>
