@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import SlipDocument from '../../components/SlipDocument';
 import { formatRp, safeStorageSet, calculatePayroll, exportToPDF } from '../../utils/payrollUtils';
+import { exportArchiveToExcel } from '../../services/excelExportService';
+import { FileSpreadsheet } from 'lucide-react';
 import { pushCloudData as pushToSupabase, deduplicateArchives } from '../../services/dbService';
 
 // --- MANAJEMEN ARSIP VIEW ---
@@ -431,10 +433,11 @@ function ArsipView({ archives, setArchives, settings }) {
                 />
               </div>
               <button 
-                onClick={() => handleExportCSV(selectedArchive)} 
-                className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0"
+                onClick={() => exportArchiveToExcel({ archive: selectedArchive, settings })} 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                title="Unduh Rekap Arsip Gaji Format Excel (.xlsx)"
               >
-                <Download size={14} /> Export CSV
+                <FileSpreadsheet size={14} /> Unduh Excel (.xlsx)
               </button>
             </div>
           </div>

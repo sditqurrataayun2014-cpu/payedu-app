@@ -33,6 +33,18 @@ import {
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { getSesiTheme } from './utils/sesiTheme';
 import SlipDocument from './components/SlipDocument';
+import { 
+  exportPayrollToExcel, 
+  exportTeachingHoursToExcel, 
+  exportAttendanceToExcel 
+} from './services/excelExportService';
+import { 
+  isBiometricSupported, 
+  getSavedBiometricAccount, 
+  registerBiometricLogin, 
+  authenticateWithBiometrics, 
+  removeBiometricAccount 
+} from './services/biometricService';
 
 // 🚀 MODULARISASI ARSITEKTUR: Dynamic Import (React.lazy) untuk mempercepat loading di HP Guru
 const PresensiGuruView = React.lazy(() => import('./PresensiGuruView'));
@@ -1664,6 +1676,58 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
+  // 🔐 FITUR WEBAUTHN: Login Cepat Sidik Jari / Biometrik
+  const [isBioAvailable, setIsBioAvailable] = useState(false);
+  const [savedBioAccount, setSavedBioAccount] = useState(null);
+  const [isBioLoading, setIsBioLoading] = useState(false);
+
+  useEffect(() => {
+    isBiometricSupported().then(supported => {
+      setIsBioAvailable(supported);
+      if (supported) {
+        const saved = getSavedBiometricAccount();
+        setSavedBioAccount(saved);
+      }
+    });
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setIsBioLoading(true);
+    setError('');
+    try {
+      const result = await authenticateWithBiometrics(teachers);
+      if (result && result.success && result.user) {
+        if (settings?.maintenanceMode && result.user.role === 'guru') {
+          recordLogin(result.user.name, 'Guru', 'Gagal (Sistem Maintenance)');
+          setError('Mohon maaf, Portal Pegawai saat ini sedang dalam Mode Perbaikan. Silakan coba kembali beberapa saat lagi.');
+          setIsBioLoading(false);
+          return;
+        }
+
+        recordLogin(result.user.name, result.user.role === 'admin' ? 'Admin' : 'Guru', 'Sukses (Biometrik WebAuthn)');
+        onLogin({
+          role: result.user.role === 'admin' ? 'admin' : 'guru',
+          id: result.user.id,
+          name: result.user.name,
+          username: result.user.username,
+          nipy: result.user.nipy
+        });
+      }
+    } catch (err) {
+      console.warn("Biometric login gagal:", err);
+      setError(err.message || 'Verifikasi sidik jari dibatalkan atau tidak cocok.');
+    } finally {
+      setIsBioLoading(false);
+    }
+  };
+
+  const handleRemoveBiometric = () => {
+    if (confirm('Hapus kredensial sidik jari dari HP ini? Anda harus login manual untuk menghubungkannya kembali.')) {
+      removeBiometricAccount();
+      setSavedBioAccount(null);
+    }
+  };
+
   // TAMBAHAN: Memuat username yang tersimpan jika fitur "Ingat Saya" aktif sebelumnya
   useEffect(() => {
     const savedUser = localStorage.getItem('payedu_saved_username');
@@ -1973,6 +2037,47 @@ function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, te
         </div>
         
         <form onSubmit={handleLogin} className="p-8 md:p-10 space-y-5">
+          {/* 🔐 WIDGET LOGIN CEPAT BIOMETRIK / SIDIK JARI */}
+          {isBioAvailable && savedBioAccount && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-cyan-950/40 border border-teal-200 dark:border-teal-800 text-center animate-in fade-in zoom-in-95 duration-300 shadow-sm">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner">
+                  <Fingerprint size={24} className="animate-pulse" />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Sidik Jari HP Terhubung
+              </p>
+              <p className="text-sm font-extrabold text-teal-700 dark:text-teal-300 truncate max-w-xs mx-auto mb-3">
+                {savedBioAccount.name}
+              </p>
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={isBioLoading}
+                className="w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <Fingerprint size={18} />
+                {isBioLoading ? 'Memindai Sensor HP...' : 'Masuk dengan Sidik Jari / Wajah'}
+              </button>
+              <div className="flex items-center justify-between mt-2.5 px-1">
+                <span className="text-[10px] text-slate-400">Atau ketik manual di bawah</span>
+                <button 
+                  type="button"
+                  onClick={handleRemoveBiometric}
+                  className="text-[10px] text-red-500 hover:underline cursor-pointer"
+                >
+                  Lepas Sidik Jari
+                </button>
+              </div>
+            </div>
+          )}
+          {isBioAvailable && !savedBioAccount && (
+            <div className="p-3 rounded-xl bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-700 dark:text-teal-300 flex items-center gap-2 shadow-xs">
+              <Fingerprint size={18} className="shrink-0 text-teal-600 dark:text-teal-400" />
+              <span>Sensor biometrik HP aktif. Anda dapat menghubungkan sidik jari di menu profil setelah login.</span>
+            </div>
+          )}
           {error && <div className="p-3.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium rounded-xl flex items-start gap-2.5 border border-red-100 dark:border-red-800/50 animate-in fade-in slide-in-from-top-2"><AlertCircle size={18} className="mt-0.5 flex-shrink-0"/>{error}</div>}
           
           <div>
@@ -3634,6 +3739,19 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
     closeModal();
   };
 
+  const handleExportExcelPure = () => {
+    try {
+      exportPayrollToExcel({
+        teachers: filtered,
+        settings,
+        periode: settings?.payrollPeriod
+      });
+    } catch (err) {
+      console.error("Gagal ekspor Excel:", err);
+      alert("Gagal mengekspor file Excel: " + (err.message || 'Error tidak diketahui'));
+    }
+  };
+
   const handleExportCSV = () => {
     // TAMBAHAN: Memasukkan No WA dan Keaktifan ke dalam export CSV
     const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'No WA', 'Pendidikan', 'Status Golongan', 'Keaktifan', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
@@ -5222,6 +5340,17 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
   };
 
   const handleExportExcel = () => {
+    try {
+      exportTeachingHoursToExcel({
+        teachers: filtered,
+        settings,
+        presensiGuru,
+        bulan
+      });
+      return;
+    } catch (err) {
+      console.warn("Ekspor xlsx gagal, fallback ke CSV:", err);
+    }
     const daysHeaders = Array.from({ length: 31 }, (_, i) => `Tgl ${i + 1}`);
     const headers = ['Nama Guru', ...daysHeaders, 'Jam +', 'Total', 'Wajib', 'JSJM', 'Selisih', 'Telat', 'Tepat Waktu'];
     
@@ -8977,8 +9106,8 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               >
                  <History size={14} /> <span>Audit</span>
               </button>
-              <button onClick={handleExportCSV} className="justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
-                 <Download size={14} /> <span>Excel</span>
+              <button onClick={handleExportExcelPure} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex" title="Unduh Rekap Gaji Lengkap Format Excel (.xlsx)">
+                 <FileSpreadsheet size={14} /> <span>Excel (.xlsx)</span>
               </button>
               <button onClick={handleMassPrint} disabled={isMassPrinting} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-70 disabled:cursor-not-allowed">
                  {isMassPrinting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Printer size={14} />}
@@ -9587,6 +9716,46 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
   // 🪄 FITUR BARU: State & Handler Mandiri Edit Biodata Guru
   const [isEditBiodataOpen, setIsEditBiodataOpen] = useState(false);
+  const [savedBioAccount, setSavedBioAccount] = useState(() => getSavedBiometricAccount());
+  const [isBioSupported, setIsBioSupported] = useState(false);
+  const [isEnrollingBio, setIsEnrollingBio] = useState(false);
+
+  useEffect(() => {
+    isBiometricSupported().then(supported => {
+      setIsBioSupported(supported);
+      if (supported) {
+        setSavedBioAccount(getSavedBiometricAccount());
+      }
+    });
+  }, []);
+
+  const handleRegisterBiometric = async () => {
+    setIsEnrollingBio(true);
+    try {
+      const bioData = await registerBiometricLogin({
+        id: myData.id,
+        name: myData.name,
+        username: myData.linkedUsername || myData.id,
+        role: 'guru',
+        nipy: myData.nipy
+      });
+      setSavedBioAccount(bioData);
+      alert('Alhamdulillah! Sidik Jari Anda berhasil terdaftar di HP ini.\n\nMulai sekarang Anda bisa masuk ke PayEdu tanpa perlu mengetik kata sandi.');
+    } catch (err) {
+      console.warn("Gagal daftarkan biometrik:", err);
+      alert(err.message || 'Pendaftaran sidik jari dibatalkan.');
+    } finally {
+      setIsEnrollingBio(false);
+    }
+  };
+
+  const handleUnlinkBiometric = () => {
+    if (confirm('Lepaskan hubungan sidik jari dari HP ini?')) {
+      removeBiometricAccount();
+      setSavedBioAccount(null);
+      alert('Kredensial sidik jari berhasil dilepas dari perangkat ini.');
+    }
+  };
   useEffect(() => {
     if (!isEditBiodataOpen) return;
     return registerBackModal(() => setIsEditBiodataOpen(false));
@@ -10680,7 +10849,61 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
                       </div>
                    </div>
 
-                   {/* KANAN: Rekening Bank */}
+                   {/* KARTU KEAMANAN & BIOMETRIK HP */}
+                {isBioSupported && (
+                  <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 animate-in fade-in">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-inner">
+                          <Fingerprint size={26} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            Login Cepat Biometrik / Sidik Jari HP
+                            {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                                Aktif di HP Ini
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-bold px-2 py-0.5 rounded-full">
+                                Belum Terhubung
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-lg">
+                            {savedBioAccount && String(savedBioAccount.userId) === String(myData.id)
+                              ? 'Sensor biometrik HP Anda telah terhubung. Anda dapat masuk ke PayEdu cukup dengan satu sentuhan sensor tanpa perlu mengetik kata sandi.'
+                              : 'Hubungkan sensor sidik jari atau Face Unlock bawaan HP Anda agar bisa masuk ke aplikasi PayEdu secara instan tanpa ribet mengetik.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                        {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
+                          <button
+                            type="button"
+                            onClick={handleUnlinkBiometric}
+                            className="w-full sm:w-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Lepas Sidik Jari
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleRegisterBiometric}
+                            disabled={isEnrollingBio}
+                            className="w-full sm:w-auto px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70"
+                          >
+                            <Fingerprint size={16} />
+                            {isEnrollingBio ? 'Menghubungkan Sensor...' : 'Hubungkan Sidik Jari'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* KANAN: Rekening Bank */}
                    <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-800 dark:from-emerald-700 dark:to-teal-900 p-6 md:p-8 rounded-3xl shadow-lg border border-emerald-400/30 flex flex-col justify-between min-h-[260px] transform transition-transform hover:scale-[1.02] duration-300">
                       <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
                       <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/30 rounded-full blur-2xl pointer-events-none"></div>
