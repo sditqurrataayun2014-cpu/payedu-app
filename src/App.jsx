@@ -6,7 +6,7 @@ import {
 import { 
   LayoutDashboard, Users, Clock, Calculator, FileText, Settings, 
   LogOut, LogIn, Sun, Moon, Eye, EyeOff, Search, Edit, Trash2, 
-  Menu, X, CheckCircle, CheckCircle2, MessageCircle, XCircle, ChevronRight, Printer, AlertCircle, UserCircle,
+  Menu, X, CheckCircle, CheckCircle2, MessageCircle, XCircle, ChevronLeft, ChevronRight, Printer, AlertCircle, UserCircle,
   GraduationCap, Wallet, Calendar, TrendingUp, Award,
   PlusCircle, Trash, Star, Briefcase, Shield, HeartHandshake, Sparkles,
   Download, Upload, BarChart3, Activity, PieChart as PieChartIcon,
@@ -2699,7 +2699,7 @@ function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeac
         <div 
           ref={mainContentRef}
           onScroll={handleMainScroll}
-          className="flex-1 p-3 sm:p-6 lg:p-8 pb-24 md:pb-12 md:overflow-y-auto transition-all"
+          className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 pb-24 md:pb-12 md:overflow-y-auto transition-all"
         >
           {renderContent()}
         </div>
@@ -2991,10 +2991,10 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         </div>
       )}
 
-      {/* DIPERBARUI: Desain Banner Dashboard Admin Dibuat Lebih Mewah & Personal */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 rounded-2xl p-4 sm:p-6 md:p-10 text-white shadow-xl relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 md:gap-6 mb-4 sm:mb-6">
+      {/* DIPERBARUI: Desain Banner Dashboard Admin Dibuat Lebih Mewah & Compact Ergonomis di Mobile */}
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 md:p-8 text-white shadow-xl relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 sm:gap-6 mb-3 sm:mb-5">
         {/* TAMBAHAN: Wrapper Background Khusus agar overflow-hidden tidak memotong Card yang scale saat di-hover */}
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden pointer-events-none">
            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay"></div>
            {/* Ornamen Latar Belakang */}
            <div className="absolute -right-10 -top-24 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -3003,25 +3003,25 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         
         <div className="relative z-10">
           {/* Sapaan Personal */}
-          <p className="text-blue-200 text-xs sm:text-sm md:text-base font-bold mb-1 tracking-widest uppercase drop-shadow-md">
+          <p className="text-blue-200 text-[11px] sm:text-xs md:text-sm font-bold mb-0.5 sm:mb-1 tracking-widest uppercase drop-shadow-md">
              {user?.role === 'Kepala Sekolah' ? 'Ruang Kendali Pimpinan' : 'Ruang Kendali Administrator'}
           </p>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-2 md:mb-4 leading-tight">
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-1 sm:mb-2 md:mb-3 leading-snug">
              Halo, {user?.role === 'Kepala Sekolah' || user?.name === 'Kepala Sekolah' ? (settings?.principalName ? `Kepala Sekolah (${settings.principalName.split(',')[0]})` : 'Kepala Sekolah') : (user?.name?.split(' ')[0] || 'User')}!
           </h1>
-          <p className="text-blue-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base">
+          <p className="text-blue-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed">
             Pantau statistik kepegawaian, distribusi status guru, tingkat pendidikan, dan estimasi total pengeluaran gaji sekolah periode ini secara *real-time*.
           </p>
         </div>
         
-        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto mt-2 lg:mt-0">
-          <div className="flex items-center gap-3 sm:gap-4 bg-white/10 p-2.5 sm:p-3.5 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105 group relative overflow-hidden">
-            <div className="bg-blue-500/50 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-inner group-hover:scale-110 transition-transform">
-              <Calendar size={20} className="text-blue-50 sm:hidden" />
-              <Calendar size={24} className="text-blue-50 hidden sm:block" />
+        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto mt-1 lg:mt-0">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 bg-white/10 p-2 sm:p-3 rounded-xl sm:rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105 group relative overflow-hidden">
+            <div className="bg-blue-500/50 p-2 sm:p-2.5 rounded-lg sm:rounded-xl shrink-0 shadow-inner group-hover:scale-110 transition-transform">
+              <Calendar size={18} className="text-blue-50 sm:hidden" />
+              <Calendar size={22} className="text-blue-50 hidden sm:block" />
             </div>
             <div className="flex flex-col">
-              <div className="text-[10px] text-blue-200 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1">
+              <div className="text-[9px] sm:text-[10px] text-blue-200 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1">
                 Periode Gaji {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && <Edit size={10} className="opacity-50" />}
               </div>
               {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') ? (
@@ -3029,22 +3029,22 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
                   type="month" 
                   value={settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} 
                   onChange={e => setSettings({...settings, payrollPeriod: e.target.value})}
-                  className="bg-transparent text-base sm:text-lg md:text-xl font-black text-white outline-none cursor-pointer border-b border-dashed border-white/40 hover:border-white focus:border-white w-32 sm:w-36 md:w-44 transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                  className="bg-transparent text-sm sm:text-base md:text-lg font-black text-white outline-none cursor-pointer border-b border-dashed border-white/40 hover:border-white focus:border-white w-28 sm:w-36 md:w-44 transition-colors [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
                   title="Klik untuk mengubah periode penggajian"
                 />
               ) : (
-                <div className="text-base sm:text-lg md:text-xl font-black truncate">{currentMonthYear}</div>
+                <div className="text-sm sm:text-base md:text-lg font-black truncate">{currentMonthYear}</div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4 bg-white/10 p-2.5 sm:p-4 rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105">
-            <div className="bg-emerald-500/50 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-inner">
-              <Wallet size={20} className="text-emerald-50 sm:hidden" />
-              <Wallet size={24} className="text-emerald-50 hidden sm:block" />
+          <div className="flex items-center gap-2.5 sm:gap-3.5 bg-white/10 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl backdrop-blur-md border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] w-full sm:w-auto transition-transform hover:scale-105">
+            <div className="bg-emerald-500/50 p-2 sm:p-2.5 rounded-lg sm:rounded-xl shrink-0 shadow-inner">
+              <Wallet size={18} className="text-emerald-50 sm:hidden" />
+              <Wallet size={22} className="text-emerald-50 hidden sm:block" />
             </div>
             <div className="truncate">
-              <div className="text-[10px] text-emerald-200 uppercase tracking-widest font-bold mb-0.5">Estimasi Pengeluaran</div>
-              <div className="text-base sm:text-lg md:text-xl font-black truncate">{formatRp(stats.totalKotor)}</div>
+              <div className="text-[9px] sm:text-[10px] text-emerald-200 uppercase tracking-widest font-bold mb-0.5">Estimasi Pengeluaran</div>
+              <div className="text-sm sm:text-base md:text-lg font-black truncate">{formatRp(stats.totalKotor)}</div>
             </div>
           </div>
         </div>
@@ -3176,73 +3176,85 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
 
       {/* PANEL JALAN PINTAS (QUICK ACTIONS) - DIPERBARUI: Tampil juga untuk Kepsek */}
       {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
-          <button onClick={() => setActiveTab('dataguru')} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer">
-            <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Users size={20}/></div>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Data Pegawai</span>
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-3 mb-2.5">
+          <button onClick={() => setActiveTab('dataguru')} className="bg-white dark:bg-slate-800 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-1 sm:gap-2 group cursor-pointer">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users size={16} className="sm:hidden"/><Users size={20} className="hidden sm:block"/>
+            </div>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 text-center truncate w-full">Data Pegawai</span>
           </button>
-          <button onClick={() => setActiveTab('gaji')} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Calculator size={20}/></div>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Kelola Gaji</span>
+          <button onClick={() => setActiveTab('gaji')} className="bg-white dark:bg-slate-800 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-1 sm:gap-2 group cursor-pointer">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Calculator size={16} className="sm:hidden"/><Calculator size={20} className="hidden sm:block"/>
+            </div>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 text-center truncate w-full">Kelola Gaji</span>
           </button>
-          <button onClick={() => setActiveTab('pinjaman')} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer">
-            <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform"><CreditCard size={20}/></div>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Rekap Kasbon</span>
+          <button onClick={() => setActiveTab('pinjaman')} className="bg-white dark:bg-slate-800 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-1 sm:gap-2 group cursor-pointer">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <CreditCard size={16} className="sm:hidden"/><CreditCard size={20} className="hidden sm:block"/>
+            </div>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 text-center truncate w-full">Rekap Kasbon</span>
           </button>
-          <button onClick={() => setActiveTab('rekapabsensi')} className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-orange-400 dark:hover:border-orange-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer">
-            <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform"><Clock size={20}/></div>
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Tarik Absen</span>
+          <button onClick={() => setActiveTab('rekapabsensi')} className="bg-white dark:bg-slate-800 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-orange-400 dark:hover:border-orange-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-1 sm:gap-2 group cursor-pointer">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Clock size={16} className="sm:hidden"/><Clock size={20} className="hidden sm:block"/>
+            </div>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 text-center truncate w-full">Tarik Absen</span>
           </button>
         </div>
       )}
 
       {/* METRIK PERINGATAN CERDAS (SMART ALERTS) - DIPERBARUI: Tampil juga untuk Kepsek */}
       {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && (alerts.lateTeachers > 0 || alerts.totalUnpaidLoans > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 mb-2.5">
           {alerts.lateTeachers > 0 && (
-            <div onClick={onAbsensiAlertClick} className="cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all duration-300 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 p-4 rounded-2xl flex items-center gap-4 shadow-sm animate-in fade-in zoom-in-95 group">
-              <div className="p-2.5 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-full shrink-0 shadow-inner group-hover:scale-110 transition-transform"><AlertCircle size={20}/></div>
-              <div className="flex-1 w-full">
-                <h4 className="text-sm font-bold text-rose-800 dark:text-rose-300 flex justify-between items-center">
+            <div onClick={onAbsensiAlertClick} className="cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all duration-300 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-4 shadow-sm animate-in fade-in zoom-in-95 group">
+              <div className="p-2 sm:p-2.5 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-full shrink-0 shadow-inner group-hover:scale-110 transition-transform">
+                <AlertCircle size={18} className="sm:hidden"/><AlertCircle size={20} className="hidden sm:block"/>
+              </div>
+              <div className="flex-1 w-full min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-rose-800 dark:text-rose-300 flex justify-between items-center">
                    Peringatan Kedisiplinan 
-                   <span className="text-[10px] bg-rose-200/50 text-rose-700 px-2 py-0.5 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Tindak Lanjut <ChevronRight size={12}/></span>
+                   <span className="text-[9px] sm:text-[10px] bg-rose-200/50 text-rose-700 px-2 py-0.5 rounded-full flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">Tindak Lanjut <ChevronRight size={12}/></span>
                 </h4>
-                <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">Terdapat <span className="font-extrabold px-1 rounded bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100">{alerts.lateTeachers} pegawai</span> dengan tingkat keterlambatan tinggi bulan ini.</p>
+                <p className="text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 mt-0.5">Terdapat <span className="font-extrabold px-1 rounded bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100">{alerts.lateTeachers} pegawai</span> dengan keterlambatan tinggi bulan ini.</p>
               </div>
             </div>
           )}
           {alerts.totalUnpaidLoans > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-4 rounded-2xl flex items-center gap-4 shadow-sm animate-in fade-in zoom-in-95">
-              <div className="p-2.5 bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-full shrink-0 shadow-inner"><CreditCard size={20}/></div>
-              <div>
-                <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">Piutang Kasbon Terbuka</h4>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Total dana piutang sekolah yang belum lunas: <span className="font-extrabold">{formatRp(alerts.totalUnpaidLoans)}</span>.</p>
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-4 shadow-sm animate-in fade-in zoom-in-95">
+              <div className="p-2 sm:p-2.5 bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-full shrink-0 shadow-inner">
+                <CreditCard size={18} className="sm:hidden"/><CreditCard size={20} className="hidden sm:block"/>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-amber-800 dark:text-amber-300">Piutang Kasbon Terbuka</h4>
+                <p className="text-[11px] sm:text-xs text-amber-600 dark:text-amber-400 mt-0.5">Total dana piutang sekolah yang belum lunas: <span className="font-extrabold">{formatRp(alerts.totalUnpaidLoans)}</span>.</p>
               </div>
             </div>
           )}
         </div>
       )}
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 md:gap-5">
 
         {/* Card 1: Total SDM (Desain Berwarna Premium) */}
         <div 
           onClick={() => setActiveTab('dataguru')}
-          className="bg-gradient-to-br from-blue-500 to-blue-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-blue-500 to-blue-600 p-2.5 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
           <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-blue-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Kelola Data</div>
-          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-blue-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">Kelola</div>
+          <div className="flex justify-between items-start mb-2 sm:mb-4 md:mb-6 relative z-10">
             <div>
-              <p className="text-[10px] sm:text-xs font-semibold text-blue-100 uppercase tracking-wider mb-1 sm:mb-2">Total Guru & Staff</p>
+              <p className="text-[9px] sm:text-xs font-semibold text-blue-100 uppercase tracking-wider mb-0.5 sm:mb-1.5">Total Guru & Staff</p>
               <div className="flex items-baseline gap-1 sm:gap-1.5">
-                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.total}</h4>
-                <span className="text-xs sm:text-sm font-medium text-blue-100">Orang</span>
+                <h4 className="text-xl sm:text-2xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.total}</h4>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-blue-100">Orang</span>
               </div>
             </div>
-            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <Users size={18} className="drop-shadow-sm sm:hidden" />
-              <Users size={24} className="drop-shadow-sm hidden sm:block" />
+            <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <Users size={16} className="drop-shadow-sm sm:hidden" />
+              <Users size={22} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
           <div className="mt-auto space-y-1.5 sm:space-y-3 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
@@ -3264,31 +3276,31 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 2: Status Kepegawaian (Desain Berwarna Premium) */}
         <div 
           onClick={() => setIsStatusModalOpen(true)}
-          className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-emerald-500 to-teal-600 p-2.5 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
         >
           <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-emerald-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">Detail</div>
+          <div className="flex justify-between items-start mb-2 sm:mb-4 md:mb-6 relative z-10">
             <div>
-              <p className="text-[10px] sm:text-xs font-semibold text-emerald-100 uppercase tracking-wider mb-1 sm:mb-2">Status Pegawai</p>
+              <p className="text-[9px] sm:text-xs font-semibold text-emerald-100 uppercase tracking-wider mb-0.5 sm:mb-1.5">Status Pegawai</p>
               <div className="flex items-baseline gap-1 sm:gap-1.5">
-                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.tetap}</h4>
-                <span className="text-xs sm:text-sm font-medium text-emerald-100">Tetap</span>
+                <h4 className="text-xl sm:text-2xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">{stats.tetap}</h4>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-emerald-100">Tetap</span>
               </div>
             </div>
-            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <Award size={18} className="drop-shadow-sm sm:hidden" />
-              <Award size={24} className="drop-shadow-sm hidden sm:block" />
+            <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <Award size={16} className="drop-shadow-sm sm:hidden" />
+              <Award size={22} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto space-y-1.5 sm:space-y-2 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
-             <div className="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
-                <span className="text-[11px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><CheckCircle size={12} className="sm:hidden" /><CheckCircle size={14} className="hidden sm:inline"/> Guru Tetap</span>
-                <span className="text-xs sm:text-sm font-bold text-white">{stats.tetap}</span>
+          <div className="mt-auto space-y-1 sm:space-y-2 pt-2 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
+             <div className="flex items-center justify-between p-1 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-[10px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><CheckCircle size={11} className="sm:hidden" /><CheckCircle size={14} className="hidden sm:inline"/> Guru Tetap</span>
+                <span className="text-[11px] sm:text-sm font-bold text-white">{stats.tetap}</span>
              </div>
-             <div className="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
-                <span className="text-[11px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><Clock size={12} className="sm:hidden" /><Clock size={14} className="hidden sm:inline"/> Tidak Tetap</span>
-                <span className="text-xs sm:text-sm font-bold text-white">{stats.tdkTetap}</span>
+             <div className="flex items-center justify-between p-1 sm:p-2 rounded-lg bg-black/10 border border-white/10 backdrop-blur-sm">
+                <span className="text-[10px] sm:text-xs font-semibold text-emerald-50 flex items-center gap-1 sm:gap-1.5"><Clock size={11} className="sm:hidden" /><Clock size={14} className="hidden sm:inline"/> Tidak Tetap</span>
+                <span className="text-[11px] sm:text-sm font-bold text-white">{stats.tdkTetap}</span>
              </div>
           </div>
         </div>
@@ -3296,41 +3308,41 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 3: Kualifikasi Pendidikan (Desain Berwarna Premium) */}
         <div 
           onClick={() => setIsEduModalOpen(true)}
-          className="bg-gradient-to-br from-purple-500 to-indigo-600 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-purple-500 to-indigo-600 p-2.5 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-md border-0 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col group relative overflow-hidden text-white"
         >
           <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-purple-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Lihat Detail</div>
-          <div className="flex justify-between items-start mb-3 sm:mb-4 relative z-10">
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-purple-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">Detail</div>
+          <div className="flex justify-between items-start mb-2 sm:mb-4 relative z-10">
             <div>
-              <p className="text-[10px] sm:text-xs font-semibold text-purple-100 uppercase tracking-wider mb-1 sm:mb-2">Pendidikan (S1/S2)</p>
+              <p className="text-[9px] sm:text-xs font-semibold text-purple-100 uppercase tracking-wider mb-0.5 sm:mb-1.5">Pendidikan (S1/S2)</p>
               <div className="flex items-baseline gap-1 sm:gap-1.5">
-                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
+                <h4 className="text-xl sm:text-2xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
                   {stats.eduCount['S2'] + stats.eduCount['S1']}
                 </h4>
-                <span className="text-xs sm:text-sm font-medium text-purple-100">Sarjana+</span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-purple-100">Sarjana+</span>
               </div>
             </div>
-            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <GraduationCap size={18} className="drop-shadow-sm sm:hidden" />
-              <GraduationCap size={24} className="drop-shadow-sm hidden sm:block" />
+            <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <GraduationCap size={16} className="drop-shadow-sm sm:hidden" />
+              <GraduationCap size={22} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto grid grid-cols-2 gap-1.5 sm:gap-2 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10">
+          <div className="mt-auto grid grid-cols-2 gap-1 sm:gap-2 pt-2 sm:pt-4 border-t border-white/20 relative z-10">
              <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Magister</span>
-                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['S2']}</span>
+                <span className="block text-[8px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Magister</span>
+                <span className="block text-xs sm:text-base font-bold mt-0.5">{stats.eduCount['S2']}</span>
              </div>
              <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Sarjana</span>
-                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['S1']}</span>
+                <span className="block text-[8px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Sarjana</span>
+                <span className="block text-xs sm:text-base font-bold mt-0.5">{stats.eduCount['S1']}</span>
              </div>
              <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Diploma</span>
-                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['Diploma']}</span>
+                <span className="block text-[8px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">Diploma</span>
+                <span className="block text-xs sm:text-base font-bold mt-0.5">{stats.eduCount['Diploma']}</span>
              </div>
              <div className="p-1 sm:p-2 border border-white/20 rounded-lg bg-black/10 backdrop-blur-sm text-center transition-colors hover:bg-black/20">
-                <span className="block text-[9px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">SMA/Setara</span>
-                <span className="block text-sm sm:text-base font-bold mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
+                <span className="block text-[8px] sm:text-[10px] font-bold text-purple-200 uppercase tracking-wider">SMA/Setara</span>
+                <span className="block text-xs sm:text-base font-bold mt-0.5">{stats.eduCount['SMA/Pondok']}</span>
              </div>
           </div>
         </div>
@@ -3338,29 +3350,29 @@ function DashboardView({ teachers, user, settings, setSettings, archives, setAct
         {/* Card 4: Staff Operasional (Desain Berwarna Premium) */}
         <div 
           onClick={() => setActiveTab('dataguru')}
-          className="bg-gradient-to-br from-orange-500 to-rose-500 p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
+          className="bg-gradient-to-br from-orange-500 to-rose-500 p-2.5 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
           <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] sm:text-[10px] font-bold text-orange-700 bg-white/90 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded z-20 shadow-sm">Kelola Data</div>
-          <div className="flex justify-between items-start mb-3 sm:mb-6 relative z-10">
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-orange-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">Kelola</div>
+          <div className="flex justify-between items-start mb-2 sm:mb-4 md:mb-6 relative z-10">
             <div>
-              <p className="text-[10px] sm:text-xs font-semibold text-orange-100 uppercase tracking-wider mb-1 sm:mb-2">Staff Operasional</p>
+              <p className="text-[9px] sm:text-xs font-semibold text-orange-100 uppercase tracking-wider mb-0.5 sm:mb-1.5">Staff Operasional</p>
               <div className="flex items-baseline gap-1 sm:gap-1.5">
-                <h4 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
+                <h4 className="text-xl sm:text-2xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
                   {stats.opsCount.security + stats.opsCount.kebersihan + stats.opsCount.pengabdian}
                 </h4>
-                <span className="text-xs sm:text-sm font-medium text-orange-100">Orang</span>
+                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-orange-100">Orang</span>
               </div>
             </div>
-            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
-              <HeartHandshake size={18} className="drop-shadow-sm sm:hidden" />
-              <HeartHandshake size={24} className="drop-shadow-sm hidden sm:block" />
+            <div className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition-transform duration-300 shrink-0">
+              <HeartHandshake size={16} className="drop-shadow-sm sm:hidden" />
+              <HeartHandshake size={22} className="drop-shadow-sm hidden sm:block" />
             </div>
           </div>
-          <div className="mt-auto space-y-1.5 sm:space-y-2.5 pt-2.5 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
+          <div className="mt-auto space-y-1 sm:space-y-2 pt-2 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
              <div className="flex items-center justify-between">
-                <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Shield size={12} className="sm:hidden opacity-70"/><Shield size={14} className="hidden sm:inline opacity-70"/> Security</span>
-                <span className="font-bold">{stats.opsCount.security}</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1 sm:gap-2"><Shield size={11} className="sm:hidden opacity-70"/><Shield size={14} className="hidden sm:inline opacity-70"/> Security</span>
+                <span className="text-[11px] sm:text-sm font-bold">{stats.opsCount.security}</span>
              </div>
              <div className="flex items-center justify-between">
                 <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Trash2 size={12} className="sm:hidden opacity-70"/><Trash2 size={14} className="hidden sm:inline opacity-70"/> Kebersihan</span>
@@ -4007,105 +4019,106 @@ function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Users className="text-blue-200" size={24} /> Manajemen Data Pegawai</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><Users className="text-blue-200" size={22} /> Manajemen Data Pegawai</h1>
           <p className="text-blue-100 text-xs sm:text-sm">Kelola profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.</p>
         </div>
-        <Users size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none" />
+        <Users size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-50 dark:bg-slate-900/50 shrink-0">
-          <h3 className="text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Lengkap Pegawai</h3>
+        <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-slate-50 dark:bg-slate-900/50 shrink-0">
+          <h3 className="text-sm sm:text-base font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Lengkap Pegawai</h3>
           
-          <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full xl:w-auto items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full xl:w-auto items-stretch sm:items-center">
             
-            {/* TAMBAHAN: Filter Dropdown Status Golongan */}
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
-            >
-              <option value="Semua">Semua Golongan</option>
-              <option value="Tetap">Guru Tetap</option>
-              <option value="Tidak Tetap">Guru Tidak Tetap</option>
-            </select>
+            {/* Filter Dropdown Status Golongan & Keaktifan (2 Kolom Rapi di Mobile) */}
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+              <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
+              >
+                <option value="Semua">Semua Golongan</option>
+                <option value="Tetap">Guru Tetap</option>
+                <option value="Tidak Tetap">Guru Tidak Tetap</option>
+              </select>
 
-            {/* 🪄 FITUR BARU: Filter Dropdown Status Keaktifan */}
-            <select 
-              value={filterWorkStatus}
-              onChange={(e) => setFilterWorkStatus(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
-            >
-              <option value="Semua">Semua Kondisi</option>
-              <option value="Aktif">Aktif Saja</option>
-              <option value="Tidak Aktif">Tidak Aktif (Cuti)</option>
-              <option value="Resign">Telah Resign</option>
-            </select>
+              <select 
+                value={filterWorkStatus}
+                onChange={(e) => setFilterWorkStatus(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
+              >
+                <option value="Semua">Semua Kondisi</option>
+                <option value="Aktif">Aktif Saja</option>
+                <option value="Tidak Aktif">Tidak Aktif (Cuti)</option>
+                <option value="Resign">Telah Resign</option>
+              </select>
+            </div>
 
             <div className="relative w-full sm:w-56 md:w-64 flex-grow sm:flex-grow-0">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <Search className="absolute left-2.5 top-2 text-slate-400" size={15} />
               <input 
                 type="text" 
                 placeholder="Cari Nama / NIPY..." 
                 value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
               />
             </div>
             
-            <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+            <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
               <button 
                 type="button"
                 onClick={handleCleanDuplicates}
-                className="flex-1 sm:flex-none justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                className="justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
                 title="Pindai dan bersihkan data ganda / duplikat"
               >
-                 <Sparkles size={16} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan Duplikat</span><span className="sm:hidden">Duplikat</span>
+                 <Sparkles size={14} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan</span><span className="sm:hidden">Bersih</span>
               </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                 <Upload size={16} /> <span className="hidden sm:inline">Impor</span>
+              <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                 <Upload size={14} /> <span>Impor</span>
               </button>
-              <button onClick={handleExportCSV} className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                 <Download size={16} /> <span className="hidden sm:inline">Ekspor</span>
+              <button onClick={handleExportCSV} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                 <Download size={14} /> <span>Ekspor</span>
               </button>
-              <button onClick={() => openModal('add', null)} className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                 <PlusCircle size={16} /> <span className="hidden sm:inline">Tambah</span>
+              <button onClick={() => openModal('add', null)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                 <PlusCircle size={14} /> <span>Tambah</span>
               </button>
             </div>
           </div>
         </div>
         
         {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
-        <div className="md:hidden space-y-3 p-4">
+        <div className="md:hidden space-y-2.5 p-2.5 sm:p-4">
           {filtered.map(t => (
-            <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+            <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className="font-bold text-base text-slate-800 dark:text-white">{t.name}</h4>
-                  <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">{t.name}</h4>
+                  <div className="text-[11px] text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
                 </div>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                   {t.status}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                <div><span className="text-slate-400">Pendidikan:</span> <span className="font-medium block dark:text-slate-200">{t.education}</span></div>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                <div><span className="text-slate-400">Pendidikan:</span> <span className="font-medium block dark:text-slate-200 truncate">{t.education}</span></div>
                 <div><span className="text-slate-400">Keaktifan:</span> <span className="font-medium block text-blue-600 dark:text-blue-400">{t.workStatus || 'Aktif'}</span></div>
-                <div><span className="text-slate-400">No WA:</span> <span className="font-medium block dark:text-slate-200">{t.phone || '-'}</span></div>
+                <div><span className="text-slate-400">No WA:</span> <span className="font-medium block dark:text-slate-200 truncate">{t.phone || '-'}</span></div>
                 <div><span className="text-slate-400">TMT:</span> <span className="font-medium block dark:text-slate-200">{formatDateId(t.tmt)}</span></div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
-                <button onClick={() => openModal('view', t)} className="px-3 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Eye size={14}/> Detail
+              <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                <button onClick={() => openModal('view', t)} className="px-2.5 py-1 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Eye size={13}/> Detail
                 </button>
-                <button onClick={() => openModal('edit', t)} className="px-3 py-1.5 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Edit size={14}/> Edit
+                <button onClick={() => openModal('edit', t)} className="px-2.5 py-1 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Edit size={13}/> Edit
                 </button>
-                <button onClick={() => openModal('delete', t)} className="px-3 py-1.5 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Trash2 size={14}/> Hapus
+                <button onClick={() => openModal('delete', t)} className="px-2.5 py-1 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Trash2 size={13}/> Hapus
                 </button>
               </div>
             </div>
@@ -4735,93 +4748,96 @@ function RekapPinjamanView({ teachers, setTeachers, onEditGaji }) {
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100" size={24} /> Buku Pemantauan Kasbon</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100" size={22} /> Buku Pemantauan Kasbon</h1>
           <p className="text-teal-50 text-xs sm:text-sm">Monitor transparansi piutang, kelola pinjaman baru, dan sisa hutang pegawai.</p>
         </div>
-        <CreditCard size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <CreditCard size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0">
-         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded-xl flex items-center justify-center">
-               <Wallet size={24} />
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 shrink-0 mb-3 sm:mb-4">
+         <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+               <Wallet size={16} className="sm:hidden" />
+               <Wallet size={24} className="hidden sm:block" />
             </div>
-            <div>
-               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Total Sisa Piutang Berjalan</p>
-               <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400">{formatRp(totalPiutang)}</h3>
+            <div className="min-w-0">
+               <p className="text-[9px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Sisa Piutang</p>
+               <h3 className="text-sm sm:text-2xl font-black text-amber-600 dark:text-amber-400 truncate">{formatRp(totalPiutang)}</h3>
             </div>
          </div>
-         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-4">
-            <div className="w-12 h-12 bg-teal-50 dark:bg-teal-900/30 text-teal-500 rounded-xl flex items-center justify-center">
-               <Activity size={24} />
+         <div className="bg-white dark:bg-slate-800 p-2.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-teal-50 dark:bg-teal-900/30 text-teal-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+               <Activity size={16} className="sm:hidden" />
+               <Activity size={24} className="hidden sm:block" />
             </div>
-            <div>
-               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Estimasi Potongan Bulan Ini</p>
-               <h3 className="text-2xl font-black text-teal-600 dark:text-teal-400">{formatRp(totalPotonganBulanan)}</h3>
+            <div className="min-w-0">
+               <p className="text-[9px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5 truncate">Potongan Bulan Ini</p>
+               <h3 className="text-sm sm:text-2xl font-black text-teal-600 dark:text-teal-400 truncate">{formatRp(totalPotonganBulanan)}</h3>
             </div>
          </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col flex-1 min-h-0">
-         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 dark:bg-slate-900/50 shrink-0">
-          <h3 className="text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Tagihan Pegawai</h3>
+         <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-4 bg-slate-50 dark:bg-slate-900/50 shrink-0">
+          <h3 className="text-sm sm:text-base font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Tagihan Pegawai</h3>
           
-          <div className="flex flex-wrap gap-3 w-full sm:w-auto items-center justify-end">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full sm:w-auto items-center justify-end">
             <div className="relative w-full sm:w-64 flex-1">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <Search className="absolute left-2.5 top-2 text-slate-400" size={15} />
               <input 
                 type="text" 
                 placeholder="Cari Pegawai atau Keterangan..." 
                 value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white transition-all shadow-sm"
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white transition-all shadow-sm"
               />
             </div>
             
-            {/* 🪄 TAMBALAN CERDAS: Tombol Tambah Pinjaman Baru & Import Data */}
-            <button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
-               <PlusCircle size={16} /> <span className="hidden sm:inline">Tambah Baru</span><span className="sm:hidden">Tambah</span>
-            </button>
-            <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} className="w-full sm:w-auto flex-none justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg text-sm font-bold transition-colors items-center gap-2 shadow-sm cursor-pointer flex border border-slate-300 dark:border-slate-600">
-               <Upload size={16} /> <span className="hidden sm:inline">Import Excel</span><span className="sm:hidden">Import</span>
-            </button>
-            <button onClick={handleExportCSV} className="w-full sm:w-auto flex-none justify-center bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
-               <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Export</span>
-            </button>
+            <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto">
+              <button onClick={() => setIsAddModalOpen(true)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
+                 <PlusCircle size={14} /> <span>Tambah</span>
+              </button>
+              <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex border border-slate-300 dark:border-slate-600">
+                 <Upload size={14} /> <span>Impor</span>
+              </button>
+              <button onClick={handleExportCSV} className="justify-center bg-teal-600 hover:bg-teal-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
+                 <Download size={14} /> <span>Ekspor</span>
+              </button>
+            </div>
           </div>
          </div>
 
         {/* FITUR BARU: Tampilan Kartu Mobile Rekap Pinjaman (< md) */}
-        <div className="md:hidden space-y-3 p-3 no-print">
+        <div className="md:hidden space-y-2.5 p-2.5 sm:p-4 no-print">
            {filteredLoans.map((loan, idx) => (
-              <div key={`${loan.teacherId}-${idx}`} className={`bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3 ${loan.isLunas ? 'opacity-75 bg-slate-50/50' : ''}`}>
+              <div key={`${loan.teacherId}-${idx}`} className={`bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5 ${loan.isLunas ? 'opacity-75 bg-slate-50/50' : ''}`}>
                  <div className="flex justify-between items-start">
                     <div>
-                       <h4 className="font-bold text-base text-slate-800 dark:text-white">{loan.name}</h4>
-                       <div className="text-xs text-slate-500 mt-0.5">{loan.nipy} • {loan.ket}</div>
+                       <h4 className="font-bold text-sm text-slate-800 dark:text-white">{loan.name}</h4>
+                       <div className="text-[11px] text-slate-500 mt-0.5">{loan.nipy} • {loan.ket}</div>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${loan.isLunas ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${loan.isLunas ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
                        {loan.isLunas ? 'LUNAS' : 'Belum Lunas'}
                     </span>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                 <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
                     <div><span className="text-slate-400">Total Plafon:</span> <span className="font-bold block dark:text-slate-200">{formatRp(loan.totalPinjaman)}</span></div>
                     <div><span className="text-slate-400">Cicilan/Bulan:</span> <span className="font-bold block text-rose-600 dark:text-rose-400">{formatRp(loan.nominal)}</span></div>
-                    <div className="col-span-2"><span className="text-slate-400">Sisa Hutang:</span> <span className="font-black text-sm block text-teal-600 dark:text-teal-400">{formatRp(loan.sisaHutang)}</span></div>
+                    <div className="col-span-2"><span className="text-slate-400">Sisa Hutang:</span> <span className="font-black text-xs block text-teal-600 dark:text-teal-400">{formatRp(loan.sisaHutang)}</span></div>
                  </div>
 
-                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/50">
-                    <button onClick={() => setSelectedLoanHistory(loan)} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
-                       <History size={14}/> Riwayat
+                 <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                    <button onClick={() => setSelectedLoanHistory(loan)} className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <History size={13}/> Riwayat
                     </button>
-                    <button onClick={() => { setEditForm({ teacherId: loan.teacherId, loanIdx: loan.loanIdx, ket: loan.ket, nominal: loan.nominal, totalPinjaman: loan.totalPinjaman, sisaHutang: loan.sisaHutang, originalKet: loan.ket }); setIsEditModalOpen(true); }} className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
-                       <Edit size={14}/> Edit
+                    <button onClick={() => { setEditForm({ teacherId: loan.teacherId, loanIdx: loan.loanIdx, ket: loan.ket, nominal: loan.nominal, totalPinjaman: loan.totalPinjaman, sisaHutang: loan.sisaHutang, originalKet: loan.ket }); setIsEditModalOpen(true); }} className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <Edit size={13}/> Edit
                     </button>
-                    <button onClick={() => handleDeleteLoan(loan)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
-                       <Trash2 size={14}/> Hapus
+                    <button onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })} className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
+                       <Trash2 size={13}/> Hapus
                     </button>
                  </div>
               </div>
@@ -6007,117 +6023,117 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-orange-600 to-amber-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-orange-600 to-amber-500 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-orange-100" size={24} /> Rekapitulasi Jam Mengajar</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-orange-100" size={22} /> Rekapitulasi Jam Mengajar</h1>
           <p className="text-orange-50 text-xs sm:text-sm">Rincian jurnal harian (Tgl 1 - 31) dan evaluasi target wajib periode {bulan}.</p>
         </div>
-        <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       {/* TAMBAHAN: Kartu Statistik Ringkasan Absensi (INTERAKTIF) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
-        <div onClick={() => setActiveFilter('all')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border ${activeFilter === 'all' ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'} flex flex-col justify-center relative overflow-hidden group`}>
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 relative z-10">Total Realisasi Jam Sekolah</p>
-          <div className="flex items-baseline gap-2 relative z-10">
-            <h4 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{stats.totalJam}</h4>
-            <span className="text-sm font-bold text-blue-500">JPL</span>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-4 md:gap-6 mb-3 sm:mb-5">
+        <div onClick={() => setActiveFilter('all')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-2 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border ${activeFilter === 'all' ? 'border-blue-500 ring-2 sm:ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'} flex flex-col justify-center relative overflow-hidden group`}>
+          <p className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 sm:mb-2 relative z-10 truncate">Total Realisasi</p>
+          <div className="flex items-baseline gap-1 sm:gap-2 relative z-10">
+            <h4 className="text-base sm:text-3xl font-extrabold text-blue-600 dark:text-blue-400">{stats.totalJam}</h4>
+            <span className="text-[10px] sm:text-sm font-bold text-blue-500">JPL</span>
           </div>
-          <div className="absolute -right-4 -bottom-4 bg-blue-50 dark:bg-blue-900/30 w-20 h-20 rounded-full blur-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors"></div>
-          {activeFilter === 'all' && <div className="absolute top-4 right-4"><CheckCircle size={16} className="text-blue-500"/></div>}
+          <div className="absolute -right-4 -bottom-4 bg-blue-50 dark:bg-blue-900/30 w-16 h-16 sm:w-20 sm:h-20 rounded-full blur-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors"></div>
+          {activeFilter === 'all' && <div className="absolute top-2 right-2 sm:top-4 sm:right-4"><CheckCircle size={14} className="text-blue-500"/></div>}
         </div>
         
-        <div onClick={() => setActiveFilter(activeFilter === 'kurang_jam' ? 'all' : 'kurang_jam')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border ${activeFilter === 'kurang_jam' ? 'border-amber-500 ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-amber-300'} flex flex-col justify-center relative group`}>
+        <div onClick={() => setActiveFilter(activeFilter === 'kurang_jam' ? 'all' : 'kurang_jam')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-2 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border ${activeFilter === 'kurang_jam' ? 'border-amber-500 ring-2 sm:ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-amber-300'} flex flex-col justify-center relative group`}>
           <div className="flex items-start justify-between relative z-10">
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Pegawai Kurang Jam</p>
-              <div className="flex items-baseline gap-2">
-                <h4 className="text-3xl font-extrabold text-amber-600 dark:text-amber-400">{stats.kurangJam}</h4>
-                <span className="text-sm font-bold text-slate-500">Orang</span>
+              <p className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 sm:mb-2 truncate">Kurang Jam</p>
+              <div className="flex items-baseline gap-1 sm:gap-2">
+                <h4 className="text-base sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400">{stats.kurangJam}</h4>
+                <span className="text-[10px] sm:text-sm font-bold text-slate-500">Org</span>
               </div>
             </div>
-            <div className={`p-2 rounded-full transition-colors ${activeFilter === 'kurang_jam' ? 'bg-amber-500 text-white' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 group-hover:bg-amber-100'} ${stats.kurangJam === 0 ? 'opacity-30' : ''}`}><AlertCircle size={20}/></div>
+            <div className={`p-1.5 sm:p-2 rounded-full transition-colors ${activeFilter === 'kurang_jam' ? 'bg-amber-500 text-white' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 group-hover:bg-amber-100'} ${stats.kurangJam === 0 ? 'opacity-30' : ''}`}><AlertCircle size={16} className="sm:hidden" /><AlertCircle size={20} className="hidden sm:block" /></div>
           </div>
-          {activeFilter === 'kurang_jam' && <div className="absolute top-0 right-0 w-10 h-10 bg-amber-500/10 rounded-bl-full border-b border-l border-amber-500/20"></div>}
+          {activeFilter === 'kurang_jam' && <div className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 bg-amber-500/10 rounded-bl-full border-b border-l border-amber-500/20"></div>}
         </div>
 
-        <div onClick={() => setActiveFilter(activeFilter === 'sering_telat' ? 'all' : 'sering_telat')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border ${activeFilter === 'sering_telat' ? 'border-red-500 ring-4 ring-red-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-red-300'} flex flex-col justify-center relative group`}>
+        <div onClick={() => setActiveFilter(activeFilter === 'sering_telat' ? 'all' : 'sering_telat')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-2 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border ${activeFilter === 'sering_telat' ? 'border-red-500 ring-2 sm:ring-4 ring-red-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-red-300'} flex flex-col justify-center relative group`}>
           <div className="flex items-start justify-between relative z-10">
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Peringatan Disiplin (Telat {">"} 10x)</p>
-              <div className="flex items-baseline gap-2">
-                <h4 className="text-3xl font-extrabold text-red-600 dark:text-red-400">{stats.seringTelat}</h4>
-                <span className="text-sm font-bold text-slate-500">Orang</span>
+              <p className="text-[9px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 sm:mb-2 truncate">Disiplin (&gt;10x)</p>
+              <div className="flex items-baseline gap-1 sm:gap-2">
+                <h4 className="text-base sm:text-3xl font-extrabold text-red-600 dark:text-red-400">{stats.seringTelat}</h4>
+                <span className="text-[10px] sm:text-sm font-bold text-slate-500">Org</span>
               </div>
             </div>
-            <div className={`p-2 rounded-full transition-colors ${activeFilter === 'sering_telat' ? 'bg-red-500 text-white' : 'bg-red-50 dark:bg-red-900/30 text-red-600 group-hover:bg-red-100'} ${stats.seringTelat === 0 ? 'opacity-30' : ''}`}><Clock size={20}/></div>
+            <div className={`p-1.5 sm:p-2 rounded-full transition-colors ${activeFilter === 'sering_telat' ? 'bg-red-500 text-white' : 'bg-red-50 dark:bg-red-900/30 text-red-600 group-hover:bg-red-100'} ${stats.seringTelat === 0 ? 'opacity-30' : ''}`}><Clock size={16} className="sm:hidden" /><Clock size={20} className="hidden sm:block" /></div>
           </div>
-          {activeFilter === 'sering_telat' && <div className="absolute top-0 right-0 w-10 h-10 bg-red-500/10 rounded-bl-full border-b border-l border-red-500/20"></div>}
+          {activeFilter === 'sering_telat' && <div className="absolute top-0 right-0 w-8 h-8 sm:w-10 sm:h-10 bg-red-500/10 rounded-bl-full border-b border-l border-red-500/20"></div>}
         </div>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col flex-1 min-h-0">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-          <div className="relative w-full max-w-md flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+        <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-4 shrink-0">
+          <div className="relative w-full max-w-md flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="relative flex-1 min-w-[160px]">
+              <Search className="absolute left-2.5 top-2 text-slate-400" size={15} />
               <input 
                 type="text" placeholder="Cari Nama Guru..." 
                 value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-orange-500 outline-none dark:text-white"
+                className="w-full pl-8 pr-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 outline-none dark:text-white"
               />
             </div>
             {/* Indikator Filter Aktif */}
             {activeFilter !== 'all' && (
-              <span className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${activeFilter === 'kurang_jam' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'}`}>
+              <span className={`px-2 py-1 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1 ${activeFilter === 'kurang_jam' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'}`}>
                 Filter: {activeFilter === 'kurang_jam' ? 'Kurang Jam' : 'Sering Telat'}
-                <button onClick={() => setActiveFilter('all')} className="ml-1 hover:text-black dark:hover:text-white"><X size={12}/></button>
+                <button onClick={() => setActiveFilter('all')} className="ml-0.5 hover:text-black dark:hover:text-white"><X size={11}/></button>
               </span>
             )}
           </div>
           
-          {/* DIPERBARUI: Action Buttons dibiarkan melipat (wrap) dengan rapi di perangkat sempit */}
-          <div className="flex flex-wrap gap-2 w-full xl:w-auto justify-end sm:justify-start xl:justify-end">
+          {/* Action Buttons: 5 Tombol Grid Presisi di Mobile */}
+          <div className="grid grid-cols-5 gap-1 w-full xl:w-auto sm:flex sm:flex-wrap justify-end">
             {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
             <button 
               type="button"
               onClick={handleOpenSyncModal} 
-              className="flex-1 sm:flex-none bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-3 py-2 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1.5 font-bold text-sm cursor-pointer hover:shadow-md"
+              className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-2 py-1.5 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs cursor-pointer hover:shadow-md"
               title="Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff"
             >
-              <UserCheck size={16} /> 
-              <span className="hidden sm:inline">Tarik dari Presensi</span>
-              <span className="sm:hidden">Presensi</span>
+              <UserCheck size={14} /> 
+              <span className="hidden sm:inline">Presensi</span>
+              <span className="sm:hidden">Absen</span>
               {totalGuruTelatPresensi > 0 && (
-                <span className="ml-0.5 px-1.5 py-0.2 bg-white/25 text-white text-[10px] rounded-full font-black">
+                <span className="ml-0.5 px-1 bg-white/25 text-white text-[9px] rounded-full font-black">
                   {totalGuruTelatPresensi}
                 </span>
               )}
             </button>
 
             {/* TAMBAHAN: Tombol Reset Bulan */}
-            <button onClick={handleResetBulan} className="flex-1 sm:flex-none bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-3 py-2 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5 font-bold text-sm">
-              <Trash2 size={16} /> <span className="hidden md:inline">Reset Bulan</span><span className="md:hidden">Reset</span>
+            <button onClick={handleResetBulan} className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
+              <Trash2 size={14} /> <span>Reset</span>
             </button>
 
             {/* TAMBAHAN: Tombol Import Mesin Absen */}
             <input type="file" accept=".csv, .txt, .xls, .xlsx" ref={mesinInputRef} onChange={handleImportMesinAbsen} className="hidden" />
-            <button onClick={() => mesinInputRef.current?.click()} className="flex-1 sm:flex-none bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1.5 font-bold text-blue-700 dark:text-blue-400 text-sm">
-              <Fingerprint size={16} /> <span className="hidden sm:inline">Data Mesin</span><span className="sm:hidden">Mesin</span>
+            <button onClick={() => mesinInputRef.current?.click()} className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-blue-700 dark:text-blue-400 text-[11px] sm:text-xs">
+              <Fingerprint size={14} /> <span>Mesin</span>
             </button>
 
             <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-sm">
-              <Upload size={16} /> <span className="hidden sm:inline">Impor Excel</span><span className="sm:hidden">Impor</span>
+            <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs">
+              <Upload size={14} /> <span>Impor</span>
             </button>
-            <button onClick={handleExportExcel} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5 font-bold text-sm">
-              <Download size={16} /> <span className="hidden sm:inline">Ekspor Excel</span><span className="sm:hidden">Ekspor</span>
+            <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
+              <Download size={14} /> <span>Ekspor</span>
             </button>
           </div>
         </div>
 
         {/* FITUR BARU: Tampilan Kartu Mobile Rekap Absensi (< md) */}
-        <div className="md:hidden space-y-3 p-3 no-print">
+        <div className="md:hidden space-y-2.5 p-2.5 sm:p-4 no-print">
           {filtered.map(t => {
              const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
              const real = t.payroll?.jamMengajar?.realisasi || 0;
@@ -6132,10 +6148,10 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
              const isLateOften = telat >= 3;
 
              return (
-               <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+               <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
                  <div className="flex justify-between items-start">
                    <div>
-                     <h4 className="font-bold text-base text-slate-800 dark:text-white flex items-center gap-1.5">
+                     <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
                        {isLateOften && <Clock size={14} className="text-red-500 shrink-0" title="Sering Telat" />}
                        {isUnderperforming && !isLateOften && <AlertCircle size={14} className="text-amber-500 shrink-0" title="Kurang Jam" />}
                        {t.name}
@@ -6150,7 +6166,7 @@ function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFi
                    </button>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                 <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
                     <div><span className="text-slate-400">Total Realisasi:</span> <span className="font-black text-blue-600 dark:text-blue-400 block text-sm">{real} JPL</span></div>
                     <div><span className="text-slate-400">Tepat Waktu:</span> <span className="font-black text-emerald-600 dark:text-emerald-400 block text-sm">{tepatWaktu} JPL</span></div>
                     <div><span className="text-slate-400">Jam Wajib Target:</span> <span className="font-bold block dark:text-slate-200">{wajib} JPL</span></div>
@@ -6981,12 +6997,12 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
       )}
 
       {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg flex items-center justify-between shrink-0 relative overflow-hidden mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><CalendarDays className="text-pink-100" size={24} /> Pengaturan Jadwal Mengajar</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><CalendarDays className="text-pink-100" size={22} /> Pengaturan Jadwal Mengajar</h1>
           <p className="text-pink-50 text-xs sm:text-sm">Petakan jadwal mingguan (Roster) dan input kegiatan insidental secara massal.</p>
         </div>
-        <CalendarDays size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <CalendarDays size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div className="flex flex-col xl:flex-row gap-6 flex-1 min-h-0">
@@ -6995,23 +7011,23 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
          <div className="w-full xl:w-64 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-row xl:flex-col overflow-x-auto xl:overflow-hidden shrink-0 hide-scrollbar">
             <button 
                onClick={() => setActiveTab('roster')}
-               className={`flex-1 xl:flex-none p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'roster' ? 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400 border-pink-500 xl:border-l-pink-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+               className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'roster' ? 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400 border-pink-500 xl:border-l-pink-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
             >
-               <div className="flex items-center gap-2 whitespace-nowrap"><CalendarDays size={18}/> Pemetaan Roster</div>
+               <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><CalendarDays size={16}/> Pemetaan Roster</div>
                <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Atur jadwal rutin mingguan guru (Senin - Minggu).</p>
             </button>
             <button 
                onClick={() => setActiveTab('insidental')}
-               className={`flex-1 xl:flex-none p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'insidental' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-500 xl:border-l-indigo-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+               className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'insidental' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-500 xl:border-l-indigo-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
             >
-               <div className="flex items-center gap-2 whitespace-nowrap"><ListPlus size={18}/> Input Kegiatan Massal</div>
+               <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><ListPlus size={16}/> Input Massal</div>
                <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Tambahkan jam kegiatan non-rutin ke banyak guru sekaligus.</p>
             </button>
             <button 
                onClick={() => setActiveTab('riwayat_massal')}
-               className={`flex-1 xl:flex-none p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'riwayat_massal' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-500 xl:border-l-amber-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+               className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'riwayat_massal' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-500 xl:border-l-amber-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
             >
-               <div className="flex items-center gap-2 whitespace-nowrap"><History size={18}/> Manajemen Kegiatan</div>
+               <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><History size={16}/> Riwayat Kegiatan</div>
                <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Edit, hapus, dan pantau riwayat kegiatan massal.</p>
             </button>
          </div>
@@ -7030,24 +7046,24 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-pink-500 outline-none dark:text-white"
                        />
                      </div>
-                     <div className="flex flex-wrap w-full md:w-auto gap-2 justify-end">
+                     <div className="grid grid-cols-2 sm:flex sm:w-auto gap-1.5 w-full justify-end">
                        
                        {/* 🪄 TAMBALAN CERDAS: Tombol Impor & Ekspor Roster */}
                        <input type="file" accept=".csv, .xlsx, .xls" ref={rosterFileInputRef} onChange={handleImportRosterCSV} className="hidden" />
-                       <button onClick={() => rosterFileInputRef.current?.click()} disabled={isSaving} className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 border border-slate-300 dark:border-slate-600 disabled:opacity-70">
-                         <Upload size={16} /> <span className="hidden xl:inline">Impor Roster</span><span className="xl:hidden">Impor</span>
+                       <button onClick={() => rosterFileInputRef.current?.click()} disabled={isSaving} className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 border border-slate-300 dark:border-slate-600 disabled:opacity-70">
+                         <Upload size={14} /> <span>Impor</span>
                        </button>
-                       <button onClick={handleExportRosterCSV} disabled={isSaving} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-70">
-                         <Download size={16} /> <span className="hidden xl:inline">Ekspor Template</span><span className="xl:hidden">Ekspor</span>
+                       <button onClick={handleExportRosterCSV} disabled={isSaving} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                         <Download size={14} /> <span>Ekspor</span>
                        </button>
 
-                       <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
-                         {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={16} />}
-                         {isSaving ? 'Memproses...' : 'Terapkan ke Portal'}
+                       <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                         {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={14} />}
+                         <span>Ke Portal</span>
                        </button>
-                       <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="w-full sm:w-auto bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
-                         {isSaving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={16} />}
-                         {isSaving ? 'Memproses...' : 'Terapkan ke Absen'}
+                       <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="justify-center bg-pink-600 hover:bg-pink-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                         {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={14} />}
+                         <span>Ke Absen</span>
                        </button>
                      </div>
                   </div>
@@ -7058,10 +7074,10 @@ function JadwalMengajarView({ teachers, setTeachers, settings }) {
                         const r = t.payroll?.roster || {};
                         const totalMingguan = ['senin','selasa','rabu','kamis','jumat','sabtu','minggu'].reduce((sum, d) => sum + (Number(r[d]) || 0), 0);
                         return (
-                           <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                           <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
                               <div className="flex justify-between items-start">
                                  <div>
-                                    <h4 className="font-bold text-base text-slate-800 dark:text-white">{t.name}</h4>
+                                    <h4 className="font-bold text-sm text-slate-800 dark:text-white">{t.name}</h4>
                                     <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || 'Guru'}</div>
                                  </div>
                                  <span className="px-3 py-1 bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400 rounded-full text-xs font-black">
@@ -7657,12 +7673,12 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
       <datalist id="insentif-list">{insentifList.map(i => <option key={i} value={i} />)}</datalist>
       <datalist id="potongan-list">{potonganList.map(i => <option key={i} value={i} />)}</datalist>
 
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Calculator className="text-emerald-100" size={24} /> Input Cepat Komponen Gaji</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><Calculator className="text-emerald-100" size={22} /> Input Cepat Komponen Gaji</h1>
           <p className="text-emerald-50 text-xs sm:text-sm">Pilih komponen di menu kiri, lalu sesuaikan nilainya untuk semua pegawai secara berurutan di sebelah kanan.</p>
         </div>
-        <Calculator size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none" />
+        <Calculator size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
@@ -7675,20 +7691,20 @@ function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelect
           </div>
 
           {/* Dropdown Khusus Mobile */}
-          <div className="md:hidden p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">
-             <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Kategori Komponen Gaji</label>
+          <div className="md:hidden p-2.5 sm:p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">
+             <label className="block text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Kategori Komponen Gaji</label>
              <div className="relative">
                 <select
                    value={activeTabGaji}
                    onChange={(e) => setActiveTabGaji(e.target.value)}
-                   className="w-full p-3.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm appearance-none cursor-pointer text-sm"
+                   className="w-full py-2 px-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm appearance-none cursor-pointer text-xs sm:text-sm"
                 >
                    {tabMenus.map(tab => (
                       <option key={tab.id} value={tab.id}>{tab.label}</option>
                    ))}
                 </select>
-                <div className="absolute right-3 top-3.5 bg-emerald-100 dark:bg-emerald-900/50 p-1.5 rounded-lg pointer-events-none">
-                  <ChevronDown size={16} className="text-emerald-600 dark:text-emerald-400" />
+                <div className="absolute right-2.5 top-2 bg-emerald-100 dark:bg-emerald-900/50 p-1 rounded pointer-events-none">
+                  <ChevronDown size={14} className="text-emerald-600 dark:text-emerald-400" />
                </div>
              </div>
           </div>
@@ -9181,12 +9197,12 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
       )}
 
       {/* Header Profesional Rekap Gaji */}
-      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-pink-100" size={24} /> Rekapitulasi Gaji Keseluruhan</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><FileText className="text-pink-100" size={22} /> Rekapitulasi Gaji Keseluruhan</h1>
           <p className="text-pink-50 text-xs sm:text-sm">Tinjau rincian pengeluaran gaji sekolah secara transparan, cetak rekap per bulan, dan audit gaji per individu.</p>
         </div>
-        <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
@@ -9255,9 +9271,9 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
               </select>
             </div>
             
-            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-              <button onClick={handleKirimNotifMassal} className="flex-1 sm:flex-none justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
-                 <BellRing size={16} /> <span className="hidden sm:inline">Notif Massal</span><span className="sm:hidden">Notif</span>
+            <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
+              <button onClick={handleKirimNotifMassal} className="justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
+                 <BellRing size={14} /> <span>Notif</span>
               </button>
               <button 
                 type="button"
@@ -9266,17 +9282,17 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                     onOpenAuditLog('finansial');
                   }
                 }} 
-                className="flex-1 sm:flex-none justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors items-center gap-2 cursor-pointer flex" 
+                className="justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors items-center gap-1 cursor-pointer flex" 
                 title="Buka Jejak Audit Finansial & Mutasi Gaji di Pengaturan"
               >
-                 <History size={16} /> <span className="hidden sm:inline">Jejak Audit Gaji</span><span className="sm:hidden">Audit</span>
+                 <History size={14} /> <span>Audit</span>
               </button>
-              <button onClick={handleExportCSV} className="flex-1 sm:flex-none justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex">
-                 <Download size={16} /> <span className="hidden sm:inline">Export Excel</span><span className="sm:hidden">Excel</span>
+              <button onClick={handleExportCSV} className="justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
+                 <Download size={14} /> <span>Excel</span>
               </button>
-              <button onClick={handleMassPrint} disabled={isMassPrinting} className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 shadow-sm cursor-pointer flex disabled:opacity-70 disabled:cursor-not-allowed">
-                 {isMassPrinting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Printer size={16} />}
-                 <span className="hidden sm:inline">{isMassPrinting ? 'Memproses...' : 'Cetak Slip Massal'}</span><span className="sm:hidden">Cetak</span>
+              <button onClick={handleMassPrint} disabled={isMassPrinting} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-70 disabled:cursor-not-allowed">
+                 {isMassPrinting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Printer size={14} />}
+                 <span>Cetak</span>
               </button>
             </div>
           </div>
@@ -9294,7 +9310,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
         )}
 
         {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
-        <div className="md:hidden space-y-3 mb-4 no-print">
+        <div className="md:hidden space-y-2.5 mb-4 no-print">
           {filtered.map(t => {
              const slip = calculatePayroll(t, settings);
              const prevData = prevArchive?.dataGuru?.find(guru => {
@@ -9307,12 +9323,12 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
              const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
              return (
-               <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+               <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
                  <div className="flex justify-between items-start">
                    <div>
                      <button 
                        onClick={() => onEditGaji(t.id)} 
-                       className="font-bold text-base text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 text-left hover:underline"
+                       className="font-bold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-1 text-left hover:underline"
                      >
                        {t.name} <Edit size={14} className="shrink-0" />
                      </button>
@@ -9335,7 +9351,7 @@ function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSetting
                    </div>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                 <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
                     <div><span className="text-slate-400">Total Kotor:</span> <span className="font-bold block dark:text-slate-200">{formatRp(slip.totalKotor)}</span></div>
                     <div><span className="text-slate-400">Total Potongan:</span> <span className="font-bold text-red-500 block">-{formatRp(slip.totalPotongan)}</span></div>
                     <div><span className="text-slate-400">T. Masa Kerja:</span> <span className="font-medium block dark:text-slate-300">{formatRp(slip.tMasaKerja)}</span></div>
@@ -9858,12 +9874,12 @@ function ArsipView({ archives, setArchives, settings }) {
       )}
 
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-4 sm:mb-6">
+      <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl font-bold mb-1 flex items-center gap-2 sm:gap-3"><Archive className="text-teal-100" size={24} /> Manajemen Arsip Tahunan</h1>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><Archive className="text-teal-100" size={22} /> Manajemen Arsip Tahunan</h1>
           <p className="text-teal-50 text-xs sm:text-sm max-w-2xl">Lihat, cetak ulang, dan kelola database penggajian berdasarkan tahun berjalan. Optimalkan kecepatan server dengan fitur Auto-Archiving.</p>
         </div>
-        <FolderOpen size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none" />
+        <FolderOpen size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       {!selectedArchive ? (
@@ -10035,7 +10051,7 @@ function ArsipView({ archives, setArchives, settings }) {
               const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
               return (
-                <div key={t.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-bold text-base text-slate-800 dark:text-white">
@@ -14654,7 +14670,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             Konfigurasi informasi umum aplikasi dan manajemen hak akses *login* secara terpusat.
           </p>
         </div>
-        <Settings size={140} className="absolute -right-10 -bottom-10 text-slate-300/50 dark:text-slate-600/30 transform rotate-12 pointer-events-none" />
+        <Settings size={140} className="absolute -right-10 -bottom-10 text-slate-300/50 dark:text-slate-600/30 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">

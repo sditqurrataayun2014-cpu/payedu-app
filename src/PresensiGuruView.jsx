@@ -745,17 +745,17 @@ export default function PresensiGuruView({
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-2xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-600 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 md:p-6 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-4 animate-in fade-in duration-500">
           <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-black mb-2 flex items-center gap-3">
-              <Fingerprint className="text-teal-100" size={32} />
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 flex items-center gap-2 sm:gap-3">
+              <Fingerprint className="text-teal-100" size={24} />
               Presensi Guru & Staff
             </h1>
-            <p className="text-teal-50 text-sm md:text-base max-w-xl font-medium">
+            <p className="text-teal-50 text-xs sm:text-sm md:text-base max-w-xl font-medium">
               Absensi digital terintegrasi — rekapitulasi kehadiran, jam kedatangan, dan keterlambatan pegawai sekolah.
             </p>
           </div>
-          <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none" />
+          <Fingerprint size={120} className="absolute -right-6 -bottom-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
         </div>
       )}
 
@@ -2912,7 +2912,7 @@ function LokasiListSettingField({ settingsForm, setSettingsForm, showToast, show
   const simpanForm = () => {
     if (!form.nama.trim()) { showToast('Nama lokasi wajib diisi.', 'error'); return; }
     if (form.latitude == null || form.longitude == null) { showToast('Latitude & longitude wajib diisi (atau tekan "Ambil Lokasi Saat Ini").', 'error'); return; }
-    const entry = { id: form.id || generateLokasiId(), nama: form.nama.trim(), latitude: Number(form.latitude), longitude: Number(form.longitude), radiusMeter: Number(form.radiusMeter) || 150 };
+    const entry = { id: form.id || ('lokasi_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)), nama: form.nama.trim(), latitude: Number(form.latitude), longitude: Number(form.longitude), radiusMeter: Number(form.radiusMeter) || 150 };
     const exists = list.some(l => l.id === entry.id);
     const updated = exists ? list.map(l => l.id === entry.id ? entry : l) : [...list, entry];
     setSettingsForm({ ...settingsForm, lokasiList: updated });
