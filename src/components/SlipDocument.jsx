@@ -1,5 +1,5 @@
 import React from 'react';
-import { calculatePayroll, formatRp } from '../utils/payrollUtils';
+import { calculatePayroll, formatRp, formatDateId, terbilang } from '../utils/payrollUtils';
 
 function SlipDocument({ teacher, bulan, settings }) {
   const slip = calculatePayroll(teacher, settings);

@@ -138,21 +138,75 @@ export function FormattedRupiahInput({ value, onChange, className = "", placehol
   );
 }
 
-export const formatDateId = (dateString) => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
-  } catch (e) {
-    return dateString;
+export const parseSmartDate = (dateStr) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date && !isNaN(dateStr.getTime())) return dateStr;
+  
+  let str = String(dateStr).trim();
+  if (!str || str === '-' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') return null;
+
+  // Format YYYY-MM-DD
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
   }
+
+  // Format DD-MM-YYYY atau DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmyMatch) {
+    const [_, d, m, y] = dmyMatch.map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // Format DD-Bulan-YYYY (misal: 10 Mei 2020 atau 10-May-2020)
+  const bulanMap = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, jun: 6, jul: 7, agu: 8, ags: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
+  const dmyTextMatch = str.toLowerCase().match(/^(\d{1,2})[\/\-\s]+([a-z]+)[\/\-\s]+(\d{2,4})$/);
+  if (dmyTextMatch) {
+    const d = Number(dmyTextMatch[1]);
+    const bKey = dmyTextMatch[2].substring(0, 3);
+    const m = bulanMap[bKey] || 1;
+    let y = Number(dmyTextMatch[3]);
+    if (y < 100) y = y > 30 ? 1900 + y : 2000 + y;
+    return new Date(y, m - 1, d);
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) return parsed;
+  return null;
+};
+
+export const formatDateId = (dateString, options = { day: 'numeric', month: 'long', year: 'numeric' }) => {
+  if (!dateString || dateString === '-') return '-';
+  const d = parseSmartDate(dateString);
+  if (!d) return String(dateString);
+  return d.toLocaleDateString('id-ID', options);
+};
+
+// Fungsi Helper untuk Terbilang (Mengubah Angka menjadi Teks)
+export const terbilang = (angka) => {
+  const bilangan = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+  let temp = "";
+  angka = Math.floor(Math.abs(Number(angka) || 0));
+  if (angka < 12) {
+    temp = " " + bilangan[angka];
+  } else if (angka < 20) {
+    temp = terbilang(angka - 10) + " Belas";
+  } else if (angka < 100) {
+    temp = terbilang(Math.floor(angka / 10)) + " Puluh" + terbilang(angka % 10);
+  } else if (angka < 200) {
+    temp = " Seratus" + terbilang(angka - 100);
+  } else if (angka < 1000) {
+    temp = terbilang(Math.floor(angka / 100)) + " Ratus" + terbilang(angka % 100);
+  } else if (angka < 2000) {
+    temp = " Seribu" + terbilang(angka - 1000);
+  } else if (angka < 1000000) {
+    temp = terbilang(Math.floor(angka / 1000)) + " Ribu" + terbilang(angka % 1000);
+  } else if (angka < 1000000000) {
+    temp = terbilang(Math.floor(angka / 1000000)) + " Juta" + terbilang(angka % 1000000);
+  } else if (angka < 1000000000000) {
+    temp = terbilang(Math.floor(angka / 1000000000)) + " Miliar" + terbilang(angka % 1000000000);
+  }
+  return temp;
 };
 
 export const simpleHash = (str) => {
