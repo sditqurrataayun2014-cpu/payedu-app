@@ -11558,14 +11558,23 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
       {/* Header Banner Dinamis Berdasarkan Tab Aktif */}
       {/* DIPERBARUI: Header "portal_dashboard" & "portal_presensi" digabung ke dalam Card di bawahnya agar tidak ganda */}
 
+      {/* Header Banner Portal Jadwal (Responsive & Mobile Ergonomic) */}
       {activeSection === 'portal_jadwal' && (
-        <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-br from-pink-600 via-rose-600 to-rose-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-pink-400/30">
           {NotificationBell}
           <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CalendarDays className="text-pink-100 shrink-0" size={24} /> Jadwal Mengajar & Penugasan</h1>
-            <p className="text-pink-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau jadwal rutin mingguan (Roster) dan riwayat penugasan kegiatan insidental Anda secara transparan.</p>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+              <CalendarDays size={11} className="text-pink-100" />
+              <span>Roster Rutin &amp; Pemetaan</span>
+            </div>
+            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+              <CalendarDays className="text-pink-100 shrink-0" size={20} /> Jadwal Mengajar &amp; Penugasan
+            </h1>
+            <p className="text-pink-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+              Pantau jadwal rutin mingguan (Roster) dan rincian alokasi jam mengajar harian Anda secara transparan.
+            </p>
           </div>
-          <CalendarDays size={90} className="absolute -right-4 -bottom-4 text-white/10 transform rotate-12 pointer-events-none" />
+          <CalendarDays size={80} className="absolute -right-3 -bottom-3 text-white/10 transform rotate-12 pointer-events-none" />
         </div>
       )}
 
@@ -11611,14 +11620,23 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
         </div>
       )}
 
+      {/* Header Banner Portal Riwayat Gaji (Responsive & Mobile Ergonomic) */}
       {activeSection === 'portal_riwayat' && (
-        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-indigo-400/30">
           {NotificationBell}
           <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><History className="text-indigo-100 shrink-0" size={24} /> Riwayat Penerimaan Gaji</h1>
-            <p className="text-indigo-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.</p>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+              <History size={11} className="text-indigo-100" />
+              <span>Arsip Slip Resmi</span>
+            </div>
+            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+              <History className="text-indigo-100 shrink-0" size={20} /> Riwayat Penerimaan Gaji
+            </h1>
+            <p className="text-indigo-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+              Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.
+            </p>
           </div>
-          <History size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
+          <History size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
         </div>
       )}
 
@@ -12201,97 +12219,266 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
         )}
 
         {/* FITUR BARU: Jadwal Saya (Roster Mingguan & Insidental) */}
-        {activeSection === 'portal_jadwal' && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h3 className="font-bold text-lg mb-6 text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
-              <ListPlus className="text-pink-500" /> Roster Rutin Mingguan
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-               {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map((hari) => {
-                 const r = myData.payroll?.roster || {};
-                 const hariKey = hari.toLowerCase();
-                 const jpl = r[hariKey] || 0;
-                 return (
-                 <div key={hari} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm group hover:border-pink-300 dark:hover:border-pink-600 transition-colors">
-                    <div className="bg-slate-100 dark:bg-slate-900/80 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                       <h4 className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-pink-500"></span> {hari}
-                       </h4>
-                       <span className="text-xs font-bold bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 px-2 py-0.5 rounded">{jpl} JPL</span>
-                    </div>
-                    <div className="p-4 bg-white dark:bg-slate-800 space-y-3">
-                       {jpl > 0 ? (
-                          <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 dark:border-slate-700/50 hover:bg-pink-50 dark:hover:bg-pink-900/20 hover:border-pink-200 dark:hover:border-pink-800 transition-colors">
-                             <span className="text-[10px] font-bold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/40 px-2 py-0.5 rounded w-fit">Terjadwal</span>
-                             <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">Pembelajaran / Penugasan Kelas</span>
-                             <span className="text-xs text-slate-500 flex items-center gap-1"><Users size={12}/> Total Beban: {jpl} Jam Pelajaran</span>
-                          </div>
-                       ) : (
-                          <div className="flex flex-col items-center justify-center p-6 text-slate-400 dark:text-slate-500 italic text-sm border-2 border-dashed border-slate-100 dark:border-slate-700 rounded-lg">
-                             Tidak ada jadwal wajib pada hari ini.
-                          </div>
-                       )}
-                    </div>
-                 </div>
-               )})}
-            </div>
+        {activeSection === 'portal_jadwal' && (() => {
+          const rosterDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          const rosterObj = myData.payroll?.roster || {};
+          const totalRosterJpl = rosterDays.reduce((acc, h) => acc + (Number(rosterObj[h.toLowerCase()]) || 0), 0);
+          const activeTeachingDays = rosterDays.filter(h => (Number(rosterObj[h.toLowerCase()]) || 0) > 0).length;
 
-            {/* Pemetaan Jam Harian Hasil Roster & Sync Admin */}
-             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700">
-                <h4 className="font-bold text-base text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                   <CalendarDays className="text-blue-500" size={18} /> Kalender Pemetaan Jam Mengajar Harian (Bulan Ini)
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Berikut rincian alokasi Jam Pelajaran (JPL) hasil pemetaan roster dan kegiatan khusus per tanggal 1 s.d. 31 bulan ini:</p>
-                <div className="grid grid-cols-4 sm:grid-cols-7 lg:grid-cols-10 gap-2">
-                   {Array.from({ length: 31 }, (_, idx) => {
-                      const dayNum = idx + 1;
-                      const harianArr = myData.payroll?.jamMengajar?.harian || [];
-                      const jamHarian = Number(harianArr[idx]) || 0;
-                      return (
-                         <div key={dayNum} className={`p-2.5 rounded-xl border text-center flex flex-col items-center justify-between transition-all ${jamHarian > 0 ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-sm' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700/60 text-slate-400'}`}>
-                            <span className="text-[10px] font-bold uppercase tracking-wider block opacity-70">Tgl {dayNum}</span>
-                            <span className={`text-base font-black my-1 ${jamHarian > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-300 dark:text-slate-600'}`}>{jamHarian > 0 ? `${jamHarian}` : '-'}</span>
-                            <span className="text-[9px] font-bold uppercase">{jamHarian > 0 ? 'JPL' : 'Libur/0'}</span>
-                         </div>
-                      );
-                   })}
+          return (
+            <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              {/* KARTU 1: KPI RINGKASAN ROSTER MINGGUAN */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Beban Mingguan</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                      <Clock size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{totalRosterJpl}</span>
+                      <span className="text-xs font-bold text-slate-400">JPL / Pekan</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      Roster terjadwal rutin
+                    </div>
+                  </div>
                 </div>
-             </div>
 
-            <div className="mt-10 p-6 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl">
-               <h3 className="font-bold text-lg mb-4 text-amber-800 dark:text-amber-300 flex items-center gap-2 pb-3">
-                 <Star className="text-amber-500" /> Riwayat Kegiatan Insidental & Tambahan (Bulan Ini)
-               </h3>
-               <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                     <thead className="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-b-2 border-amber-200 dark:border-amber-800">
-                        <tr>
-                          <th className="p-3 font-bold">Keterangan / Nama Kegiatan Khusus</th>
-                          <th className="p-3 font-bold text-center">Tambahan Jam (JPL)</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-amber-100 dark:divide-slate-700/50">
-                        {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
-                           myData.payroll.kegiatanInsidental.map((keg, i) => (
-                             <tr key={i} className="hover:bg-amber-100/50 dark:hover:bg-slate-800/80 transition-colors">
-                                <td className="p-3 font-bold text-slate-700 dark:text-slate-300">{keg.ket}</td>
-                                <td className="p-3 text-center">
-                                   <span className="px-3 py-1 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-400 font-black text-xs shadow-sm">+{keg.jam} JPL</span>
-                                </td>
-                             </tr>
-                           ))
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Mengajar</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                      <CalendarDays size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">{activeTeachingDays}</span>
+                      <span className="text-xs font-bold text-slate-400">Hari / Pekan</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      {6 - activeTeachingDays} hari bebas mengajar
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rata-Rata Harian</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                      <Award size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">
+                        {activeTeachingDays > 0 ? (totalRosterJpl / activeTeachingDays).toFixed(1) : 0}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">JPL / Hari Aktif</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      Intensitas mengajar harian
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 2: ROSTER RUTIN MINGGUAN (Senin - Sabtu) */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                    <ListPlus size={16} className="text-pink-500" />
+                    <span>Roster Rutin Mingguan</span>
+                  </h4>
+                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300">
+                    Senin - Sabtu
+                  </span>
+                </div>
+
+                {/* Grid 2 Kolom di Mobile, 3 Kolom di Tablet/Desktop */}
+                <div className="p-2.5 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+                  {rosterDays.map((hari) => {
+                    const hariKey = hari.toLowerCase();
+                    const jpl = Number(rosterObj[hariKey]) || 0;
+                    const hasJpl = jpl > 0;
+
+                    return (
+                      <div 
+                        key={hari} 
+                        className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                          hasJpl 
+                            ? 'bg-gradient-to-br from-pink-50/50 to-rose-50/30 dark:from-pink-950/20 dark:to-slate-900/40 border-pink-200/80 dark:border-pink-800/40 shadow-xs' 
+                            : 'bg-slate-50/60 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${hasJpl ? 'bg-pink-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                            <span>{hari}</span>
+                          </span>
+                          <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${
+                            hasJpl 
+                              ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300' 
+                              : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                          }`}>
+                            {jpl} JPL
+                          </span>
+                        </div>
+
+                        {hasJpl ? (
+                          <div className="mt-1 pt-2 border-t border-pink-100/80 dark:border-pink-900/30 space-y-1">
+                            <span className="text-[9px] font-bold text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-900/40 px-1.5 py-0.5 rounded inline-block">
+                              Terjadwal
+                            </span>
+                            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 line-clamp-1">
+                              Pembelajaran Kelas
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <Users size={11} className="text-pink-500 shrink-0" />
+                              <span>{jpl} Jam Pelajaran</span>
+                            </div>
+                          </div>
                         ) : (
-                           <tr>
-                              <td colSpan="2" className="p-8 text-center text-slate-500 italic bg-white dark:bg-slate-800">Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.</td>
-                           </tr>
+                          <div className="mt-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 italic">
+                            Tidak ada jadwal wajib
+                          </div>
                         )}
-                     </tbody>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* KARTU 3: KALENDER PEMETAAN JAM MENGAJAR HARIAN (Bulan Ini) - Grid 7 Kolom */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                      <CalendarDays size={16} className="text-blue-500" />
+                      <span>Kalender Pemetaan Jam Mengajar Harian</span>
+                      <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">(Tgl 1 - 31)</span>
+                    </h4>
+                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Rincian alokasi Jam Pelajaran (JPL) hasil pemetaan roster dan kegiatan khusus per tanggal.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Mengajar</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span> Libur / 0 JPL</span>
+                  </div>
+                </div>
+
+                {/* Grid 7 Kolom Presisi Mobile */}
+                <div className="p-2.5 sm:p-4 grid grid-cols-7 gap-1 sm:gap-2">
+                  {Array.from({ length: 31 }, (_, idx) => {
+                    const dayNum = idx + 1;
+                    const harianArr = myData.payroll?.jamMengajar?.harian || [];
+                    const jamHarian = Number(harianArr[idx]) || 0;
+                    const hasJpl = jamHarian > 0;
+
+                    return (
+                      <div 
+                        key={dayNum} 
+                        className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${
+                          hasJpl 
+                            ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40 text-blue-900 dark:text-blue-200 shadow-xs' 
+                            : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+                          {dayNum}
+                        </span>
+                        {hasJpl ? (
+                          <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">
+                            {jamHarian}
+                            <span className="text-[8px] font-medium ml-0.5 text-blue-600/70 hidden sm:inline">JPL</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs sm:text-sm font-normal text-slate-300 dark:text-slate-600">-</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* KARTU 4: RIWAYAT KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Card Feed + Desktop Table) */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                    <Star size={16} className="text-amber-500" />
+                    <span>Kegiatan Insidental &amp; Tambahan Bulan Ini</span>
+                  </h4>
+                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    {(myData.payroll?.kegiatanInsidental || []).length} Kegiatan
+                  </span>
+                </div>
+
+                {/* Mobile View: Clean Card Feed (md:hidden) */}
+                <div className="p-3 space-y-2 md:hidden">
+                  {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                    myData.payroll.kegiatanInsidental.map((keg, i) => (
+                      <div key={i} className="p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 line-clamp-2">
+                            {keg.ket}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-black text-xs shadow-xs border border-amber-200/60 dark:border-amber-800/60">
+                            +{keg.jam} JPL
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 px-4 text-center">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                        <Star size={18} />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada penugasan kegiatan massal/insidental di bulan ini.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop View: Full Table (hidden md:block) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
+                      <tr>
+                        <th className="p-3.5 font-semibold">Keterangan / Nama Kegiatan Khusus</th>
+                        <th className="p-3.5 font-semibold text-center w-36">Tambahan Jam</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                        myData.payroll.kegiatanInsidental.map((keg, i) => (
+                          <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">{keg.ket}</td>
+                            <td className="p-3.5 text-center">
+                              <span className="px-3 py-1 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-bold text-xs shadow-xs border border-amber-200/50 dark:border-amber-800/50">
+                                +{keg.jam} JPL
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="2" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
+                            Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
                   </table>
-               </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 2. Rekap Kehadiran */}
         {activeSection === 'portal_kehadiran' && (
@@ -13087,59 +13274,201 @@ function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, fe
 
         {/* 5. Riwayat Gaji */}
         {activeSection === 'portal_riwayat' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-            <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                <tr>
-                  <th className="p-4 font-bold">Periode Bulan</th>
-                  <th className="p-4 font-bold text-right">Total Bersih (THP)</th>
-                  <th className="p-4 font-bold">Tanggal Pengesahan</th>
-                  <th className="p-4 font-bold text-center">Aksi Dokumen</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {riwayatAsli.map((item) => (
-                  <tr key={item.idArsip} className="hover:bg-indigo-50/50 dark:hover:bg-slate-800/40 transition-colors group">
-                    <td className="p-4 font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <Calendar size={16} className="text-indigo-400" /> {item.periode}
-                    </td>
-                    <td className="p-4 font-bold text-emerald-600 dark:text-emerald-400 text-right">{formatRp(item.nominal)}</td>
-                    <td className="p-4">
-                      <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                        <CheckCircle size={14} className="text-emerald-500" /> {item.tanggal}
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      <button 
-                        onClick={() => {
-                          setSelectedHistorySlip(item);
-                          setIsSlipModalOpen(true);
-                        }} 
-                        className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 hover:border-indigo-300 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg font-bold transition-all flex items-center justify-center gap-2 w-full max-w-[140px] mx-auto shadow-sm group-hover:shadow"
-                      >
-                        <FileText size={14} /> Lihat Rincian
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {riwayatAsli.length === 0 && (
-                  <tr>
-                    <td colSpan="4" className="p-10 text-center text-slate-500 flex flex-col items-center justify-center">
-                       <Archive size={40} className="mb-3 opacity-30 text-indigo-500" />
-                       <p className="font-bold">Belum ada riwayat gaji yang tersimpan.</p>
-                       <p className="text-xs mt-1">Data akan muncul di sini setelah Admin melakukan "Tutup Buku" pada akhir bulan.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+          {/* KARTU 1: KPI RINGKASAN ARSIP GAJI */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Arsip</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <Archive size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{riwayatAsli.length}</span>
+                  <span className="text-xs font-bold text-slate-400">Bulan</span>
+                </div>
+                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Dokumen slip tersimpan
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Arsip Terakhir</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Calendar size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 truncate">
+                  {riwayatAsli[0]?.periode || 'Belum Ada'}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                  {riwayatAsli[0]?.tanggal || '-'}
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status Dokumen</span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={16} />
+                </div>
+              </div>
+              <div>
+                <div className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <span>Resmi &amp; Sah</span>
+                </div>
+                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Disetujui Kepala Sekolah
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-4 flex items-start gap-1">
-             <Info size={14} className="shrink-0" />
-             Catatan: Dokumen slip gaji merupakan dokumen rahasia. Jaga kerahasiaan file PDF yang Anda unduh. Apabila terdapat pertanyaan mengenai data lampau, silakan hubungi bendahara.
-          </p>
+
+          {/* KARTU 2: DAFTAR DOKUMEN ARSIP (Dual-Mode: Mobile Card Feed + Desktop Table) */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                <History size={16} className="text-indigo-500" />
+                <span>Daftar Slip Gaji Diarsipkan</span>
+              </h4>
+              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+                {riwayatAsli.length} Dokumen
+              </span>
+            </div>
+
+            {/* Mobile View: Dedicated Card Feed (md:hidden) */}
+            <div className="p-3 space-y-3 md:hidden">
+              {riwayatAsli.map((item) => (
+                <div 
+                  key={item.idArsip} 
+                  className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3.5 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-600 transition-all space-y-3"
+                >
+                  {/* Baris 1: Periode & Badge Disahkan */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                        <Calendar size={15} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Periode Gaji</span>
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">{item.periode}</h4>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/50 dark:border-emerald-800/40">
+                      <CheckCircle2 size={11} className="text-emerald-500" /> Disahkan
+                    </span>
+                  </div>
+
+                  {/* Baris 2: Nominal THP & Tanggal */}
+                  <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gaji Bersih (THP)</span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(item.nominal)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-medium text-slate-400 block">Tgl Pengesahan</span>
+                      <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{item.tanggal}</span>
+                    </div>
+                  </div>
+
+                  {/* Baris 3: Tombol Aksi Buka Slip */}
+                  <button 
+                    onClick={() => {
+                      setSelectedHistorySlip(item);
+                      setIsSlipModalOpen(true);
+                    }} 
+                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-[0.98]"
+                  >
+                    <FileText size={15} />
+                    <span>Buka &amp; Cetak Slip Gaji (A4)</span>
+                  </button>
+                </div>
+              ))}
+
+              {riwayatAsli.length === 0 && (
+                <div className="py-8 px-4 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center mx-auto mb-3 text-indigo-400">
+                    <Archive size={24} />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat gaji tersimpan</h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Data akan muncul di sini setelah Admin/Bendahara melakukan Tutup Buku bulanan.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop View: Full Table (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
+                <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
+                  <tr>
+                    <th className="p-3.5 font-semibold">Periode Bulan</th>
+                    <th className="p-3.5 font-semibold text-right">Total Bersih (THP)</th>
+                    <th className="p-3.5 font-semibold">Tanggal Pengesahan</th>
+                    <th className="p-3.5 font-semibold text-center">Status</th>
+                    <th className="p-3.5 font-semibold text-center">Aksi Dokumen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {riwayatAsli.map((item) => (
+                    <tr key={item.idArsip} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 transition-colors group">
+                      <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={15} className="text-indigo-400" />
+                          <span className="font-semibold">{item.periode}</span>
+                        </div>
+                      </td>
+                      <td className="p-3.5 font-black text-emerald-600 dark:text-emerald-400 text-right">
+                        {formatRp(item.nominal)}
+                      </td>
+                      <td className="p-3.5 text-xs text-slate-600 dark:text-slate-400">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-emerald-500" />
+                          <span>{item.tanggal}</span>
+                        </div>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-bold border border-emerald-200/50 dark:border-emerald-800/40">
+                          Disahkan
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <button 
+                          onClick={() => {
+                            setSelectedHistorySlip(item);
+                            setIsSlipModalOpen(true);
+                          }} 
+                          className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 hover:border-indigo-300 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 mx-auto shadow-xs group-hover:shadow cursor-pointer"
+                        >
+                          <FileText size={13} /> Lihat Rincian
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {riwayatAsli.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="p-10 text-center text-slate-400">
+                        <Archive size={36} className="mb-2 opacity-30 text-indigo-500 mx-auto" />
+                        <p className="font-bold text-sm text-slate-600 dark:text-slate-300">Belum ada riwayat gaji yang tersimpan.</p>
+                        <p className="text-xs mt-0.5 text-slate-400">Data akan muncul di sini setelah Admin melakukan "Tutup Buku" pada akhir bulan.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Catatan Privasi Dokumen */}
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
+            <ShieldCheck size={13} className="shrink-0 text-indigo-500" />
+            <span>Dokumen slip gaji merupakan dokumen rahasia. Jaga kerahasiaan berkas yang Anda unduh.</span>
+          </div>
         </div>
         )}
 
