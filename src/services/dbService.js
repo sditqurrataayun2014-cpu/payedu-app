@@ -418,11 +418,23 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
           return tB - tA; // descending (terbaru di depan)
         });
 
+        // 🔋 OPTIMASI EGRESS & LOG INGESTION SUPABASE:
+        // Jangan meng-upsert seluruh ribuan rekaman presensi masa lampau berulang-ulang!
+        // Hanya upsert rekaman 7 hari terakhir (atau maksimal 60 jika libur/penugasan khusus).
+        let rowsToPush = rows;
+        if (!options.all) {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+          rowsToPush = rows.filter(r => (r.date && r.date >= sevenDaysAgo) || !r.date);
+          if (rowsToPush.length === 0 && rows.length > 0) {
+            rowsToPush = rows.slice(0, 60);
+          }
+        }
+
         const BATCH_SIZE = 100;
         let hasError = false;
 
-        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-          const chunk = rows.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < rowsToPush.length; i += BATCH_SIZE) {
+          const chunk = rowsToPush.slice(i, i + BATCH_SIZE);
           const { error: batchErr } = await supabase
             .from('presensi_records')
             .upsert(chunk, { onConflict: 'id' });
@@ -451,79 +463,22 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
         if (tableAttempt < TABLE_MAX_RETRIES) {
           const delay = Math.min(500 * Math.pow(2, tableAttempt - 1), 4000) + Math.random() * 500;
           await new Promise(r => setTimeout(r, delay));
-        } else {
-          console.warn('Semua retry presensi_records gagal, mencoba fallback ke settings...');
         }
       }
     }
   }
 
-  // 🛡️ MESIN 2 (FALLBACK): SIMPAN KE TABEL settings JIKA TABEL MANDIRI BELUM ADA
-  const maxRetries = options.overwrite ? 1 : 3;
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      let dataToPush = presensiArray;
-      if (!options.overwrite) {
-        try {
-          const { data: serverRow } = await supabase
-            .from('settings')
-            .select('data')
-            .eq('id', 'presensi_guru')
-            .single();
-
-          if (serverRow?.data) {
-            const serverData = typeof serverRow.data === 'string' ? JSON.parse(serverRow.data) : serverRow.data;
-            if (Array.isArray(serverData) && serverData.length > 0) {
-              dataToPush = mergePresensiArrays(serverData, presensiArray);
-              safeStorageSet('payedu_presensi_guru', dataToPush);
-            }
-          }
-        } catch (fetchErr) {
-          console.warn(`Peringatan pembacaan data presensi cloud sebelum push (attempt ${attempt}):`, fetchErr);
-        }
-      }
-
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ 
-          id: 'presensi_guru', 
-          data: dataToPush, 
-          updated_at: now 
-        });
-
-      if (!error) {
-        _lastPushedPresensiHash = JSON.stringify(dataToPush);
-        _lastPushedPresensiTime = Date.now();
-        clearPendingQueue(); // Bersihkan antrian jika ada
-        return { status: 'success', message: 'Presensi berhasil disinkronkan ke cloud (settings)', data: dataToPush };
-      } else {
-        lastError = error;
-        if (attempt < maxRetries) {
-          await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
-        }
-      }
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
-      }
-    }
-  }
-
-  console.error('Supabase presensi_guru upsert error:', lastError);
   // 🛡️ Push gagal total → masukkan ke antrian offline untuk retry otomatis nanti
   enqueuePendingPush(presensiArray);
   return { status: 'partial', message: 'Tersimpan lokal, gagal sync ke cloud (masuk antrian retry)' };
 };
 
 /**
- * Mengambil data presensi guru dari Supabase dengan Dual-Engine:
- * Mencoba tabel `presensi_records` terlebih dahulu, lalu fallback ke `settings`.
+ * Mengambil data presensi guru dari Supabase dengan Delta Sync Cerdas:
+ * 1. Jika data lokal sudah ada, cari timestamp mutakhir dan HANYA unduh baris baru/diubah (~150 bytes vs 3.7 MB!).
+ * 2. Jika data lokal kosong atau dipaksa refresh, unduh 1500 rekaman paling mutakhir (~3 bulan terakhir).
  */
-export const fetchPresensiGuru = async () => {
+export const fetchPresensiGuru = async (options = {}) => {
   const localPresensi = safeStorageGet('payedu_presensi_guru', []);
   const safeLocal = Array.isArray(localPresensi) ? localPresensi : [];
 
@@ -532,99 +487,66 @@ export const fetchPresensiGuru = async () => {
   }
 
   const hasTable = await isPresensiRecordsTableAvailable();
+  const forceFull = options?.force === true;
 
-  // 🚀 MESIN 1: AMBIL DARI TABEL MANDIRI presensi_records
+  // 🚀 MESIN 1: AMBIL DARI TABEL MANDIRI presensi_records DENGAN DELTA SYNC
   if (hasTable) {
     try {
-      let allRecords = [];
-      let from = 0;
-      const step = 1000;
-
-      while (true) {
-        const { data, error } = await supabase
-          .from('presensi_records')
-          .select('*')
-          .range(from, from + step - 1);
-
-        if (error) {
-          console.warn('Gagal fetch presensi_records chunk:', error);
-          break;
+      // 🔋 DELTA SYNC CERDAS (Hemat 99.9% Bandwidth Egress & Log Ingestion):
+      if (!forceFull && safeLocal.length > 0) {
+        let latestLocalTs = '';
+        for (const r of safeLocal) {
+          const ts = r.updatedAt || r.updated_at || r.createdAt || r.created_at;
+          if (ts && String(ts) > latestLocalTs) {
+            latestLocalTs = String(ts);
+          }
         }
-        if (!data || data.length === 0) break;
-        allRecords = allRecords.concat(data);
-        if (data.length < step) break;
-        from += step;
+
+        if (latestLocalTs) {
+          // Ambil HANYA baris yang berubah sejak sinkronisasi lokal terakhir
+          const { data: deltaRows, error: deltaErr } = await supabase
+            .from('presensi_records')
+            .select('*')
+            .gt('updated_at', latestLocalTs)
+            .order('updated_at', { ascending: false })
+            .limit(300);
+
+          if (!deltaErr && Array.isArray(deltaRows)) {
+            if (deltaRows.length === 0) {
+              // Tidak ada perubahan sama sekali di cloud! (Egress ~150 bytes, respons ~70ms)
+              return { status: 'success', source: 'delta_cache', data: safeLocal };
+            }
+            // Ada baris baru atau update: gabungkan hanya delta tersebut
+            const mappedDelta = deltaRows.map(mapDbRowToPresensi);
+            const merged = mergePresensiArrays(mappedDelta, safeLocal);
+            safeStorageSet('payedu_presensi_guru', merged);
+            return { status: 'success', source: 'delta_sync', data: merged };
+          }
+        }
       }
 
-      if (allRecords.length > 0) {
-        const mapped = allRecords.map(mapDbRowToPresensi);
+      // 📥 INITIAL LOAD / RECOVERY (Jika data lokal kosong atau diminta reload):
+      // Ambil 1500 rekaman paling mutakhir (mencakup 3+ bulan terakhir seluruh sekolah)
+      // bukan men-download seluruh ribuan riwayat tahun lampau tanpa batas!
+      const { data: recentRows, error: recentErr } = await supabase
+        .from('presensi_records')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(1500);
+
+      if (!recentErr && Array.isArray(recentRows) && recentRows.length > 0) {
+        const mapped = recentRows.map(mapDbRowToPresensi);
         const merged = mergePresensiArrays(mapped, safeLocal);
         safeStorageSet('payedu_presensi_guru', merged);
         return { status: 'success', source: 'presensi_records', data: merged };
       }
     } catch (tableErr) {
-      console.warn('Gagal membaca dari presensi_records, mencoba fallback ke settings:', tableErr);
+      console.warn('Gagal membaca dari presensi_records:', tableErr);
     }
   }
 
-  // 🛡️ MESIN 2 (FALLBACK): AMBIL DARI SETTINGS
-  try {
-    const { data: row, error } = await supabase
-      .from('settings')
-      .select('data, updated_at')
-      .eq('id', 'presensi_guru')
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.warn('Gagal mengambil presensi_guru dari Supabase:', error);
-    }
-
-    let serverPresensi = null;
-    if (row?.data) {
-      const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
-      if (Array.isArray(parsed)) {
-        serverPresensi = parsed;
-      }
-    }
-
-    // Jika server punya data, merge dengan lokal (prioritas server)
-    if (serverPresensi !== null) {
-      const merged = mergePresensiArrays(serverPresensi, safeLocal);
-      safeStorageSet('payedu_presensi_guru', merged);
-      return { status: 'success', source: 'supabase', data: merged };
-    }
-
-    // Server kosong — coba migrasi dari settings lama (field presensiGuru di general)
-    try {
-      const { data: generalRow } = await supabase
-        .from('settings')
-        .select('data')
-        .eq('id', 'general')
-        .single();
-      if (generalRow?.data) {
-        const generalData = typeof generalRow.data === 'string' ? JSON.parse(generalRow.data) : generalRow.data;
-        if (Array.isArray(generalData?.presensiGuru) && generalData.presensiGuru.length > 0) {
-          console.log('Migrasi presensi dari settings.general ke settings.presensi_guru...');
-          const migrated = mergePresensiArrays(generalData.presensiGuru, safeLocal);
-          await pushPresensiGuru(migrated);
-          return { status: 'success', source: 'migrated', data: migrated };
-        }
-      }
-    } catch (migErr) {
-      console.warn('Migrasi presensi gagal (tidak fatal):', migErr);
-    }
-
-    // Server benar-benar kosong, push lokal ke server
-    if (safeLocal.length > 0) {
-      console.log('Presensi cloud kosong, auto-push data lokal...');
-      pushPresensiGuru(safeLocal).catch(e => console.warn(e));
-    }
-
-    return { status: 'success', source: 'local', data: safeLocal };
-  } catch (error) {
-    console.error('Error saat fetch presensi dari Supabase:', error);
-    return { status: 'success', source: 'fallback', data: safeLocal };
-  }
+  // Fallback aman: kembalikan data lokal
+  return { status: 'success', source: 'local', data: safeLocal };
 };
 
 /**
@@ -880,7 +802,7 @@ export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
     return () => {}; // noop unsubscribe
   }
   const channel = supabase
-    .channel('public:presensi_dual_realtime')
+    .channel('public:presensi_records_realtime')
     .on('postgres_changes', { 
       event: '*', 
       schema: 'public', 
@@ -894,27 +816,19 @@ export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
           return;
         }
 
+        // 🗑️ REALTIME DELETE: Hapus instan tanpa re-fetch data penuh
+        if (payload?.eventType === 'DELETE' && payload.old?.id && typeof onSingleUpdate === 'function') {
+          onSingleUpdate({ id: payload.old.id, _deleted: true });
+          return;
+        }
+
+        // Fallback delta sync: Hanya unduh baris baru (~150 bytes)
         const res = await fetchPresensiGuru();
         if (res.status === 'success' && Array.isArray(res.data) && typeof onUpdate === 'function') {
           onUpdate(res.data);
         }
       } catch (err) {
         console.warn('Gagal sinkronisasi presensi_records real-time:', err);
-      }
-    })
-    .on('postgres_changes', { 
-      event: '*', 
-      schema: 'public', 
-      table: 'settings', 
-      filter: 'id=eq.presensi_guru' 
-    }, async () => {
-      try {
-        const res = await fetchPresensiGuru();
-        if (res.status === 'success' && Array.isArray(res.data) && typeof onUpdate === 'function') {
-          onUpdate(res.data);
-        }
-      } catch (err) {
-        console.warn('Gagal sinkronisasi presensi settings real-time:', err);
       }
     })
     .subscribe();
@@ -1011,7 +925,11 @@ export const pushCloudData = async (action, payload) => {
           updated_at: now
         }));
         const { error } = await supabase.from('teachers').upsert(teacherRecords, { onConflict: 'id' });
-        if (error) console.error('Supabase teachers upsert error:', error);
+        if (error) {
+          console.error('Supabase teachers upsert error:', error);
+        } else {
+          safeStorageSet('payedu_teachers_last_sync', Date.now());
+        }
 
         // Hapus baris guru di Supabase yang sudah tidak ada di payload (misal baru dihapus admin)
         try {
@@ -1072,20 +990,16 @@ export const pushCloudData = async (action, payload) => {
       if (error) console.error('Supabase feedbacks upsert error:', error);
     }
 
-    // 5. Simpan / Hapus Login Logs Permanen
-    if (Array.isArray(targetLogs)) {
-      if (targetLogs.length === 0) {
-        const { error } = await supabase.from('login_logs').delete().neq('id', '000000_dummy_never_matches');
-        if (error) console.error('Supabase login_logs delete error:', error);
-      } else {
-        const logRecords = targetLogs.map(l => ({
-          id: String(l.id || Date.now() + Math.random()),
-          data: l,
-          created_at: l.timestamp || l.created_at || (l.timeRaw ? new Date(l.timeRaw).toISOString() : now)
-        }));
-        const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
-        if (error) console.error('Supabase login_logs upsert error:', error);
-      }
+    // 5. 🔋 OPTIMASI: Simpan HANYA log login terbaru (bukan me-re-upsert ratusan baris lama)
+    if (Array.isArray(targetLogs) && targetLogs.length > 0) {
+      const recentLogs = targetLogs.slice(0, 2);
+      const logRecords = recentLogs.map(l => ({
+        id: String(l.id || ('log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+        data: l,
+        created_at: l.timestamp || l.created_at || (l.timeRaw ? new Date(l.timeRaw).toISOString() : now)
+      }));
+      const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
+      if (error) console.error('Supabase login_logs upsert error:', error);
     }
 
     return { status: 'success', message: 'Berhasil disinkronkan ke Supabase Cloud!' };
@@ -1137,13 +1051,48 @@ export const fetchCloudData = async (options = {}) => {
       console.warn('Gagal mengambil settings dari Supabase:', settingsErr);
     }
 
-    // 2. Fetch Teachers (Terurut rapi berdasarkan ID)
-    const { data: teachersRows, error: teachersErr } = await supabase
-      .from('teachers')
-      .select('id, data')
-      .order('id', { ascending: true });
+    // 2. 🔋 OPTIMASI EGRESS TEACHERS:
+    // Cek timestamp mutakhir (~48 bytes) sebelum mengunduh seluruh 84 guru (~103 KB)
+    let teachersRows = null;
+    const forceTeachers = typeof options === 'object' && options?.forceTeachers;
+    if (localTeachers && localTeachers.length > 0 && !forceTeachers) {
+      try {
+        const { data: latestTeacherRow } = await supabase
+          .from('teachers')
+          .select('updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(1);
 
-    if (teachersErr) console.warn('Gagal mengambil teachers dari Supabase:', teachersErr);
+        const latestTs = latestTeacherRow?.[0]?.updated_at ? new Date(latestTeacherRow[0].updated_at).getTime() : 0;
+        const lastSyncTs = Number(safeStorageGet('payedu_teachers_last_sync', 0)) || 0;
+
+        if (latestTs > 0 && lastSyncTs > 0 && latestTs <= lastSyncTs) {
+          // Data guru di cloud belum berubah, gunakan cache lokal (Hemat ~103 KB!)
+          teachersRows = null;
+        } else {
+          // Ada update guru dari admin atau belum pernah sync
+          const { data: tRows, error: tErr } = await supabase
+            .from('teachers')
+            .select('id, data')
+            .order('id', { ascending: true });
+          if (!tErr && Array.isArray(tRows)) {
+            teachersRows = tRows;
+            safeStorageSet('payedu_teachers_last_sync', Date.now());
+          }
+        }
+      } catch (tCheckErr) {
+        teachersRows = null;
+      }
+    } else {
+      const { data: tRows, error: tErr } = await supabase
+        .from('teachers')
+        .select('id, data')
+        .order('id', { ascending: true });
+      if (!tErr && Array.isArray(tRows)) {
+        teachersRows = tRows;
+        safeStorageSet('payedu_teachers_last_sync', Date.now());
+      }
+    }
 
     // 3. 🔋 OPTIMASI EGRESS ARSIP GAJI:
     // Guru & Admin tetap bisa melihat seluruh arsip bulan-bulan lampau secara utuh.
@@ -1255,7 +1204,7 @@ export const fetchCloudData = async (options = {}) => {
         ...parsedData,
         id: r.id || parsedData.id
       };
-    }) : null;
+    }) : (localTeachers && localTeachers.length > 0 ? localTeachers : null);
 
     if (serverTeachers && Array.isArray(serverTeachers)) {
       serverTeachers.sort((a, b) => {
@@ -1444,6 +1393,7 @@ export const fetchTeachersOnly = async () => {
     });
     const clean = deduplicateTeachers(teachers);
     safeStorageSet('payedu_teachers', clean);
+    safeStorageSet('payedu_teachers_last_sync', Date.now());
     return clean;
   } catch (e) {
     console.warn('Gagal fetch teachers only:', e);

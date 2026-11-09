@@ -1000,7 +1000,8 @@ export default function App() {
           let finalTeachers = serverTeachers;
           let finalArchives = serverArchives;
 
-          if (isLocalNewer || isServerTeachersEmpty) {
+          // 🛡️ ANTI-WIPEOUT: Hanya ADMIN yang boleh push SYNC_ALL ke cloud! Guru tidak pernah push SYNC_ALL!
+          if (user && user.role !== 'guru' && (isLocalNewer || isServerTeachersEmpty)) {
             console.log("🛡️ Proteksi Sinkronisasi: Mempertahankan data lokal Admin yang lebih baru & auto-push ke Supabase Cloud");
             if (isLocalNewer && localSettings) {
               finalSettings = { ...serverSettings, ...localSettings };
@@ -1025,6 +1026,7 @@ export default function App() {
           lastSavedSettingsRef.current = JSON.stringify({ ...finalSettings, lastModified: 0 });
           lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
           lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
+          lastKnownCloudTimestampRef.current = String(finalSettings?.lastModified || serverSettings?.lastModified || Date.now());
 
           setGeneralSettings(finalSettings);
           setTeachers(cleanTeachers); 
@@ -1077,6 +1079,15 @@ export default function App() {
       }
     }, (singleRecord) => {
       if (!singleRecord || !singleRecord.id) return;
+      if (singleRecord._deleted) {
+        setPresensiGuru(prev => {
+          const currentList = Array.isArray(prev) ? prev : [];
+          const nextList = currentList.filter(r => r.id !== singleRecord.id);
+          safeStorageSet('payedu_presensi_guru', nextList);
+          return nextList;
+        });
+        return;
+      }
       setPresensiGuru(prev => {
         const currentList = Array.isArray(prev) ? prev : [];
         const norm = (v) => String(v || '').trim().toLowerCase();
@@ -1181,24 +1192,48 @@ export default function App() {
     flushPendingPresensi().catch(e => console.warn('[Flush Queue Login] Warning:', e));
   }, [user, isDataLoaded]);
 
-  // 🔋 Radar Latar Belakang (Smart Polling) — Cek ringan setiap 2 menit, fetch penuh hanya jika ada perubahan
+  // 🔋 Radar Latar Belakang (Smart Polling Hemat Bandwidth)
+  // - Interval 5 menit (hanya sebagai cadangan jika WebSocket Realtime terputus)
+  // - Otomatis PAUSE jika tab berada di background / layar HP mati (hemat ribuan log ingestion)
+  // - Hanya fetch settings jika timestamp general settings berubah (~1 KB, bukan megabytes)
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return; 
 
-    const pollInterval = setInterval(async () => {
-       if (!isPushingDataRef.current) {
-          try {
-            const cloudTs = await checkCloudTimestamp();
-            if (cloudTs && cloudTs !== lastKnownCloudTimestampRef.current) {
-              lastKnownCloudTimestampRef.current = cloudTs;
-              fetchCloudData(true);
-            }
-          } catch (e) { /* skip jika gagal cek timestamp */ }
-       }
-    }, 120000); // ⚡ 2 menit (sebelumnya 8 detik — menghemat ~93% bandwidth polling)
+    const checkUpdate = async () => {
+      // 🛡️ Hemat Bandwidth: Lewati jika tab sedang diminimize / layar HP mati
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (isPushingDataRef.current) return;
 
-    return () => clearInterval(pollInterval);
-  }, [isDataLoaded, generalSettings.lastModified, hasConflict]);
+      try {
+        const cloudTs = await checkCloudTimestamp();
+        if (cloudTs && cloudTs !== lastKnownCloudTimestampRef.current) {
+          lastKnownCloudTimestampRef.current = cloudTs;
+          fetchSettingsOnly().then(newSettings => {
+            if (newSettings) {
+              setGeneralSettings(newSettings);
+              safeStorageSet('payedu_settings', newSettings);
+            }
+          });
+        }
+      } catch (e) { /* skip jika gagal cek timestamp */ }
+    };
+
+    // 1. Polling santai setiap 5 menit (300.000 ms) saat tab aktif
+    const pollInterval = setInterval(checkUpdate, 300000);
+
+    // 2. Cek seketika saat user membuka kembali tab PayEdu dari background
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        checkUpdate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isDataLoaded, hasConflict]);
 
   // 🪄 FUNGSI MUTLAK: Mengubah Status Mode Maintenance & Push Langsung ke Cloud Supabase
   const handleToggleMaintenanceMode = async (newVal) => {
