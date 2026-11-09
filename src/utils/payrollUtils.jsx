@@ -182,6 +182,51 @@ export const formatDateId = (dateString, options = { day: 'numeric', month: 'lon
   return d.toLocaleDateString('id-ID', options);
 };
 
+// Helper Super Cerdas Konversi Tanggal ke Format ISO (YYYY-MM-DD) untuk <input type="date">
+export const formatToInputDate = (dateStr) => {
+  if (!dateStr) return '';
+  let str = String(dateStr).trim();
+  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str.split('T')[0];
+  
+  const matchSlash = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (matchSlash) {
+    return `${matchSlash[3]}-${matchSlash[2].padStart(2, '0')}-${matchSlash[1].padStart(2, '0')}`;
+  }
+
+  const bulanMap = { 
+    'jan': '01', 'januari': '01',
+    'feb': '02', 'februari': '02',
+    'mar': '03', 'maret': '03',
+    'apr': '04', 'april': '04',
+    'mei': '05', 'may': '05',
+    'jun': '06', 'juni': '06',
+    'jul': '07', 'juli': '07',
+    'agu': '08', 'agustus': '08', 'aug': '08',
+    'sep': '09', 'september': '09',
+    'okt': '10', 'oktober': '10', 'oct': '10',
+    'nov': '11', 'november': '11',
+    'des': '12', 'desember': '12', 'dec': '12' 
+  };
+  const parts = str.toLowerCase().split(/[\s\-]+/);
+  if (parts.length >= 3) {
+    const d = parts[0].padStart(2, '0');
+    const m = bulanMap[parts[1]] || '01';
+    let y = parts[2];
+    if (y.length === 2) y = parseInt(y, 10) > 30 ? `19${y}` : `20${y}`;
+    if (parseInt(d, 10) > 0 && parseInt(y, 10) > 1900) {
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return '';
+};
+
 // Fungsi Helper untuk Terbilang (Mengubah Angka menjadi Teks)
 export const terbilang = (angka) => {
   const bilangan = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
@@ -221,6 +266,52 @@ export const simpleHash = (str) => {
 
 export const generateUniqueId = (prefix = '') => {
   return `${prefix}${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+};
+
+// Helper untuk mengurai berbagai format string periode menjadi Date object valid (Mencegah "Invalid Date")
+export const parsePeriodToDate = (periodStr) => {
+  if (!periodStr) return new Date();
+  if (periodStr instanceof Date && !isNaN(periodStr.getTime())) return periodStr;
+
+  const str = String(periodStr).trim();
+
+  // 1. Cek format nama bulan + tahun, contoh: "Agustus 2026", "Juli 2026", "Des 2025"
+  const textMatch = str.match(/^([a-zA-Z]+)\s+(\d{4})$/);
+  if (textMatch) {
+    const monthName = textMatch[1].toLowerCase();
+    const year = parseInt(textMatch[2], 10);
+    if (MONTH_INDEX_MAP[monthName] !== undefined && !isNaN(year)) {
+      return new Date(year, MONTH_INDEX_MAP[monthName], 1);
+    }
+  }
+
+  // 2. Cek format YYYY-MM atau YYYY/MM (contoh: "2026-08")
+  const yyyyMmMatch = str.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yyyyMmMatch) {
+    const year = parseInt(yyyyMmMatch[1], 10);
+    const month = parseInt(yyyyMmMatch[2], 10) - 1;
+    if (!isNaN(year) && !isNaN(month) && month >= 0 && month <= 11) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  // 3. Cek format MM-YYYY atau MM/YYYY (contoh: "08-2026")
+  const mmYyyyMatch = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (mmYyyyMatch) {
+    const month = parseInt(mmYyyyMatch[1], 10) - 1;
+    const year = parseInt(mmYyyyMatch[2], 10);
+    if (!isNaN(year) && !isNaN(month) && month >= 0 && month <= 11) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  // 4. Standar Date parse (ISO string dsb)
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return new Date();
 };
 
 export const getFormattedPeriod = (periodStr) => {
@@ -471,3 +562,77 @@ export const sortLoginLogs = (logs) => {
   if (!Array.isArray(logs)) return [];
   return [...logs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
 };
+
+export const calculateYearsFromDate = (dateStr) => {
+  if (!dateStr || dateStr === '-') return '?';
+  const d = parseSmartDate(dateStr);
+  if (!d) return '?';
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) {
+    years--;
+  }
+  return years >= 0 ? years : '?';
+};
+
+export const generateTeacherId = (currentTeachers) => {
+  if (!currentTeachers || currentTeachers.length === 0) return 'G01QA';
+  let maxNum = 0;
+  currentTeachers.forEach(t => {
+    const match = String(t.id).match(/^G(\d+)QA$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  return `G${String(maxNum + 1).padStart(2, '0')}QA`;
+};
+
+// 🪄 FITUR MASTER & SETTINGS DEFAULT UNIVERSAL
+export const defaultMasterRates = {
+  TENURE_RATES: TENURE_RATES,
+  EDU_RATES: EDU_RATES,
+  JOB_CATEGORIES: JOB_CATEGORIES,
+  JOB_ROLES: JOB_ROLES,
+  KINERJA_LEVELS: KINERJA_LEVELS,
+  KINERJA_RATES: KINERJA_RATES,
+  KOMPETENSI_FIELDS: KOMPETENSI_FIELDS,
+  KOMPETENSI_LEVELS: KOMPETENSI_LEVELS,
+  KOMPETENSI_LEVEL_RATES: KOMPETENSI_LEVEL_RATES,
+  INSENTIF_LIST: INSENTIF_LIST,
+  POTONGAN_LIST: POTONGAN_LIST
+};
+
+export const defaultGeneralSettings = {
+  appName: 'Manajemen Penggajian',
+  foundationName: 'YAYASAN DAARUSSALAAM SERUYAN',
+  schoolName: 'Sekolah Dasar Islam Terpadu (SD-IT)',
+  principalName: 'ILWANI, S.Pd.I', 
+  signatureUrl: '', 
+  address: 'Jl. Diponegoro Gg. Makam Pahlawan Kuala Pembuang Seruyan',
+  logoUrl: 'https://i.ibb.co.com/zVGjvWxV/httpsi-ibb-co-com-GQYf3-Hd81-removebg-preview-png.png',
+  avatarMaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png',
+  avatarFemaleUrl: 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png',
+  payrollStatus: 'Draft', 
+  payrollPeriod: (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })(),
+  payrollInfoText: `Sistem penggajian di sekolah ini kami susun secara transparan dan berbasis kinerja. Berikut adalah pedoman dan komponen yang membentuk gaji bersih (Take Home Pay) Anda:
+
+* Tunjangan Masa Kerja: Dihitung berdasarkan tahun Mulai Tugas (TMT) pengabdian Anda di sekolah ini.
+* Tunjangan Masa Kerja: Diberikan kepada Guru/Pegawai yang berstatus TETAP. Adapun syarat untuk diangkat sebagai Guru/ Pegawai Tetap adalah minimal masa kerja 2 tahun.
+* Tunjangan Pendidikan: Penyesuaian berdasarkan kualifikasi pendidikan terakhir (SMA/Diploma/S1/S2).
+* Tunjangan Jabatan: Diberikan kepada pemangku amanah struktural sekolah (Kepsek, Waka, Wali Kelas, dll).
+* Tunjangan Keluarga: Diberikan khusus bagi pegawai yang telah menikah (Tunjangan Suami/Istri & Anak).
+* Insentif Kehadiran (Tepat Waktu): Apresiasi atas dedikasi dan kedisiplinan waktu kehadiran masuk kelas.
+* Insentif Tugas Tambahan: Disesuaikan dengan penugasan dari Kepala Sekolah yang sifanya insidental atau tugas khusus lainnya.
+* Pemotongan Kedisiplinan: Pengurangan nominal atas keterlambatan atau ketidakhadiran tanpa keterangan.
+* Pemotongan Pinjaman: Angsuran otomatis untuk pelunasan Kasbon sekolah, iuran baju Guru, atau lainnya.
+* Adapun Hal lainnya yang belum terakomodir di dalam sistem aplikasi penggajian ini, akan menyesuaikan dengan kebijakan Sekolah/Yayasan. (misalnya: Guru cuti, libur Panjang, dll.) yang berdampak terhadap rekapitulasi jam mengajar.
+
+Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), harap segera melapor ke bagian Tata Usaha (TU) Administrasi maksimal 1x24 jam sejak slip gaji diterbitkan/dikonfirmasi.`,
+  masterRates: defaultMasterRates
+};
+
+

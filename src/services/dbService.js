@@ -1452,3 +1452,22 @@ export const syncPendingTeacherAttendance = async (teacherId, localPresensi) => 
   }
 };
 
+/**
+ * 📱 HELPER UNIVERSAL: Pembaruan Data Guru Ringkas (cth: ikat perangkat HP otomatis)
+ */
+export const createTeacherPatchHandler = (setTeachers) => (teacherId, patch) => {
+  if (typeof setTeachers !== 'function') return;
+  setTeachers(prev => {
+    const updated = (prev || []).map(t => {
+      if (String(t.id) === String(teacherId)) {
+        return { ...t, ...patch };
+      }
+      return t;
+    });
+    safeStorageSet('payedu_teachers', updated);
+    pushCloudData('SAVE_TEACHERS', updated).catch(e => console.warn('Gagal sync patch guru ke cloud:', e));
+    return updated;
+  });
+};
+
+
