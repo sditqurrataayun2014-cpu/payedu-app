@@ -75,28 +75,28 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
     safeStorageSet('payedu_salary_privacy_masked', next);
   };
 
-  const renderNominal = (amount, teacherId, customClass = "") => {
+  const renderNominal = (amount, teacherId, customClass = "", prefix = "") => {
     if (amount === null || amount === undefined || isNaN(amount)) return <span className="text-slate-400">-</span>;
     if (isTeacherMasked(teacherId)) {
       return (
         <span className={`inline-flex items-center gap-1 font-mono tracking-wider text-slate-400 dark:text-slate-500 select-none ${customClass}`} title="Nominal disensor demi privasi">
-          Rp •••••••
+          {prefix ? prefix : ''}Rp •••••••
         </span>
       );
     }
-    return <span className={customClass}>{formatRp(amount)}</span>;
+    return <span className={customClass}>{prefix}{formatRp(amount)}</span>;
   };
 
-  const renderTotalNominal = (amount, customClass = "") => {
+  const renderTotalNominal = (amount, customClass = "", prefix = "") => {
     if (amount === null || amount === undefined || isNaN(amount)) return <span className="text-slate-400">-</span>;
     if (isMaskedAll) {
       return (
         <span className={`inline-flex items-center gap-1 font-mono tracking-wider text-slate-400 dark:text-slate-500 select-none ${customClass}`} title="Nominal disensor demi privasi">
-          Rp •••••••••
+          {prefix ? prefix : ''}Rp •••••••••
         </span>
       );
     }
-    return <span className={customClass}>{formatRp(amount)}</span>;
+    return <span className={customClass}>{prefix}{formatRp(amount)}</span>;
   };
 
 
@@ -696,7 +696,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
       gtTotalKotor = 0, gtPotong = 0, gtTHP = 0;
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
+    <div className="flex flex-col gap-5 animate-in fade-in relative">
       
       {/* TAMBAHAN: Modal Konfirmasi Notif Massal */}
       {/* MODAL KONFIRMASI AJUKAN APPROVAL */}
@@ -1049,7 +1049,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
         </div>
       </div>
 
-<div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
+<div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
         {/* HEADER TABEL YANG DIRAPIKAN (TWO-TIER LAYOUT) */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-4 bg-slate-50 dark:bg-slate-900/50 shrink-0">
           
@@ -1244,8 +1244,8 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
           })}
         </div>
 
-        <div className={`hidden md:block overflow-x-auto flex-1 relative print-area pb-4 scrollbar-thin ${isMassPrinting ? 'print:hidden' : ''}`}>
-          <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max">
+        <div className={`hidden md:block overflow-auto max-h-[calc(100vh-270px)] min-h-[380px] flex-1 relative print-area pb-4 scrollbar-thin ${isMassPrinting ? 'print:hidden' : ''}`}>
+          <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max border-collapse">
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
               <tr>
@@ -1310,16 +1310,27 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                 return (
                   <tr key={t.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors group">
                     <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:left-0 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
-                      {/* FITUR BARU: Nama Pegawai Dapat Diklik Langsung Untuk Edit Komponen Gaji */}
-                      <button 
-                        onClick={() => onEditGaji(t.id)} 
-                        className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline transition-colors text-left flex items-center gap-1.5 group/btn cursor-pointer"
-                        title="Klik untuk membuka & mengubah rincian komponen gaji pegawai ini"
-                      >
-                        <span className="truncate max-w-[150px]">{t.name}</span>
-                        <Edit size={13} className="text-indigo-400 opacity-60 group-hover/btn:opacity-100 group-hover/btn:scale-110 transition-all shrink-0" />
-                      </button>
-                      <div className="text-[10px] text-slate-500 mt-0.5">{t.status} • {t.position}</div>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="truncate max-w-[150px]">
+                          <button 
+                            onClick={() => onEditGaji(t.id)} 
+                            className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline transition-colors text-left flex items-center gap-1.5 group/btn cursor-pointer"
+                            title="Klik untuk membuka & mengubah rincian komponen gaji pegawai ini"
+                          >
+                            <span className="truncate">{t.name}</span>
+                            <Edit size={13} className="text-indigo-400 opacity-60 group-hover/btn:opacity-100 group-hover/btn:scale-110 transition-all shrink-0" />
+                          </button>
+                          <div className="text-[10px] text-slate-500 mt-0.5">{t.status} • {t.position}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleTeacherMask(t.id); }}
+                          className="p-1 rounded-md text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0 cursor-pointer"
+                          title={isTeacherMasked(t.id) ? "Buka sensor untuk guru ini" : "Sensor angka guru ini"}
+                        >
+                          {isTeacherMasked(t.id) ? <EyeOff size={13} className="text-amber-500" /> : <Eye size={13} />}
+                        </button>
+                      </div>
                       {/* FITUR BARU: Lencana "Telah Konfirmasi" untuk Admin */}
                       {t.payroll?.isConfirmed && (
                          <div className="mt-1.5 inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shadow-sm">
@@ -1328,18 +1339,18 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                       )}
                     </td>
                     
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{formatRp(slip.tMasaKerja)}</td>
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{formatRp(slip.tJabatan)}</td>
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{formatRp(slip.tPendidikan)}</td>
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{formatRp(slip.tKompetensi)}</td>
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-slate-700">{formatRp(slip.tKeluarga)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{renderNominal(slip.tMasaKerja, t.id)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{renderNominal(slip.tJabatan, t.id)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{renderNominal(slip.tPendidikan, t.id)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{renderNominal(slip.tKompetensi, t.id)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-slate-700">{renderNominal(slip.tKeluarga, t.id)}</td>
                     
-                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{formatRp(slip.tTambahan)}</td>
-                    <td className="p-3 text-right font-medium text-emerald-600 dark:text-emerald-400">+{formatRp(slip.bonusHadir)}</td>
-                    <td className="p-3 text-right font-medium text-emerald-600 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-700">+{formatRp(slip.tMengajar)}</td>
+                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-300">{renderNominal(slip.tTambahan, t.id)}</td>
+                    <td className="p-3 text-right font-medium text-emerald-600 dark:text-emerald-400">{renderNominal(slip.bonusHadir, t.id, "text-emerald-600 dark:text-emerald-400", "+")}</td>
+                    <td className="p-3 text-right font-medium text-emerald-600 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-700">{renderNominal(slip.tMengajar, t.id, "text-emerald-600 dark:text-emerald-400", "+")}</td>
                     
-                    <td className="p-3 text-right font-bold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-800/20">{formatRp(slip.totalKotor)}</td>
-                    <td className="p-3 text-right font-medium text-red-600 dark:text-red-400 border-r border-slate-100 dark:border-slate-700">-{formatRp(slip.totalPotongan)}</td>
+                    <td className="p-3 text-right font-bold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-800/20">{renderNominal(slip.totalKotor, t.id, "font-bold text-slate-700 dark:text-slate-200")}</td>
+                    <td className="p-3 text-right font-medium text-red-600 dark:text-red-400 border-r border-slate-100 dark:border-slate-700">{renderNominal(slip.totalPotongan, t.id, "font-medium text-red-600 dark:text-red-400", "-")}</td>
                     
                     {/* 🪄 TAMBALAN CERDAS 2: Sticky Right untuk Kolom THP Bersih */}
                     <td className="p-3 text-right bg-emerald-50 dark:bg-emerald-900/90 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800 border-l border-r border-slate-200 dark:border-slate-700 md:sticky md:right-[150px] z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] min-w-[130px]">
@@ -1357,12 +1368,12 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                       {/* 🪄 Indikator Perbandingan Individual */}
                       {prevTHP !== null ? (
                          diffIndividu !== 0 ? (
-                           <div className={`mt-1 text-[9px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                           <div className={`mt-1 text-[9px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={isTeacherMasked(t.id) ? "Sensor privasi" : `Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
                               <TrendingUp size={10} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
-                              {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
+                              {isTeacherMasked(t.id) ? '•••••' : `${diffIndividu > 0 ? '+' : ''}${formatRp(diffIndividu)}`}
                            </div>
                          ) : (
-                           <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5" title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                           <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5" title="Gaji sama dengan bulan lalu">
                               <Activity size={10}/> Sama
                            </div>
                          )
@@ -1430,20 +1441,20 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
             <tfoot className="bg-slate-200 dark:bg-slate-800 sticky bottom-0 z-20 shadow-[0_-1px_2px_rgba(0,0,0,0.1)]">
               <tr>
                 <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200 text-right uppercase tracking-wider sticky left-0 bg-slate-200 dark:bg-slate-800 shadow-[1px_0_0_rgba(0,0,0,0.1)] border-r border-slate-300 dark:border-slate-600">Total Keseluruhan</td>
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{formatRp(gtMasaKerja)}</td>
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{formatRp(gtJabatan)}</td>
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{formatRp(gtPendidikan)}</td>
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{formatRp(gtKompetensi)}</td>
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200 border-r border-slate-300 dark:border-slate-600">{formatRp(gtKeluarga)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtMasaKerja)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtJabatan)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtPendidikan)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtKompetensi)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200 border-r border-slate-300 dark:border-slate-600">{renderTotalNominal(gtKeluarga)}</td>
                 
-                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{formatRp(gtTambahan)}</td>
-                <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">+{formatRp(gtBonusHadir)}</td>
-                <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400 border-r border-slate-300 dark:border-slate-600">+{formatRp(gtMengajar)}</td>
+                <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtTambahan)}</td>
+                <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{renderTotalNominal(gtBonusHadir, "text-emerald-600 dark:text-emerald-400 font-bold", "+")}</td>
+                <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400 border-r border-slate-300 dark:border-slate-600">{renderTotalNominal(gtMengajar, "text-emerald-600 dark:text-emerald-400 font-bold", "+")}</td>
                 
-                <td className="p-3 text-right font-black text-slate-800 dark:text-slate-200 bg-slate-300/50 dark:bg-slate-700/50">{formatRp(gtTotalKotor)}</td>
-                <td className="p-3 text-right font-black text-red-600 dark:text-red-400 border-r border-slate-300 dark:border-slate-600">-{formatRp(gtPotong)}</td>
+                <td className="p-3 text-right font-black text-slate-800 dark:text-slate-200 bg-slate-300/50 dark:bg-slate-700/50">{renderTotalNominal(gtTotalKotor, "font-black text-slate-800 dark:text-slate-200")}</td>
+                <td className="p-3 text-right font-black text-red-600 dark:text-red-400 border-r border-slate-300 dark:border-slate-600">{renderTotalNominal(gtPotong, "font-black text-red-600 dark:text-red-400", "-")}</td>
                 
-                <td className="p-3 text-right font-black text-emerald-700 dark:text-emerald-400 bg-emerald-200 dark:bg-emerald-900/90 text-[14px] sticky right-[150px] z-20 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px] border-l border-slate-300 dark:border-slate-600">{renderTotalNominal(gtTHP)}</td>
+                <td className="p-3 text-right font-black text-emerald-700 dark:text-emerald-400 bg-emerald-200 dark:bg-emerald-900/90 text-[14px] sticky right-[150px] z-20 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px] border-l border-slate-300 dark:border-slate-600">{renderTotalNominal(gtTHP, "font-black text-emerald-700 dark:text-emerald-400 text-[14px]")}</td>
                 <td className="p-3 sticky right-0 bg-slate-200 dark:bg-slate-800 shadow-[-1px_0_0_rgba(0,0,0,0.1)] border-l border-slate-300 dark:border-slate-600 no-print z-30 w-[150px] min-w-[150px]"></td>
               </tr>
             </tfoot>
@@ -1451,7 +1462,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
         </div>
           </>
         ) : (
-          <div className="flex flex-col flex-1 p-3.5 sm:p-5 gap-4">
+          <div className="flex flex-col flex-1 p-3.5 sm:p-5 gap-4 min-h-0">
             {/* TOOLBAR KHUSUS MATRIKS LINTAS BULAN */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-indigo-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-indigo-100 dark:border-slate-700/60 shadow-xs">
               
@@ -1536,18 +1547,18 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
             </div>
 
             {/* TABEL MATRIKS HORISONTAL (DILENGKAPI TABLEWRAPPER AGAR MUDAH DIGESER DI HP) */}
-            <TableWrapper className="min-h-[380px]">
+            <TableWrapper className="min-h-[380px] max-h-[65vh] md:max-h-[calc(100vh-270px)]">
               <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max border-collapse">
                 <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-xs">
                   {/* BARIS HEADER TINGKAT 1 */}
                   <tr>
-                    <th colSpan="3" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-slate-200/90 dark:bg-slate-800 border-b border-r border-slate-300 dark:border-slate-700 sticky left-0 z-40">
+                    <th colSpan="3" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-slate-200 dark:bg-slate-800 border-b border-r border-slate-300 dark:border-slate-700 sticky left-0 z-40">
                       Identitas Pendidik & Tenaga Kependidikan
                     </th>
-                    <th colSpan={matrixData.columns.length} className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-indigo-100/70 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border-b border-r border-indigo-200 dark:border-slate-700">
+                    <th colSpan={matrixData.columns.length} className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border-b border-r border-indigo-200 dark:border-slate-700">
                       Riwayat Rekapitulasi Tiap Periode Gaji
                     </th>
-                    <th colSpan="2" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-b border-slate-300 dark:border-slate-700 sticky right-0 z-40">
+                    <th colSpan="2" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-b border-slate-300 dark:border-slate-700 sticky right-0 z-40">
                       Ringkasan Finansial
                     </th>
                   </tr>
