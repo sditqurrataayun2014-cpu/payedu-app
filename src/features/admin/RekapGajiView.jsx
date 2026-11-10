@@ -99,6 +99,35 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
     return <span className={customClass}>{formatRp(amount)}</span>;
   };
 
+
+
+  const bulan = getFormattedPeriod(settings?.payrollPeriod);
+  
+  // 🪄 TAMBALAN CERDAS: Ambil arsip bulan lalu untuk perbandingan
+  const prevArchive = archives && archives.length > 0 ? archives[0] : null;
+  const prevTotalTHP = prevArchive ? prevArchive.totalGaji : 0;
+
+  // 🪄 PERBAIKAN: Menampilkan Pegawai Aktif secara default (Non-Aktif / Resign disembunyikan kecuali dipilih)
+  const filtered = useMemo(() => {
+    return teachers.filter(t => {
+      const isAct = isTeacherActive(t);
+      const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
+      
+      let matchStatus = true;
+      if (filterStatus === 'Semua') {
+        matchStatus = isAct; // Default hanya pegawai aktif
+      } else if (filterStatus === 'Semua (Termasuk Non-Aktif)') {
+        matchStatus = true;
+      } else if (filterStatus === 'Non-Aktif') {
+        matchStatus = !isAct;
+      } else {
+        matchStatus = (t.status === filterStatus) && isAct;
+      }
+
+      return matchSearch && matchStatus;
+    });
+  }, [teachers, search, filterStatus]);
+
   // 🪄 KOMPUTASI CERDAS: Matriks Riwayat Multi-Bulan (Tanpa Request Cloud Baru, 0 Byte Egress)
   const matrixData = useMemo(() => {
     const cols = [];
@@ -225,33 +254,6 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
       });
     }
   };
-
-  const bulan = getFormattedPeriod(settings?.payrollPeriod);
-  
-  // 🪄 TAMBALAN CERDAS: Ambil arsip bulan lalu untuk perbandingan
-  const prevArchive = archives && archives.length > 0 ? archives[0] : null;
-  const prevTotalTHP = prevArchive ? prevArchive.totalGaji : 0;
-
-  // 🪄 PERBAIKAN: Menampilkan Pegawai Aktif secara default (Non-Aktif / Resign disembunyikan kecuali dipilih)
-  const filtered = useMemo(() => {
-    return teachers.filter(t => {
-      const isAct = isTeacherActive(t);
-      const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
-      
-      let matchStatus = true;
-      if (filterStatus === 'Semua') {
-        matchStatus = isAct; // Default hanya pegawai aktif
-      } else if (filterStatus === 'Semua (Termasuk Non-Aktif)') {
-        matchStatus = true;
-      } else if (filterStatus === 'Non-Aktif') {
-        matchStatus = !isAct;
-      } else {
-        matchStatus = (t.status === filterStatus) && isAct;
-      }
-
-      return matchSearch && matchStatus;
-    });
-  }, [teachers, search, filterStatus]);
 
   // 🪄 FITUR BARU: Fungsi untuk mengedit nilai kolom secara manual langsung dari tabel Rekap Gaji
   const handleInlineOverride = (teacherId, field, value) => {
