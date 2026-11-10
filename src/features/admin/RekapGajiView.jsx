@@ -2,16 +2,21 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Activity, AlertCircle, Archive, Bell, BellRing, Calendar,
   CheckCircle, Clock, Download, Edit, FileSpreadsheet, FileText,
-  History, Lock, Printer, Search, Send, Trash2, TrendingUp, Wallet, X
+  History, Lock, Printer, Search, Send, Trash2, TrendingUp, Wallet, X,
+  Eye, EyeOff, Layers, TableProperties, Sparkles, Filter
 } from 'lucide-react';
 
 import SlipDocument from '../../components/SlipDocument';
+import TableWrapper from '../../components/TableWrapper';
 import {
   EDU_RATES, calculatePayroll, exportToPDF, formatRp,
   formatToInputDate, generateUniqueId, getFormattedPeriod,
-  isTeacherActive, safeStorageSet
+  isTeacherActive, safeStorageGet, safeStorageSet, parsePeriodToDate
 } from '../../utils/payrollUtils';
-import { exportPayrollToExcel } from '../../services/excelExportService';
+import { 
+  exportPayrollToExcel, 
+  exportMultiMonthPayrollMatrixToExcel 
+} from '../../services/excelExportService';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
 
 export default function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog, onOpenAuditLog }) {
@@ -37,6 +42,189 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
   const [selectedTeacherHistory, setSelectedTeacherHistory] = useState(null);
 
   const [isMassPrinting, setIsMassPrinting] = useState(false);
+
+  // 🪄 FITUR BARU: Sub-Tab Navigasi (Rekap Periode Berjalan vs Matriks Riwayat Lintas Bulan)
+  const [activeSubTab, setActiveSubTab] = useState('rekap_berjalan'); // 'rekap_berjalan' | 'matriks_lintas_bulan'
+
+  // 🪄 FITUR BARU: Mode Privasi & Sensor Angka Fleksibel (Global & Individual)
+  const [isMaskedAll, setIsMaskedAll] = useState(() => safeStorageGet('payedu_salary_privacy_masked', false));
+  const [individualMaskOverrides, setIndividualMaskOverrides] = useState({});
+
+  // 🪄 FITUR BARU: Pilihan Metrik untuk Matriks Lintas Bulan
+  const [matrixMetric, setMatrixMetric] = useState('totalBersih'); // 'totalBersih' | 'totalKotor' | 'totalPotongan'
+
+  // Helper Cerdas: Deteksi status sensor per guru
+  const isTeacherMasked = (teacherId) => {
+    if (individualMaskOverrides[teacherId] !== undefined) {
+      return individualMaskOverrides[teacherId];
+    }
+    return isMaskedAll;
+  };
+
+  const toggleTeacherMask = (teacherId) => {
+    setIndividualMaskOverrides(prev => ({
+      ...prev,
+      [teacherId]: !isTeacherMasked(teacherId)
+    }));
+  };
+
+  const toggleMaskAll = () => {
+    const next = !isMaskedAll;
+    setIsMaskedAll(next);
+    setIndividualMaskOverrides({});
+    safeStorageSet('payedu_salary_privacy_masked', next);
+  };
+
+  const renderNominal = (amount, teacherId, customClass = "") => {
+    if (amount === null || amount === undefined || isNaN(amount)) return <span className="text-slate-400">-</span>;
+    if (isTeacherMasked(teacherId)) {
+      return (
+        <span className={`inline-flex items-center gap-1 font-mono tracking-wider text-slate-400 dark:text-slate-500 select-none ${customClass}`} title="Nominal disensor demi privasi">
+          Rp •••••••
+        </span>
+      );
+    }
+    return <span className={customClass}>{formatRp(amount)}</span>;
+  };
+
+  const renderTotalNominal = (amount, customClass = "") => {
+    if (amount === null || amount === undefined || isNaN(amount)) return <span className="text-slate-400">-</span>;
+    if (isMaskedAll) {
+      return (
+        <span className={`inline-flex items-center gap-1 font-mono tracking-wider text-slate-400 dark:text-slate-500 select-none ${customClass}`} title="Nominal disensor demi privasi">
+          Rp •••••••••
+        </span>
+      );
+    }
+    return <span className={customClass}>{formatRp(amount)}</span>;
+  };
+
+  // 🪄 KOMPUTASI CERDAS: Matriks Riwayat Multi-Bulan (Tanpa Request Cloud Baru, 0 Byte Egress)
+  const matrixData = useMemo(() => {
+    const cols = [];
+    const seenPeriods = new Set();
+
+    // A. Arsip-arsip terdahulu (Urutkan dari yang terlama ke yang terbaru)
+    const sortedArchives = [...(archives || [])].sort((a, b) => {
+      const dateA = parsePeriodToDate(a.periode || a.period);
+      const dateB = parsePeriodToDate(b.periode || b.period);
+      return dateA - dateB;
+    });
+
+    sortedArchives.forEach(arc => {
+      const p = arc.periode || arc.period || '';
+      const pLabel = getFormattedPeriod(p);
+      if (p && !seenPeriods.has(pLabel)) {
+        seenPeriods.add(pLabel);
+        cols.push({
+          key: `arc_${arc.id || pLabel}`,
+          rawPeriod: p,
+          label: pLabel,
+          isCurrent: false,
+          dataGuru: arc.dataGuru || arc.teachers || []
+        });
+      }
+    });
+
+    // B. Bulan Berjalan (Periode Aktif Operasional)
+    const currentPeriodLabel = bulan;
+    if (!seenPeriods.has(currentPeriodLabel)) {
+      cols.push({
+        key: 'current_active',
+        rawPeriod: settings?.payrollPeriod || '',
+        label: `${currentPeriodLabel} (Aktif)`,
+        isCurrent: true,
+        dataGuru: teachers
+      });
+    }
+
+    // C. Susun baris per guru yang telah difilter pencarian & status
+    const rows = filtered.map(t => {
+      const tName = (t.name || '').trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+      const values = {};
+      let rowTotal = 0;
+      let activeMonthsCount = 0;
+
+      cols.forEach(col => {
+        let teacherData = null;
+        if (col.isCurrent) {
+          teacherData = t;
+        } else {
+          teacherData = (col.dataGuru || []).find(g => {
+            if (!g) return false;
+            if (String(g.id) === String(t.id)) return true;
+            const gName = (g.name || '').trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
+            return gName === tName;
+          });
+        }
+
+        if (teacherData) {
+          const calc = calculatePayroll(teacherData, settings);
+          const val = matrixMetric === 'totalKotor' 
+            ? calc.totalKotor 
+            : matrixMetric === 'totalPotongan' 
+              ? calc.totalPotongan 
+              : calc.totalBersih;
+          
+          values[col.key] = val;
+          rowTotal += val;
+          activeMonthsCount++;
+        } else {
+          values[col.key] = null;
+        }
+      });
+
+      const avg = activeMonthsCount > 0 ? Math.round(rowTotal / activeMonthsCount) : 0;
+
+      return {
+        teacher: t,
+        values,
+        total: rowTotal,
+        avg,
+        activeMonthsCount
+      };
+    });
+
+    // D. Hitung Total Pengeluaran Sekolah per Kolom Bulan
+    const columnTotals = {};
+    cols.forEach(col => {
+      columnTotals[col.key] = rows.reduce((sum, r) => sum + (r.values[col.key] || 0), 0);
+    });
+    const grandTotalSum = rows.reduce((sum, r) => sum + r.total, 0);
+    const grandAverage = cols.length > 0 ? Math.round(grandTotalSum / cols.length) : 0;
+
+    return {
+      columns: cols,
+      rows,
+      columnTotals,
+      grandTotalSum,
+      grandAverage
+    };
+  }, [archives, teachers, filtered, settings, bulan, matrixMetric]);
+
+  const handleExportMatrixExcel = () => {
+    try {
+      exportMultiMonthPayrollMatrixToExcel({
+        columns: matrixData.columns,
+        matrixRows: matrixData.rows,
+        metricType: matrixMetric,
+        settings,
+        filename: `Matriks_Riwayat_Gaji_${getFormattedPeriod(settings?.payrollPeriod).replace(/\s+/g, '_')}.xlsx`
+      });
+      setNotification({
+        isOpen: true,
+        type: 'success',
+        message: 'Matriks riwayat gaji multi-bulan berhasil diekspor ke Excel (.xlsx).'
+      });
+    } catch (e) {
+      console.error("Gagal ekspor matriks:", e);
+      setNotification({
+        isOpen: true,
+        type: 'error',
+        message: 'Gagal mengekspor matriks ke Excel. Silakan periksa data Anda.'
+      });
+    }
+  };
 
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
   
@@ -805,7 +993,61 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
         <FileText size={100} className="absolute -right-6 -top-6 text-white/10 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
+      
+      {/* 🪄 NAVIGASI SUB-TAB & MASTER PRIVASI CONTROLS */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-1 shrink-0">
+        <div className="flex items-center p-1 bg-slate-200/80 dark:bg-slate-800/90 rounded-xl shadow-inner border border-slate-300/60 dark:border-slate-700 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('rekap_berjalan')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeSubTab === 'rekap_berjalan'
+                ? 'bg-white dark:bg-slate-700 text-pink-600 dark:text-pink-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <TableProperties size={16} />
+            <span>Rekap Periode Berjalan</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300 font-extrabold hidden md:inline-block">
+              {bulan}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('matriks_lintas_bulan')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeSubTab === 'matriks_lintas_bulan'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Layers size={16} />
+            <span>Matriks Riwayat Lintas Bulan</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-extrabold hidden md:inline-block">
+              {matrixData.columns.length} Bulan
+            </span>
+          </button>
+        </div>
+
+        {/* Master Tombol Mode Privasi / Sensor Nominal */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleMaskAll}
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer border ${
+              isMaskedAll
+                ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-300 dark:ring-amber-800'
+                : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+            }`}
+            title={isMaskedAll ? "Mode privasi aktif: Seluruh nominal gaji disensor. Klik untuk membuka semua." : "Sembunyikan/sensor semua angka nominal gaji untuk menjaga kerahasiaan saat ada orang lain."}
+          >
+            {isMaskedAll ? <EyeOff size={16} className="animate-pulse" /> : <Eye size={16} />}
+            <span>{isMaskedAll ? 'Sensor Privasi Aktif (Klik Buka Semua)' : 'Sensor Angka Gaji (Mode Privasi)'}</span>
+          </button>
+        </div>
+      </div>
+
+<div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
         {/* HEADER TABEL YANG DIRAPIKAN (TWO-TIER LAYOUT) */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-4 bg-slate-50 dark:bg-slate-900/50 shrink-0">
           
@@ -898,7 +1140,11 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
           </div>
         </div>
 
-        {/* FITUR BARU 3: Kontainer Rendering Cetak Slip Massal (Hanya muncul saat mem-print massal) */}
+        
+        {/* 🪄 TAMPILAN KONDISIONAL: 1. REKAP PERIODE BERJALAN ATAU 2. MATRIKS RIWAYAT LINTAS BULAN */}
+        {activeSubTab === 'rekap_berjalan' ? (
+          <>
+            {/* FITUR BARU 3: Kontainer Rendering Cetak Slip Massal (Hanya muncul saat mem-print massal) */}
         {isMassPrinting && (
            <div className="hidden print:block w-full h-full bg-white print-area z-50 absolute top-0 left-0">
              {filtered.map((t, idx) => (
@@ -936,7 +1182,17 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                    </div>
                    <div className="text-right">
                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">THP Bersih</div>
-                     <div className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</div>
+                     <div className="flex items-center justify-end gap-1.5">
+                       <button
+                         type="button"
+                         onClick={(e) => { e.stopPropagation(); toggleTeacherMask(t.id); }}
+                         className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-md transition-colors"
+                         title={isTeacherMasked(t.id) ? "Buka sensor untuk guru ini" : "Sensor angka guru ini"}
+                       >
+                         {isTeacherMasked(t.id) ? <EyeOff size={13} className="text-amber-500" /> : <Eye size={13} />}
+                       </button>
+                       <div className="text-base font-black text-emerald-600 dark:text-emerald-400">{renderNominal(slip.totalBersih, t.id)}</div>
+                     </div>
                      {prevTHP !== null ? (
                         diffIndividu !== 0 ? (
                           <div className={`text-[10px] font-bold ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
@@ -1085,7 +1341,17 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                     
                     {/* 🪄 TAMBALAN CERDAS 2: Sticky Right untuk Kolom THP Bersih */}
                     <td className="p-3 text-right bg-emerald-50 dark:bg-emerald-900/90 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800 border-l border-r border-slate-200 dark:border-slate-700 md:sticky md:right-[150px] z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] min-w-[130px]">
-                      <div className="font-black text-emerald-700 dark:text-emerald-400 text-[13px] tracking-tight">{formatRp(slip.totalBersih)}</div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleTeacherMask(t.id); }}
+                          className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-md transition-colors"
+                          title={isTeacherMasked(t.id) ? "Buka sensor gaji guru ini" : "Sensor angka gaji guru ini"}
+                        >
+                          {isTeacherMasked(t.id) ? <EyeOff size={13} className="text-amber-500" /> : <Eye size={13} />}
+                        </button>
+                        <div className="font-black text-emerald-700 dark:text-emerald-400 text-[13px] tracking-tight">{renderNominal(slip.totalBersih, t.id)}</div>
+                      </div>
                       {/* 🪄 Indikator Perbandingan Individual */}
                       {prevTHP !== null ? (
                          diffIndividu !== 0 ? (
@@ -1175,12 +1441,275 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                 <td className="p-3 text-right font-black text-slate-800 dark:text-slate-200 bg-slate-300/50 dark:bg-slate-700/50">{formatRp(gtTotalKotor)}</td>
                 <td className="p-3 text-right font-black text-red-600 dark:text-red-400 border-r border-slate-300 dark:border-slate-600">-{formatRp(gtPotong)}</td>
                 
-                <td className="p-3 text-right font-black text-emerald-700 dark:text-emerald-400 bg-emerald-200 dark:bg-emerald-900/90 text-[14px] sticky right-[150px] z-20 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px] border-l border-slate-300 dark:border-slate-600">{formatRp(gtTHP)}</td>
+                <td className="p-3 text-right font-black text-emerald-700 dark:text-emerald-400 bg-emerald-200 dark:bg-emerald-900/90 text-[14px] sticky right-[150px] z-20 shadow-[-1px_0_0_rgba(0,0,0,0.1)] min-w-[130px] border-l border-slate-300 dark:border-slate-600">{renderTotalNominal(gtTHP)}</td>
                 <td className="p-3 sticky right-0 bg-slate-200 dark:bg-slate-800 shadow-[-1px_0_0_rgba(0,0,0,0.1)] border-l border-slate-300 dark:border-slate-600 no-print z-30 w-[150px] min-w-[150px]"></td>
               </tr>
             </tfoot>
           </table>
         </div>
+          </>
+        ) : (
+          <div className="flex flex-col flex-1 p-3.5 sm:p-5 gap-4">
+            {/* TOOLBAR KHUSUS MATRIKS LINTAS BULAN */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-indigo-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border border-indigo-100 dark:border-slate-700/60 shadow-xs">
+              
+              {/* Pilihan Metrik (Pills) */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 shrink-0">
+                  <Filter size={14} className="text-indigo-500" /> Tampilkan Metrik:
+                </span>
+                <div className="grid grid-cols-3 gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setMatrixMetric('totalBersih')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                      matrixMetric === 'totalBersih'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    THP Bersih
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatrixMetric('totalKotor')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                      matrixMetric === 'totalKotor'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    Gaji Kotor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatrixMetric('totalPotongan')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                      matrixMetric === 'totalPotongan'
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    Potongan
+                  </button>
+                </div>
+              </div>
+
+              {/* Tombol Ekspor Matriks ke Excel */}
+              <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={handleExportMatrixExcel}
+                  className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer active:scale-95"
+                  title="Unduh seluruh matriks komparasi lintas bulan ke dalam format Excel murni (.xlsx)"
+                >
+                  <FileSpreadsheet size={16} />
+                  <span>Unduh Matriks Excel (.xlsx)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KARTU STATISTIK RINGKASAN MATRIKS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Pegawai Terdata</span>
+                <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{matrixData.rows.length} <span className="text-xs font-semibold text-slate-400">Orang</span></span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Periode Tercatat</span>
+                <span className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">{matrixData.columns.length} <span className="text-xs font-semibold text-slate-400">Bulan</span></span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Rata-Rata per Bulan</span>
+                <span className="text-base sm:text-lg font-black text-slate-700 dark:text-slate-200 block truncate">
+                  {renderTotalNominal(matrixData.grandAverage)}
+                </span>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">Akumulasi Total</span>
+                <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300 block truncate">
+                  {renderTotalNominal(matrixData.grandTotalSum)}
+                </span>
+              </div>
+            </div>
+
+            {/* TABEL MATRIKS HORISONTAL (DILENGKAPI TABLEWRAPPER AGAR MUDAH DIGESER DI HP) */}
+            <TableWrapper className="min-h-[380px]">
+              <table className="w-full text-left text-xs md:text-sm whitespace-nowrap min-w-max border-collapse">
+                <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-xs">
+                  {/* BARIS HEADER TINGKAT 1 */}
+                  <tr>
+                    <th colSpan="3" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-slate-200/90 dark:bg-slate-800 border-b border-r border-slate-300 dark:border-slate-700 sticky left-0 z-40">
+                      Identitas Pendidik & Tenaga Kependidikan
+                    </th>
+                    <th colSpan={matrixData.columns.length} className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-indigo-100/70 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border-b border-r border-indigo-200 dark:border-slate-700">
+                      Riwayat Rekapitulasi Tiap Periode Gaji
+                    </th>
+                    <th colSpan="2" className="p-2.5 text-center font-extrabold uppercase tracking-wider text-[11px] bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-b border-slate-300 dark:border-slate-700 sticky right-0 z-40">
+                      Ringkasan Finansial
+                    </th>
+                  </tr>
+                  {/* BARIS HEADER TINGKAT 2 */}
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <th className="p-3 font-bold sticky left-0 z-30 bg-slate-100 dark:bg-slate-900/90 w-12 text-center border-r border-slate-200 dark:border-slate-700">
+                      No
+                    </th>
+                    <th className="p-3 font-bold sticky left-12 z-30 bg-slate-100 dark:bg-slate-900/90 border-r border-slate-200 dark:border-slate-700 min-w-[200px]">
+                      Nama Pegawai & NIPY
+                    </th>
+                    <th className="p-3 font-bold border-r border-slate-300 dark:border-slate-700 min-w-[120px]">
+                      Status / Jabatan
+                    </th>
+
+                    {/* Kolom Tiap Bulan */}
+                    {matrixData.columns.map(col => (
+                      <th 
+                        key={col.key} 
+                        className={`p-3 font-bold text-right border-r border-slate-200 dark:border-slate-700 min-w-[140px] ${
+                          col.isCurrent 
+                            ? 'bg-amber-50/70 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300' 
+                            : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex flex-col items-end">
+                          <span>{col.label}</span>
+                          {col.isCurrent && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-amber-200/80 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-extrabold uppercase">
+                              Berjalan
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    ))}
+
+                    {/* Kolom Total Akumulasi & Rata-rata */}
+                    <th className="p-3 font-black text-right bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-l border-r border-slate-200 dark:border-slate-700 min-w-[140px] sticky right-[130px] z-30 shadow-[-1px_0_0_rgba(0,0,0,0.05)]">
+                      Total Akumulasi
+                    </th>
+                    <th className="p-3 font-black text-right bg-slate-100 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 min-w-[130px] sticky right-0 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.05)]">
+                      Rata-Rata
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80">
+                  {matrixData.rows.map((row, idx) => {
+                    const t = row.teacher;
+                    return (
+                      <tr key={t.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors group">
+                        {/* No */}
+                        <td className="p-3 text-center text-slate-500 font-medium sticky left-0 z-20 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 border-r border-slate-100 dark:border-slate-700">
+                          {idx + 1}
+                        </td>
+
+                        {/* Nama Pegawai & Tombol Sensor Individu */}
+                        <td className="p-3 font-bold sticky left-12 z-20 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 border-r border-slate-100 dark:border-slate-700 shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate max-w-[170px]">
+                              <button 
+                                onClick={() => onEditGaji(t.id)} 
+                                className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-left cursor-pointer"
+                                title="Klik untuk membuka rincian gaji guru ini"
+                              >
+                                {t.name}
+                              </button>
+                              <div className="text-[10px] text-slate-400 font-normal">{t.nipy || t.id}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleTeacherMask(t.id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors shrink-0"
+                              title={isTeacherMasked(t.id) ? "Buka sensor untuk guru ini" : "Sensor angka guru ini"}
+                            >
+                              {isTeacherMasked(t.id) ? <EyeOff size={13} className="text-amber-500" /> : <Eye size={13} />}
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Status / Jabatan */}
+                        <td className="p-3 text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-slate-700 text-xs">
+                          <span className="font-semibold block">{t.status || 'Tetap'}</span>
+                          <span className="text-[10px] text-slate-400 truncate block max-w-[120px]">{t.position || 'Guru'}</span>
+                        </td>
+
+                        {/* Nilai Tiap Bulan */}
+                        {matrixData.columns.map(col => {
+                          const val = row.values[col.key];
+                          return (
+                            <td 
+                              key={col.key} 
+                              className={`p-3 text-right font-medium border-r border-slate-100 dark:border-slate-700 ${
+                                col.isCurrent ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''
+                              }`}
+                            >
+                              {val !== null ? (
+                                <span className={`font-semibold ${
+                                  matrixMetric === 'totalPotongan' 
+                                    ? 'text-red-500' 
+                                    : matrixMetric === 'totalKotor' 
+                                      ? 'text-slate-700 dark:text-slate-200' 
+                                      : 'text-emerald-600 dark:text-emerald-400'
+                                }`}>
+                                  {renderNominal(val, t.id)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 font-mono text-xs">-</span>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                        {/* Total Akumulasi (Sticky Right) */}
+                        <td className="p-3 text-right font-black bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-l border-r border-slate-200 dark:border-slate-700 sticky right-[130px] z-20 shadow-[-1px_0_0_rgba(0,0,0,0.05)]">
+                          {renderNominal(row.total, t.id)}
+                        </td>
+
+                        {/* Rata-Rata Bulanan (Sticky Right) */}
+                        <td className="p-3 text-right font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 sticky right-0 z-20 shadow-[-1px_0_0_rgba(0,0,0,0.05)]">
+                          {renderNominal(row.avg, t.id)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {matrixData.rows.length === 0 && (
+                    <tr>
+                      <td colSpan={matrixData.columns.length + 5} className="p-12 text-center text-slate-400">
+                        Tidak ada data pegawai yang sesuai dengan pencarian atau filter status.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+
+                {/* FOOTER TOTAL PENGELUARAN SEKOLAH PER BULAN */}
+                <tfoot className="bg-slate-200 dark:bg-slate-850 sticky bottom-0 z-30 shadow-[0_-1px_3px_rgba(0,0,0,0.1)] font-bold">
+                  <tr className="border-t-2 border-slate-300 dark:border-slate-600">
+                    <td colSpan="3" className="p-3.5 text-right font-black uppercase tracking-wider text-xs sticky left-0 z-40 bg-slate-200 dark:bg-slate-850 border-r border-slate-300 dark:border-slate-700">
+                      TOTAL PENGELUARAN SEKOLAH:
+                    </td>
+
+                    {/* Total Tiap Kolom Bulan */}
+                    {matrixData.columns.map(col => (
+                      <td key={col.key} className="p-3.5 text-right font-black text-slate-800 dark:text-slate-100 border-r border-slate-300 dark:border-slate-700">
+                        {renderTotalNominal(matrixData.columnTotals[col.key])}
+                      </td>
+                    ))}
+
+                    {/* Grand Total Akumulasi (Sticky Right) */}
+                    <td className="p-3.5 text-right font-black text-emerald-800 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900 sticky right-[130px] z-40 border-l border-r border-slate-300 dark:border-slate-700 shadow-[-1px_0_0_rgba(0,0,0,0.1)]">
+                      {renderTotalNominal(matrixData.grandTotalSum)}
+                    </td>
+
+                    {/* Grand Rata-Rata (Sticky Right) */}
+                    <td className="p-3.5 text-right font-black text-slate-800 dark:text-slate-100 bg-slate-300 dark:bg-slate-800 sticky right-0 z-40 shadow-[-1px_0_0_rgba(0,0,0,0.1)]">
+                      {renderTotalNominal(matrixData.grandAverage)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </TableWrapper>
+          </div>
+        )}
+
       </div>
     </div>
   );

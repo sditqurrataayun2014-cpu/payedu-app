@@ -15,3 +15,4 @@ export const ViewLoader = ({ title = 'Memuat Modul...' }) => (
 );
 
 export default ViewLoader;
+

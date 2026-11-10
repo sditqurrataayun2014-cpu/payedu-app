@@ -60,3 +60,4 @@ export default function TableWrapper({ children, className = "" }) {
   );
 }
 export { TableWrapper };
+

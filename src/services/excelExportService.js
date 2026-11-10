@@ -631,3 +631,105 @@ export const exportTeachingHoursToExcel = ({
   downloadExcelFile(wb, finalFilename);
   return finalFilename;
 };
+
+/**
+ * 📈 EKSPOR MATRIKS REKAPITULASI GAJI LINTAS BULAN KE EXCEL (.XLSX)
+ * Menampilkan baris guru dan kolom riwayat per bulan (misal Juni, Juli, Agustus...) beserta total akumulasi & rata-rata
+ */
+export const exportMultiMonthPayrollMatrixToExcel = ({
+  columns = [],
+  matrixRows = [],
+  metricType = 'totalBersih',
+  settings = {},
+  filename = ''
+}) => {
+  const schoolName = settings?.schoolName || 'Sekolah Dasar Islam Terpadu';
+  const foundationName = settings?.foundationName || 'Yayasan Pendidikan';
+  
+  const metricLabel = metricType === 'totalKotor' 
+    ? 'Gaji Kotor (Bruto)' 
+    : metricType === 'totalPotongan' 
+      ? 'Total Potongan' 
+      : 'Gaji Bersih (Take Home Pay)';
+
+  const defaultFilename = filename || `Matriks_Riwayat_Gaji_${metricLabel.replace(/\s+/g, '_')}_${new Date().getFullYear()}.xlsx`;
+
+  // 1. Header Metadata
+  const aoa = [
+    [schoolName.toUpperCase()],
+    [foundationName.toUpperCase()],
+    [`MATRIKS REKAPITULASI RIWAYAT GAJI LINTAS BULAN (${metricLabel.toUpperCase()})`],
+    [`Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`],
+    [] // Baris Kosong
+  ];
+
+  // 2. Baris Header Tabel
+  const tableHeader = ['No', 'NIPY', 'Nama Pegawai', 'Status', 'Jabatan'];
+  columns.forEach(col => {
+    tableHeader.push(col.label);
+  });
+  tableHeader.push('Total Akumulasi', 'Rata-Rata Bulanan');
+  aoa.push(tableHeader);
+
+  // 3. Baris Data Guru
+  const colTotals = {};
+  columns.forEach(col => { colTotals[col.key] = 0; });
+  let grandTotalSum = 0;
+
+  matrixRows.forEach((row, idx) => {
+    const t = row.teacher;
+    const rowData = [
+      idx + 1,
+      t.nipy || t.id || '-',
+      t.name || '-',
+      t.status || 'Tetap',
+      t.position || t.payroll?.jabatans?.[0]?.detail || 'Guru'
+    ];
+
+    columns.forEach(col => {
+      const val = row.values[col.key] || 0;
+      rowData.push(val);
+      colTotals[col.key] = (colTotals[col.key] || 0) + val;
+    });
+
+    rowData.push(row.total || 0);
+    rowData.push(row.avg || 0);
+    grandTotalSum += (row.total || 0);
+
+    aoa.push(rowData);
+  });
+
+  // 4. Baris Total Pengeluaran
+  const totalRow = ['TOTAL', '', '', '', ''];
+  columns.forEach(col => {
+    totalRow.push(colTotals[col.key] || 0);
+  });
+  totalRow.push(grandTotalSum);
+  const activeMonthCount = columns.length;
+  totalRow.push(activeMonthCount > 0 ? Math.round(grandTotalSum / activeMonthCount) : 0);
+  aoa.push(totalRow);
+
+  // 5. Buat Sheet
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Atur Lebar Kolom
+  const colWidths = [
+    { wch: 5 },  // No
+    { wch: 14 }, // NIPY
+    { wch: 30 }, // Nama
+    { wch: 14 }, // Status
+    { wch: 22 }, // Jabatan
+  ];
+  columns.forEach(() => {
+    colWidths.push({ wch: 18 });
+  });
+  colWidths.push({ wch: 20 }, { wch: 18 });
+  worksheet['!cols'] = colWidths;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Matriks Riwayat Gaji');
+
+  downloadExcelFile(workbook, defaultFilename);
+  return defaultFilename;
+};
+
