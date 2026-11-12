@@ -1214,7 +1214,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
         {/* FITUR BARU: Tampilan Kartu Mobile Rekap Absensi (< md) */}
         <div className="md:hidden space-y-2.5 p-2.5 sm:p-4 no-print">
-          {filtered.map(t => {
+          {filtered.map((t, idx) => {
              const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
              const real = t.payroll?.jamMengajar?.realisasi || 0;
              const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
@@ -1232,9 +1232,10 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                  <div className="flex justify-between items-start">
                    <div>
                      <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+                       <span className="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{idx + 1}</span>
                        {isLateOften && <Clock size={14} className="text-red-500 shrink-0" title="Sering Telat" />}
                        {isUnderperforming && !isLateOften && <AlertCircle size={14} className="text-amber-500 shrink-0" title="Kurang Jam" />}
-                       {t.name}
+                       <span>{t.name}</span>
                      </h4>
                      <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || t.status}</div>
                    </div>
@@ -1282,7 +1283,10 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border-2 border-slate-400 dark:border-slate-500">
             <thead className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="p-4 font-bold border border-slate-400 dark:border-slate-500 md:sticky md:left-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)]">
+                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center w-12 md:sticky md:left-0 bg-slate-200 dark:bg-slate-800 z-30">
+                  No
+                </th>
+                <th className="p-4 font-bold border border-slate-400 dark:border-slate-500 md:sticky md:left-12 bg-slate-200 dark:bg-slate-800 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)]">
                   Nama Guru
                 </th>
                 {/* Render Header Tanggal 1-31 */}
@@ -1303,7 +1307,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 dark:divide-slate-600">
-              {filtered.map(t => {
+              {filtered.map((t, idx) => {
                 const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
                 const real = t.payroll?.jamMengajar?.realisasi || 0;
                 const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
@@ -1336,7 +1340,10 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
                 return (
                   <tr key={t.id} className={`${rowBgClass} transition-colors group`}>
-                    <td className={`p-3 md:sticky md:left-0 z-10 border border-slate-400 dark:border-slate-500 shadow-[1px_0_0_rgba(0,0,0,0.05)] ${stickyBgClass}`}>
+                    <td className={`p-2 text-center font-bold text-slate-500 dark:text-slate-400 text-xs w-12 md:sticky md:left-0 z-10 border border-slate-400 dark:border-slate-500 ${stickyBgClass}`}>
+                      {idx + 1}
+                    </td>
+                    <td className={`p-3 md:sticky md:left-12 z-10 border border-slate-400 dark:border-slate-500 shadow-[1px_0_0_rgba(0,0,0,0.05)] ${stickyBgClass}`}>
                       <div className="font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap flex items-center gap-1.5">
                         {isLateOften && <Clock size={12} className="text-red-500 flex-shrink-0" title="Sering Telat" />}
                         {isUnderperforming && !isLateOften && <AlertCircle size={12} className="text-amber-500 flex-shrink-0" title="Kurang Jam" />}
@@ -1458,7 +1465,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan="38" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan="39" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
           </table>

@@ -1159,7 +1159,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
 
         {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
         <div className="md:hidden space-y-2.5 mb-4 no-print">
-          {filtered.map(t => {
+          {filtered.map((t, idx) => {
              const slip = calculatePayroll(t, settings);
              const prevData = prevArchive?.dataGuru?.find(guru => {
                if (!guru || !guru.name || !t || !t.name) return false;
@@ -1178,7 +1178,8 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                        onClick={() => onEditGaji(t.id)} 
                        className="font-bold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-1 text-left hover:underline"
                      >
-                       {t.name} <Edit size={14} className="shrink-0" />
+                       <span className="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{idx + 1}</span>
+                       <span>{t.name}</span> <Edit size={14} className="shrink-0" />
                      </button>
                      <div className="text-xs text-slate-500 mt-0.5">{t.status} • {t.position}</div>
                    </div>
@@ -1249,7 +1250,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
             <thead className="text-slate-600 dark:text-slate-400 sticky top-0 z-30 shadow-sm">
               {/* BARIS 1: PENGELOMPOKAN HEADER (NESTED HEADERS) */}
               <tr>
-                <th className="p-2 border-b border-r border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-800 md:sticky md:left-0 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)]"></th>
+                <th colSpan="2" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-800 md:sticky md:left-0 z-40 shadow-[1px_0_0_rgba(0,0,0,0.1)] text-center text-[10px] font-bold uppercase text-slate-500">Pegawai</th>
                 <th colSpan="5" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-blue-700 dark:text-blue-400 tracking-wider text-[11px] uppercase bg-blue-50 dark:bg-blue-900/40">Komponen Tunjangan Tetap</th>
                 <th colSpan="3" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-emerald-700 dark:text-emerald-400 tracking-wider text-[11px] uppercase bg-emerald-50 dark:bg-emerald-900/40">Insentif & Bonus</th>
                 <th colSpan="2" className="p-2 border-b border-r border-slate-300 dark:border-slate-600 text-center font-extrabold text-slate-700 dark:text-slate-300 tracking-wider text-[11px] uppercase bg-slate-200/70 dark:bg-slate-700/70">Kalkulasi</th>
@@ -1257,7 +1258,8 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
               </tr>
               {/* BARIS 2: NAMA KOLOM */}
               <tr className="bg-slate-100 dark:bg-slate-900/90">
-                <th className="p-3 font-bold border-b border-r border-slate-200 dark:border-slate-700 md:sticky md:left-0 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] bg-slate-100 dark:bg-slate-900/90">Nama & Status</th>
+                <th className="p-3 font-bold border-b border-r border-slate-200 dark:border-slate-700 md:sticky md:left-0 z-30 bg-slate-100 dark:bg-slate-900/90 text-center w-12">No</th>
+                <th className="p-3 font-bold border-b border-r border-slate-200 dark:border-slate-700 md:sticky md:left-12 z-30 shadow-[1px_0_0_rgba(0,0,0,0.1)] bg-slate-100 dark:bg-slate-900/90">Nama & Status</th>
                 
                 <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right">T. Masa Kerja</th>
                 <th className="p-3 font-bold border-b border-slate-200 dark:border-slate-700 text-right">T. Jabatan</th>
@@ -1277,7 +1279,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80">
-              {filtered.map(t => {
+              {filtered.map((t, idx) => {
                 const slip = calculatePayroll(t, settings);
 
                 // 🪄 TAMBALAN CERDAS: Ambil data bulan lalu per individu berdasarkan kecocokan Nama / ID+Nama
@@ -1309,7 +1311,10 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
 
                 return (
                   <tr key={t.id} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/60 transition-colors group">
-                    <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:left-0 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
+                    <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:left-0 z-10 border-r border-slate-100 dark:border-slate-700 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12">
+                      {idx + 1}
+                    </td>
+                    <td className="p-3 bg-white dark:bg-slate-800 group-hover:bg-indigo-50/40 dark:group-hover:bg-slate-800/60 md:sticky md:left-12 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)] border-r border-slate-100 dark:border-slate-700">
                       <div className="flex items-center justify-between gap-1.5">
                         <div className="truncate max-w-[150px]">
                           <button 
@@ -1435,12 +1440,13 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan="13" className="p-8 text-center text-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan="14" className="p-8 text-center text-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
             <tfoot className="bg-slate-200 dark:bg-slate-800 sticky bottom-0 z-20 shadow-[0_-1px_2px_rgba(0,0,0,0.1)]">
               <tr>
-                <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200 text-right uppercase tracking-wider sticky left-0 bg-slate-200 dark:bg-slate-800 shadow-[1px_0_0_rgba(0,0,0,0.1)] border-r border-slate-300 dark:border-slate-600">Total Keseluruhan</td>
+                <td className="p-3 sticky left-0 bg-slate-200 dark:bg-slate-800 border-r border-slate-300 dark:border-slate-600 text-center font-bold text-slate-500 text-xs w-12"></td>
+                <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200 text-right uppercase tracking-wider sticky left-12 bg-slate-200 dark:bg-slate-800 shadow-[1px_0_0_rgba(0,0,0,0.1)] border-r border-slate-300 dark:border-slate-600">Total Keseluruhan</td>
                 <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtMasaKerja)}</td>
                 <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtJabatan)}</td>
                 <td className="p-3 text-right font-bold text-slate-800 dark:text-slate-200">{renderTotalNominal(gtPendidikan)}</td>

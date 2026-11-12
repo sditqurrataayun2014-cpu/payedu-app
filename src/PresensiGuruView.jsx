@@ -1256,7 +1256,8 @@ function TeacherSelfService({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                    <th className="p-3 pl-6 text-left">Tanggal</th>
+                    <th className="p-3 text-center w-12">No</th>
+                    <th className="p-3 pl-4 text-left">Tanggal</th>
                     <th className="p-3 text-center">Jam Masuk</th>
                     <th className="p-3 text-center">Jam Pulang</th>
                     <th className="p-3 text-center">Status</th>
@@ -1264,9 +1265,10 @@ function TeacherSelfService({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
-                  {myHistory.map(r => (
+                  {myHistory.map((r, idx) => (
                     <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 pl-6 font-bold text-slate-700 dark:text-white">{new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12">{idx + 1}</td>
+                      <td className="p-3 pl-4 font-bold text-slate-700 dark:text-white">{new Date(r.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                       <td className="p-3 text-center font-mono">{formatJam(r.jamMasuk)}</td>
                       <td className="p-3 text-center font-mono">{formatJam(r.jamPulang)}</td>
                       <td className="p-3 text-center">
@@ -2473,7 +2475,8 @@ function AdminRekapPanel({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest print:border-b-2 print:border-black print:text-black">
-                  <th className="p-3 pl-6 text-left print:border print:border-black">Nama Guru / Staff</th>
+                  <th className="p-3 text-center w-12 print:border print:border-black">No</th>
+                  <th className="p-3 pl-4 text-left print:border print:border-black">Nama Guru / Staff</th>
                   <th className="p-3 text-center print:border print:border-black">Jam Masuk</th>
                   <th className="p-3 text-center print:border print:border-black">Jam Pulang</th>
                   <th className="p-3 text-center print:border print:border-black">Status</th>
@@ -2482,14 +2485,17 @@ function AdminRekapPanel({
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40 print:divide-black">
                 {filteredTeachersHarian.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
-                ) : filteredTeachersHarian.map(t => {
+                  <tr><td colSpan={readOnly ? 5 : 6} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
+                ) : filteredTeachersHarian.map((t, idx) => {
                   const rec = getRecord(t);
                   const isScheduled = isGuruTerjadwal(settings, hariIni, filterSesiId, t.id);
                   const status = rec?.status && (rec.jamMasuk || ['Sakit', 'Izin', 'Cuti', 'Dinas Luar', 'Alpa'].includes(rec.status)) ? rec.status : 'Belum Absen';
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors print:border-b print:border-black">
-                      <td className="p-3 pl-6 print:border print:border-black">
+                      <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12 print:border print:border-black">
+                        {idx + 1}
+                      </td>
+                      <td className="p-3 pl-4 print:border print:border-black">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-bold text-slate-800 dark:text-white print:text-black">{t.name}</p>
                           {!isScheduled && (
@@ -2569,7 +2575,8 @@ function AdminRekapPanel({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest print:border-black">
-                  <th className="p-3 pl-6 text-left print:border print:border-black">Nama Guru / Staff</th>
+                  <th className="p-3 text-center w-12 print:border print:border-black">No</th>
+                  <th className="p-3 pl-4 text-left print:border print:border-black">Nama Guru / Staff</th>
                   <th className="p-2 text-center text-emerald-600 print:border print:border-black">Hadir</th>
                   <th className="p-2 text-center text-amber-600 print:border print:border-black">Telat (Kali)</th>
                   <th className="p-2 text-center text-blue-600 print:border print:border-black">Sakit</th>
@@ -2582,8 +2589,8 @@ function AdminRekapPanel({
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
                 {rekapData.length === 0 ? (
-                  <tr><td colSpan={9} className="p-12 text-center text-slate-400 italic">Tidak ada data rekap.</td></tr>
-                ) : rekapData.map(r => {
+                  <tr><td colSpan={10} className="p-12 text-center text-slate-400 italic">Tidak ada data rekap.</td></tr>
+                ) : rekapData.map((r, idx) => {
                   let badgeColor = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
                   if (r.persentase >= 90) badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
                   else if (r.persentase >= 75) badgeColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
@@ -2591,7 +2598,10 @@ function AdminRekapPanel({
                   else if (r.persentase > 0) badgeColor = 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 pl-6 print:border print:border-black">
+                      <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12 print:border print:border-black">
+                        {idx + 1}
+                      </td>
+                      <td className="p-3 pl-4 print:border print:border-black">
                         <p className="font-bold text-slate-800 dark:text-white">{r.name}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{r.position || 'Guru'} • NIP: {r.nip || '-'}</p>
                       </td>
@@ -2687,7 +2697,8 @@ function AdminRekapPanel({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-200 dark:border-slate-700">
-                      <th className="p-3 text-left pl-4">Tanggal</th>
+                      <th className="p-3 text-center w-12">No</th>
+                      <th className="p-3 text-left pl-3">Tanggal</th>
                       <th className="p-3 text-center">Sesi</th>
                       <th className="p-3 text-center">Jam Masuk</th>
                       <th className="p-3 text-center">Jam Pulang</th>
@@ -2699,10 +2710,11 @@ function AdminRekapPanel({
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                     {(!detailGuruData?.logs || detailGuruData.logs.length === 0) ? (
-                      <tr><td colSpan={8} className="p-12 text-center text-slate-400 italic">Belum ada catatan presensi untuk guru ini pada bulan yang dipilih.</td></tr>
-                    ) : detailGuruData.logs.map(log => (
+                      <tr><td colSpan={9} className="p-12 text-center text-slate-400 italic">Belum ada catatan presensi untuk guru ini pada bulan yang dipilih.</td></tr>
+                    ) : detailGuruData.logs.map((log, idx) => (
                       <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                        <td className="p-3 pl-4 font-bold text-slate-800 dark:text-white">
+                        <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12">{idx + 1}</td>
+                        <td className="p-3 pl-3 font-bold text-slate-800 dark:text-white">
                           {new Date(log.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </td>
                         <td className="p-3 text-center text-xs font-bold text-slate-500">{log.sesiNama || 'Pagi'}</td>

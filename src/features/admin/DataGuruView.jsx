@@ -671,11 +671,14 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
         
         {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
         <div className="md:hidden space-y-2.5 p-2.5 sm:p-4">
-          {filtered.map(t => (
+          {filtered.map((t, idx) => (
             <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className="font-bold text-sm text-slate-800 dark:text-white">{t.name}</h4>
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{idx + 1}</span>
+                    <span>{t.name}</span>
+                  </h4>
                   <div className="text-[11px] text-slate-500 mt-0.5">{t.nipy} • {t.position}</div>
                 </div>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.status === 'Tetap' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
@@ -709,6 +712,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
               <tr>
+                <th className="p-4 font-bold border-b border-slate-200 dark:border-slate-700 text-center w-12">No</th>
                 <th className="p-4 font-bold border-b border-slate-200 dark:border-slate-700">Profil Pegawai</th>
                 <th className="p-4 font-bold border-b border-slate-200 dark:border-slate-700">Lahir & Kontak</th>
                 <th className="p-4 font-bold border-b border-slate-200 dark:border-slate-700">Status Pegawai</th>
@@ -719,8 +723,11 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/80">
-              {filtered.map(t => (
+              {filtered.map((t, idx) => (
                 <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+                  <td className="p-4 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12">
+                    {idx + 1}
+                  </td>
                   <td className="p-4">
                     <div className="font-bold text-slate-800 dark:text-slate-200">{t.name}</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">{t.nipy}</div>
@@ -768,7 +775,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan="7" className="p-8 text-center text-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan="8" className="p-8 text-center text-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
           </table>

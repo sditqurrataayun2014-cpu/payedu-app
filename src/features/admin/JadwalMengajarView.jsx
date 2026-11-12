@@ -691,7 +691,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                   
                   {/* FITUR BARU: Tampilan Kartu Mobile Pemetaan Roster (< md) */}
                   <div className="md:hidden space-y-3 p-3 no-print">
-                     {filtered.map(t => {
+                     {filtered.map((t, idx) => {
                         const r = t.payroll?.roster || {};
                         const totalMingguan = ['senin','selasa','rabu','kamis','jumat','sabtu','minggu'].reduce((sum, d) => sum + (Number(r[d]) || 0), 0);
                         return (
@@ -729,7 +729,8 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                      <table className="w-full text-left text-sm whitespace-nowrap min-w-max border-collapse border border-slate-200 dark:border-slate-700">
                         <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 sticky top-0 z-10 shadow-sm border-b border-slate-300 dark:border-slate-600">
                            <tr>
-                              <th className="p-3 font-bold border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-100 dark:bg-slate-900/90 z-20">Nama Guru</th>
+                              <th className="p-3 font-bold border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-slate-100 dark:bg-slate-900/90 z-20 w-12 text-center">No</th>
+                              <th className="p-3 font-bold border-r border-slate-200 dark:border-slate-700 sticky left-12 bg-slate-100 dark:bg-slate-900/90 z-20">Nama Guru</th>
                               <th className="p-3 font-bold text-center border-r border-slate-200 dark:border-slate-700">Senin</th>
                               <th className="p-3 font-bold text-center border-r border-slate-200 dark:border-slate-700">Selasa</th>
                               <th className="p-3 font-bold text-center border-r border-slate-200 dark:border-slate-700">Rabu</th>
@@ -741,12 +742,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                           {filtered.map(t => {
+                           {filtered.map((t, idx) => {
                               const r = t.payroll?.roster || {};
                               const totalMingguan = ['senin','selasa','rabu','kamis','jumat','sabtu','minggu'].reduce((sum, d) => sum + (Number(r[d]) || 0), 0);
                               return (
                                  <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                    <td className="p-3 font-bold text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                                    <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12 sticky left-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-10">
+                                       {idx + 1}
+                                    </td>
+                                    <td className="p-3 font-bold text-slate-800 dark:text-slate-200 sticky left-12 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-10 shadow-[1px_0_0_rgba(0,0,0,0.05)]">
                                        {t.name}
                                        <div className="text-[10px] text-slate-500 font-normal">{t.nipy}</div>
                                     </td>
@@ -767,7 +771,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                  </tr>
                               )
                            })}
-                           {filtered.length === 0 && <tr><td colSpan="9" className="p-8 text-center text-slate-500">Tidak ada data.</td></tr>}
+                           {filtered.length === 0 && <tr><td colSpan="10" className="p-8 text-center text-slate-500">Tidak ada data.</td></tr>}
                         </tbody>
                      </table>
                   </div>
@@ -851,7 +855,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                       
                       {/* Mobile Card Feed (< md) */}
                       <div className="md:hidden space-y-3 overflow-y-auto flex-1 pr-0.5">
-                         {massActivities.map((act) => (
+                         {massActivities.map((act, idx) => (
                             <div key={act.originalId} className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col gap-2.5">
                                <div className="flex justify-between items-start">
                                   <div>
@@ -891,6 +895,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                              <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
                                 <tr>
+                                  <th className="p-3 font-bold text-center w-12">No</th>
                                   <th className="p-3 font-bold text-center w-24">Tanggal</th>
                                   <th className="p-3 font-bold">Nama Kegiatan Massal</th>
                                   <th className="p-3 font-bold text-center w-28">Bobot JPL</th>
@@ -899,9 +904,10 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                 </tr>
                              </thead>
                              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                                {massActivities.map((act) => (
+                                {massActivities.map((act, idx) => (
                                     <tr key={act.originalId} className="hover:bg-amber-50/40 dark:hover:bg-slate-800/40 transition-colors">
-                                       <td className="p-3 font-bold text-slate-500 dark:text-slate-400 text-center">Tgl {act.tgl}</td>
+                                       <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 text-xs w-12">{idx + 1}</td>
+                                        <td className="p-3 font-bold text-slate-500 dark:text-slate-400 text-center">Tgl {act.tgl}</td>
                                        <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200">{act.ket}</td>
                                        <td className="p-3 text-center">
                                           <span className="text-sm font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2.5 py-1 rounded-md border border-amber-100 dark:border-amber-800/50">+{act.jam} JPL</span>
@@ -920,7 +926,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                     </tr>
                                 ))}
                                 {massActivities.length === 0 && (
-                                    <tr><td colSpan="5" className="p-10 text-center text-slate-500 bg-white dark:bg-slate-800 italic m-2 rounded-xl">Belum ada kegiatan massal yang dicatat bulan ini.</td></tr>
+                                    <tr><td colSpan="6" className="p-10 text-center text-slate-500 bg-white dark:bg-slate-800 italic m-2 rounded-xl">Belum ada kegiatan massal yang dicatat bulan ini.</td></tr>
                                 )}
                              </tbody>
                           </table>
