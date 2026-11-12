@@ -10,7 +10,7 @@ import {
   EDU_RATES, FormattedRupiahInput, INSENTIF_LIST, JOB_CATEGORIES,
   JOB_ROLES, KINERJA_LEVELS, KOMPETENSI_FIELDS, KOMPETENSI_LEVELS,
   POTONGAN_LIST, TENURE_RATES, calculatePayroll, exportToPDF,
-  formatRp, getFormattedPeriod, isTeacherActive
+  formatRp, formatTeacherName, getFormattedPeriod, isTeacherActive
 } from '../../utils/payrollUtils';
 
 export default function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, externalSelectedTab, setExternalSelectedTab, settings, user, saveAuditLog }) {
@@ -301,7 +301,7 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                                  {isExcluded && <CheckCircle size={14}/>}
                               </div>
                               <div className="flex-1 min-w-0">
-                                 <p className={`font-bold text-sm truncate ${isExcluded ? 'text-red-700 dark:text-red-400 line-through opacity-80' : 'text-slate-800 dark:text-slate-200'}`}>{t.name}</p>
+                                 <p className={`font-bold text-sm truncate ${isExcluded ? 'text-red-700 dark:text-red-400 line-through opacity-80' : 'text-slate-800 dark:text-slate-200'}`}>{formatTeacherName(t.name)}</p>
                                  <p className="text-[10px] text-slate-500">{t.position} • {t.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</p>
                               </div>
                               {isExcluded && <span className="text-[10px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 mr-1">Dikecualikan</span>}
@@ -472,9 +472,9 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                 <div key={t.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all focus-within:ring-2 focus-within:ring-emerald-500/20">
                   <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/50 dark:bg-slate-900/30">
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shrink-0">{t.name.charAt(0)}</div>
+                      <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shrink-0 text-xs">{t.name.charAt(0)}</div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-slate-800 dark:text-white truncate uppercase">{t.name}</h4>
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{formatTeacherName(t.name)}</h4>
                         <p className="text-xs text-slate-500 truncate">{t.nipy} • {t.status}</p>
                       </div>
                     </div>

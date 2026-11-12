@@ -635,4 +635,50 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   masterRates: defaultMasterRates
 };
 
+// Standarisasi penulisan gelar akademik guru / pendidik sesuai kaidah EYD / PUEBI
+export const formatTeacherName = (name) => {
+  if (!name || typeof name !== 'string') return '';
+  let str = name.trim();
+
+  // Pemetaan gelar akademik standar EYD / PUEBI
+  const degreeMap = [
+    { pattern: /\bS\.?PD\.?I\b/gi, replacement: 'S.Pd.I' },
+    { pattern: /\bS\.?PD\.?SD\b/gi, replacement: 'S.Pd.SD' },
+    { pattern: /\bS\.?PD\.?AUD\b/gi, replacement: 'S.Pd.AUD' },
+    { pattern: /\bS\.?PD\b\.?/gi, replacement: 'S.Pd.' },
+    { pattern: /\bS\.?KOM\b\.?/gi, replacement: 'S.Kom.' },
+    { pattern: /\bS\.?AG\b\.?/gi, replacement: 'S.Ag.' },
+    { pattern: /\bS\.?E\b\.?/gi, replacement: 'S.E.' },
+    { pattern: /\bS\.?SOS\.?I\b/gi, replacement: 'S.Sos.I' },
+    { pattern: /\bS\.?SOS\b\.?/gi, replacement: 'S.Sos.' },
+    { pattern: /\bS\.?T\b\.?/gi, replacement: 'S.T.' },
+    { pattern: /\bS\.?SI\b\.?/gi, replacement: 'S.Si.' },
+    { pattern: /\bS\.?PSI\b\.?/gi, replacement: 'S.Psi.' },
+    { pattern: /\bS\.?H\b\.?/gi, replacement: 'S.H.' },
+    { pattern: /\bS\.?SN\b\.?/gi, replacement: 'S.Sn.' },
+    { pattern: /\bM\.?PD\.?I\b/gi, replacement: 'M.Pd.I' },
+    { pattern: /\bM\.?PD\b\.?/gi, replacement: 'M.Pd.' },
+    { pattern: /\bM\.?AG\b\.?/gi, replacement: 'M.Ag.' },
+    { pattern: /\bM\.?SI\b\.?/gi, replacement: 'M.Si.' },
+    { pattern: /\bM\.?KOM\b\.?/gi, replacement: 'M.Kom.' },
+    { pattern: /\bM\.?M\b\.?/gi, replacement: 'M.M.' },
+    { pattern: /\bDRS\b\.?/gi, replacement: 'Drs.' },
+    { pattern: /\bDRA\b\.?/gi, replacement: 'Dra.' },
+    { pattern: /\bA\.?MA\.?PD\b\.?/gi, replacement: 'A.Ma.Pd.' },
+    { pattern: /\bA\.?MA\b\.?/gi, replacement: 'A.Ma.' },
+    { pattern: /\bLC\b\.?/gi, replacement: 'Lc.' },
+    { pattern: /\bGR\b\.?/gi, replacement: 'Gr.' },
+  ];
+
+  degreeMap.forEach(({ pattern, replacement }) => {
+    str = str.replace(pattern, replacement);
+  });
+
+  // Bersihkan titik berlebih (misal S.Pd..)
+  str = str.replace(/\.{2,}/g, '.');
+
+  return str;
+};
+
+
 

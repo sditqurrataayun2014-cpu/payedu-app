@@ -310,7 +310,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
       case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
       case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} onOpenAuditLog={handleOpenAuditLog} />;
-      case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} />;
+      case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} archives={archives} />;
       case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
       case 'portal_dashboard': 
       case 'portal_presensi':
