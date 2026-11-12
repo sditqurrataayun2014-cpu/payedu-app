@@ -733,3 +733,191 @@ export const exportMultiMonthPayrollMatrixToExcel = ({
   return defaultFilename;
 };
 
+/**
+ * 💳 EKSPOR REKAP PINJAMAN & KASBON KE EXCEL (.XLSX)
+ * Dilengkapi kolom tenor, status angsuran, sisa pokok, dan baris total.
+ */
+export const exportLoansToExcel = ({ loanRecords = [], settings = {}, filename = '' }) => {
+  const schoolName = settings?.schoolName || 'SD IT Qurrata A\'yun Kandis';
+  const defaultFilename = filename || `Rekap_Pinjaman_Kasbon_${schoolName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+  const aoa = [
+    [schoolName.toUpperCase()],
+    ['DAFTAR REKAPITULASI PINJAMAN & KASBON GURU / PEGAWAI'],
+    [`Tanggal Unduh: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} | Total Catatan: ${loanRecords.length}`],
+    [], // Baris kosong
+    [
+      'No',
+      'NIPY',
+      'Nama Guru / Pegawai',
+      'Status Kepegawaian',
+      'Keterangan Pinjaman',
+      'Plafon Pinjaman (Rp)',
+      'Angsuran / Bulan (Rp)',
+      'Total Tenor (Bln)',
+      'Angsuran Ke-',
+      'Sisa Tenor (Bln)',
+      'Sisa Pokok Pinjaman (Rp)',
+      'Status'
+    ]
+  ];
+
+  let totalPlafon = 0;
+  let totalAngsuran = 0;
+  let totalSisa = 0;
+
+  loanRecords.forEach((item, index) => {
+    totalPlafon += (item.totalPinjaman || 0);
+    totalAngsuran += (!item.isLunas ? (item.nominal || 0) : 0);
+    totalSisa += (item.sisaHutang || 0);
+
+    aoa.push([
+      index + 1,
+      item.nipy || '-',
+      item.name || '-',
+      item.status || '-',
+      item.ket || 'Kasbon Sekolah',
+      item.totalPinjaman || 0,
+      item.nominal || 0,
+      item.tenorTotal || 1,
+      item.cicilanKe || 1,
+      item.sisaBulan || 0,
+      item.sisaHutang || 0,
+      item.isLunas ? 'LUNAS' : 'AKTIF'
+    ]);
+  });
+
+  // Baris Total
+  aoa.push([
+    'TOTAL',
+    '',
+    '',
+    '',
+    '',
+    totalPlafon,
+    totalAngsuran,
+    '',
+    '',
+    '',
+    totalSisa,
+    ''
+  ]);
+
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  worksheet['!cols'] = [
+    { wch: 5 },  // No
+    { wch: 14 }, // NIPY
+    { wch: 30 }, // Nama
+    { wch: 16 }, // Status
+    { wch: 25 }, // Keterangan
+    { wch: 20 }, // Plafon
+    { wch: 18 }, // Angsuran
+    { wch: 14 }, // Tenor
+    { wch: 14 }, // Angsuran Ke
+    { wch: 14 }, // Sisa Tenor
+    { wch: 22 }, // Sisa Pokok
+    { wch: 12 }, // Status
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Pinjaman');
+
+  downloadExcelFile(workbook, defaultFilename);
+  return defaultFilename;
+};
+
+/**
+ * ⚖️ EKSPOR AUDIT KOMPARASI DUA PERIODE KE EXCEL (.XLSX)
+ * Membandingkan secara berdampingan gaji dua bulan berbeda beserta selisih dan persentase.
+ */
+export const exportArchiveComparisonToExcel = ({ 
+  periodA = '', 
+  periodB = '', 
+  comparisonRows = [], 
+  summaryMetrics = {}, 
+  settings = {}, 
+  filename = '' 
+}) => {
+  const schoolName = settings?.schoolName || 'SD IT Qurrata A\'yun Kandis';
+  const defaultFilename = filename || `Audit_Komparasi_${periodA.replace(/\s+/g, '_')}_vs_${periodB.replace(/\s+/g, '_')}.xlsx`;
+
+  const aoa = [
+    [schoolName.toUpperCase()],
+    ['LAPORAN AUDIT KOMPARASI PENGGAJIAN LINTAS PERIODE (SIDE-BY-SIDE)'],
+    [`Komparasi: Periode A (${periodA}) vs Periode B (${periodB})`],
+    [`Dicetak pada: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} WIB`],
+    [],
+    [
+      'RINGKASAN AUDIT',
+      `Beban Periode A: Rp ${(summaryMetrics.totalBebanA || 0).toLocaleString('id-ID')}`,
+      `Beban Periode B: Rp ${(summaryMetrics.totalBebanB || 0).toLocaleString('id-ID')}`,
+      `Selisih Bersih: Rp ${(summaryMetrics.selisihTotal || 0).toLocaleString('id-ID')} (${summaryMetrics.persentaseTotal || 0}%)`
+    ],
+    [],
+    [
+      'No',
+      'NIPY',
+      'Nama Guru / Pegawai',
+      'Status',
+      'Jabatan',
+      `THP ${periodA} (Rp)`,
+      `THP ${periodB} (Rp)`,
+      'Selisih (Rp)',
+      'Perubahan (%)',
+      'Status Tren'
+    ]
+  ];
+
+  comparisonRows.forEach((row, idx) => {
+    aoa.push([
+      idx + 1,
+      row.nipy || '-',
+      row.name || '-',
+      row.status || '-',
+      row.position || '-',
+      row.thpA || 0,
+      row.thpB || 0,
+      row.diff || 0,
+      `${row.pct > 0 ? '+' : ''}${row.pct}%`,
+      row.trend
+    ]);
+  });
+
+  // Baris Total
+  aoa.push([
+    'TOTAL KESELURUHAN',
+    '',
+    '',
+    '',
+    '',
+    summaryMetrics.totalBebanA || 0,
+    summaryMetrics.totalBebanB || 0,
+    summaryMetrics.selisihTotal || 0,
+    `${summaryMetrics.persentaseTotal || 0}%`,
+    summaryMetrics.selisihTotal > 0 ? 'Meningkat' : summaryMetrics.selisihTotal < 0 ? 'Menurun' : 'Stabil'
+  ]);
+
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  worksheet['!cols'] = [
+    { wch: 5 },  // No
+    { wch: 14 }, // NIPY
+    { wch: 32 }, // Nama
+    { wch: 14 }, // Status
+    { wch: 22 }, // Jabatan
+    { wch: 20 }, // THP A
+    { wch: 20 }, // THP B
+    { wch: 20 }, // Selisih
+    { wch: 15 }, // Perubahan %
+    { wch: 14 }, // Status Tren
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Komparasi Gaji');
+
+  downloadExcelFile(workbook, defaultFilename);
+  return defaultFilename;
+};
+
+

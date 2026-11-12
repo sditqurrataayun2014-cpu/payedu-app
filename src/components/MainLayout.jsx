@@ -308,10 +308,10 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
       case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} presensiGuru={presensiGuru} saveAuditLog={saveAuditLog} user={user} />;
       case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
       case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
-      case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} />;
+      case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} />;
       case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} onOpenAuditLog={handleOpenAuditLog} />;
       case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} archives={archives} />;
-      case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} />;
+      case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} setSettings={setSettings} saveAuditLog={saveAuditLog} teachers={teachers} />;
       case 'portal_dashboard': 
       case 'portal_presensi':
       case 'portal_jadwal':
