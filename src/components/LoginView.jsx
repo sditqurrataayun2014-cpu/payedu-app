@@ -160,6 +160,9 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
       } else if (username === 'kepsek' && password === 'Ilwani2010') {
         recordLogin('Kepala Sekolah', 'Kepala Sekolah', 'Sukses');
         authUser = { role: 'Kepala Sekolah', name: 'Kepala Sekolah' };
+      } else if (username.toLowerCase() === 'yayasan' && (password === 'Yayasan2014' || password === 'Yayasan123')) {
+        recordLogin('Pengurus Yayasan', 'Yayasan', 'Sukses');
+        authUser = { role: 'Yayasan', name: 'Pengurus Yayasan', username: 'yayasan' };
       }
 
       if (authUser) {

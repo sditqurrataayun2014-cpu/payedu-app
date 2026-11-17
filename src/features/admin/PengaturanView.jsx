@@ -60,7 +60,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     if (saved) return JSON.parse(saved);
     return [
       { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
-      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' },
+      { id: 'yayasan-1', name: 'Pengurus Yayasan', username: 'yayasan', password: simpleHash('Yayasan2014'), role: 'Yayasan' }
     ];
   });
 

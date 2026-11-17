@@ -30,7 +30,8 @@ import { popAndCloseTopBackModal } from '../services/navigationService';
 
 export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, auditLogs, setAuditLogs, saveAuditLog, isOnline, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
   const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
-  const rootInitialTab = (user.role === 'admin' || user.role === 'Kepala Sekolah') ? 'dashboard' : 'portal_dashboard';
+  const isManagementRole = String(user?.role || '').toLowerCase() === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan';
+  const rootInitialTab = isManagementRole ? 'dashboard' : 'portal_dashboard';
   const [activeTab, setActiveTab] = useState(rootInitialTab);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
@@ -250,7 +251,6 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
     { id: 'portal_saran', label: 'Kritik & Saran', icon: MessageSquare, color: 'text-white', glow: 'shadow-rose-500/50', bg: 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700 border border-rose-300/50 dark:border-rose-600/50' },
   ];
 
-  const isManagementRole = String(user.role || '').toLowerCase() === 'admin' || user.role === 'Kepala Sekolah';
   const navItems = isManagementRole ? adminNav : guruNav;
 
   const navigateToGaji = (teacherId, subTab = 'masaKerja') => {
@@ -560,16 +560,16 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                       <div className="text-xs text-slate-500 dark:text-slate-400 capitalize mt-0.5">{user.role}</div>
                     </div>
                     
-                    {user.role === 'admin' ? (
+                    {(user.role === 'admin' || user.role === 'Yayasan' || user.role === 'Kepala Sekolah') ? (
                       <button 
                         onClick={() => {
                            handleNavigateTab('pengaturan');
                            setIsProfileDropdownOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 flex items-center gap-2 transition-colors font-medium"
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 flex items-center gap-2 transition-colors font-medium cursor-pointer"
                       >
                         <Settings size={16} className="text-slate-400" />
-                        Pengaturan Akun
+                        Pengaturan &amp; Akun
                       </button>
                     ) : (
                       <div className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 mx-2 rounded-lg border border-slate-100 dark:border-slate-700/50 my-1">
@@ -579,14 +579,16 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                         </div>
                         <div className="flex justify-between items-center">
                           <span>Hak Akses:</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">Portal Guru (Read-only)</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            {user.role === 'Yayasan' ? 'Akses Yayasan' : user.role === 'Kepala Sekolah' ? 'Kepala Sekolah' : 'Portal Guru (Read-only)'}
+                          </span>
                         </div>
                       </div>
                     )}
 
                     <button 
                       onClick={onLogout} 
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors mt-1 border-t border-slate-100 dark:border-slate-700/50 font-bold"
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors mt-1 border-t border-slate-100 dark:border-slate-700/50 font-bold cursor-pointer"
                     >
                       <LogOut size={16} />
                       Keluar Aplikasi
@@ -598,13 +600,13 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
           </div>
         </header>
 
-        {/* FITUR BARU: Banner Status Mode Maintenance (Khusus Admin & Kepsek) */}
-        {settings?.maintenanceMode && (user.role === 'admin' || user.role === 'Kepala Sekolah') && (
+        {/* FITUR BARU: Banner Status Mode Maintenance (Khusus Admin, Kepsek & Yayasan) */}
+        {settings?.maintenanceMode && isManagementRole && (
            <div className="bg-amber-500 text-slate-950 px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md z-40 relative no-print border-b border-amber-600">
              <div className="flex items-center gap-2">
                 <Wrench className="shrink-0 animate-bounce text-slate-950" size={18} />
                 <span className="text-xs font-black">
-                   MODE MAINTENANCE (PERBAIKAN) AKTIF: Akses Guru ditutup sementara. Anda masuk sebagai Admin/Kepsek.
+                   MODE MAINTENANCE (PERBAIKAN) AKTIF: Akses Guru ditutup sementara. Anda masuk sebagai Manajemen/Pimpinan ({user.role}).
                 </span>
              </div>
              <button 

@@ -778,18 +778,18 @@ export default function App() {
 
       @media print {
         @page {
-          size: 215.9mm 330.2mm; /* Ukuran Kertas Folio / F4 */
-          margin: 5mm; /* DIPERBARUI: Margin Print Kertas dirapatkan menjadi 5mm */
+          size: A4 portrait; /* Ukuran Standar Resmi Cetak Slip A4 Presisi */
+          margin: 6mm 8mm 6mm 8mm;
         }
         body, html, #root { 
           background: white !important; 
           color: black !important; 
         }
-        /* Sembunyikan sidebar, header, dan tombol yang tidak perlu */
-        aside, header, .no-print { 
+        /* Sembunyikan sidebar, header, navigasi, dan tombol yang tidak perlu */
+        aside, header, nav, footer, [role="navigation"], .no-print { 
           display: none !important; 
         }
-        /* Buka kuncian scroll agar elemen bisa dicetak memanjang ke halaman berikutnya */
+        /* Buka kuncian scroll agar elemen bisa dicetak presisi */
         .h-screen, .min-h-screen, main, .overflow-hidden, .overflow-auto, .overflow-y-auto { 
           height: auto !important; 
           min-height: auto !important; 
@@ -798,12 +798,17 @@ export default function App() {
         .print-only { 
           display: block !important; 
         }
-        .print-area { 
+        .print-area, #printable-area { 
           position: relative !important; 
           width: 100% !important; 
+          max-width: 100% !important;
           background: white !important; 
           padding: 0 !important; 
-          margin: 0 !important; 
+          margin: 0 auto !important; 
+          box-shadow: none !important;
+          border: none !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
         /* Reset background colors for print to save ink, except for important highlights */
         * { 

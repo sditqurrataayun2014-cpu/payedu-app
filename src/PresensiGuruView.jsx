@@ -443,7 +443,7 @@ export default function PresensiGuruView({
   const effectiveTriggerPrint = triggerPrint || (() => window.print());
 
   const isTeacher = currentUser?.portal === 'Teacher' || currentUser?.role === 'Guru' || currentUser?.role === 'Staff';
-  const isAdmin = currentUser?.portal === 'Admin' || String(currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.role === 'Kepala Sekolah';
+  const isAdmin = currentUser?.portal === 'Admin' || String(currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.role === 'Kepala Sekolah' || currentUser?.role === 'Yayasan';
   const readOnly = currentUser?.portal === 'Monitoring';
 
   const settings = useMemo(() => {

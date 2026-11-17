@@ -435,11 +435,12 @@ export const exportToPDF = (elementId, filename) => {
     }
     
     const opt = {
-      margin:       5,
+      margin:       [4, 6, 4, 6],
       filename:     filename,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false },
-      jsPDF:        { unit: 'mm', format: [215.9, 330.2], orientation: 'portrait' }
+      html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
     const startExport = () => {

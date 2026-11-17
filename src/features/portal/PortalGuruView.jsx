@@ -72,14 +72,27 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   const myData = teachers.find(t => t.id === user.id);
   
   if (!myData) {
+    const isExecutive = user?.role === 'Yayasan' || user?.role === 'Kepala Sekolah' || String(user?.role || '').toLowerCase() === 'admin';
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] p-10 text-center animate-in fade-in zoom-in-95">
-        <div className="w-24 h-24 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-6">
-           <AlertCircle size={48} className="text-red-400 opacity-80" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 sm:p-10 text-center animate-in fade-in zoom-in-95">
+        <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-5 ${isExecutive ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-red-50 dark:bg-red-900/30 text-red-500'}`}>
+           {isExecutive ? <Building size={36} /> : <AlertCircle size={40} />}
         </div>
-        <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">Data Pegawai Tidak Ditemukan</h2>
-        <p className="text-slate-500 max-w-md mx-auto">Profil rincian gaji Anda kemungkinan telah dihapus atau di-reset oleh Administrator. Silakan hubungi bagian Manajemen / Tata Usaha Sekolah.</p>
-        <button onClick={() => window.location.reload()} className="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold shadow hover:bg-blue-700 transition-colors">Segarkan Halaman</button>
+        <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 mb-2">
+          {isExecutive ? `Ruang Kendali ${user?.role === 'Yayasan' ? 'Akses Yayasan' : user?.role || 'Manajemen'}` : 'Data Pegawai Tidak Ditemukan'}
+        </h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto text-xs sm:text-sm leading-relaxed mb-6">
+          {isExecutive 
+            ? `Anda saat ini masuk dengan peran ${user?.role || 'Pimpinan'}. Akun manajemen dapat memantau dashboard eksekutif, rekapitulasi gaji, dan pengawasan operasional sekolah secara terpusat.`
+            : 'Profil rincian data Anda tidak ditemukan pada database pegawai aktif. Silakan hubungi Tata Usaha Sekolah.'}
+        </p>
+        <button 
+          onClick={() => setActiveTab ? setActiveTab('dashboard') : window.location.reload()} 
+          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm flex items-center gap-2 cursor-pointer"
+        >
+          {isExecutive ? <LayoutDashboard size={16} /> : null}
+          <span>{isExecutive ? 'Buka Ruang Kendali Manajemen' : 'Segarkan Halaman'}</span>
+        </button>
       </div>
     );
   }
@@ -913,9 +926,9 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
       {/* Modal Slip Gaji */}
       {isSlipModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
-            <div className="p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
+            <div className="no-print p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
                 <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
               </h3>
@@ -928,13 +941,13 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               </button>
             </div>
             
-            <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain print:bg-transparent print:p-0 print:m-0 print:overflow-visible" style={{ WebkitOverflowScrolling: 'touch' }}>
               {/* Petunjuk khusus pengguna ponsel */}
-              <div className="md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
+              <div className="no-print md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
                 <span className="text-base">💡</span>
                 <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
               </div>
-              <div className="min-w-fit flex justify-center pb-10">
+              <div className="min-w-fit flex justify-center pb-10 print:pb-0 print:p-0 print:w-full">
                 {selectedHistorySlip ? (
                    <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
                 ) : (
@@ -943,7 +956,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               </div>
             </div>
 
-            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
+            <div className="no-print p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
               <button 
                 onClick={() => window.print()} 
                 className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
@@ -2267,38 +2280,36 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             </div>
           ) : (
             <>
-              {/* KARTU 1: HERO TAKE HOME PAY (THP) - ULTRA LUXURY FINTECH EDITION */}
-              <div className="bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-[0_20px_45px_-12px_rgba(16,185,129,0.35)] relative overflow-hidden border border-emerald-400/30">
-                {/* Latar Belakang Dekoratif & Ambient Aura */}
-                <div className="absolute -right-10 -top-10 w-52 h-52 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -left-10 -bottom-10 w-52 h-52 bg-teal-400/20 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute right-4 bottom-4 text-white/[0.04] pointer-events-none select-none">
+              {/* KARTU 1: HERO TAKE HOME PAY (THP) - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
+              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
+                {/* Latar Belakang Dekoratif Watermark Halus */}
+                <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
                   <Wallet size={160} strokeWidth={1} />
                 </div>
 
                 <div className="relative z-10 flex flex-col items-center text-center">
                   {/* Badge Header Periode & Status Resmi */}
                   <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black/25 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5 text-emerald-100">
-                      <Calendar size={13} className="text-emerald-300" />
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                      <Calendar size={13} className="text-slate-500 dark:text-slate-400" />
                       <span>Periode: {bulan}</span>
                     </span>
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400/20 backdrop-blur-md text-emerald-200 px-3 py-1 rounded-full border border-emerald-300/30 flex items-center gap-1.5 shadow-xs">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <ShieldCheck size={13} className="text-emerald-300" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1.5 shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
                       <span>Disahkan &amp; Resmi</span>
                     </span>
                   </div>
 
                   {/* Label THP dengan Tombol Privasi Mata (Show/Hide) */}
                   <div className="flex items-center justify-center gap-2 mt-2">
-                    <span className="text-[11px] font-black tracking-widest text-emerald-100/90 uppercase">
+                    <span className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-slate-400 uppercase">
                       Total Gaji Bersih (Take Home Pay)
                     </span>
                     <button 
                       type="button"
                       onClick={() => setShowNominalGaji(!showNominalGaji)} 
-                      className="p-1 rounded-full hover:bg-white/15 text-emerald-200 hover:text-white transition-colors cursor-pointer"
+                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
                       title={showNominalGaji ? "Sembunyikan Nominal" : "Tampilkan Nominal"}
                     >
                       {showNominalGaji ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -2306,27 +2317,27 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   </div>
 
                   {/* Nominal Utama THP */}
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-3 drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] select-none">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-3 select-none">
                     {showNominalGaji ? formatRp(slip.totalBersih) : 'Rp ••••••••'}
                   </div>
 
                   {/* Dua Kapsul Fintech: Penerimaan Kotor vs Total Potongan */}
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                    <div className="bg-emerald-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-emerald-400/30 text-left shadow-inner relative overflow-hidden group">
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-200 font-bold mb-1">
-                        <TrendingUp size={14} className="text-emerald-400" />
+                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-3 sm:p-3.5 border border-emerald-200/80 dark:border-emerald-800/50 text-left shadow-xs relative overflow-hidden group">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-700 dark:text-emerald-300 font-bold mb-1">
+                        <TrendingUp size={14} className="text-emerald-600 dark:text-emerald-400" />
                         <span>Penerimaan Kotor</span>
                       </div>
-                      <span className="font-mono text-xs sm:text-sm font-black text-white">
+                      <span className="font-mono text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-100">
                         {showNominalGaji ? formatRp(slip.totalKotor) : 'Rp ••••••'}
                       </span>
                     </div>
-                    <div className="bg-rose-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-rose-400/30 text-left shadow-inner relative overflow-hidden group">
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-rose-200 font-bold mb-1">
-                        <CreditCard size={14} className="text-rose-400" />
+                    <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs relative overflow-hidden group">
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-1">
+                        <CreditCard size={14} className="text-rose-600 dark:text-rose-400" />
                         <span>Total Potongan</span>
                       </div>
-                      <span className="font-mono text-xs sm:text-sm font-black text-rose-200">
+                      <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">
                         {showNominalGaji ? `-${formatRp(slip.totalPotongan)}` : '-Rp ••••'}
                       </span>
                     </div>
@@ -2337,9 +2348,9 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                     <button 
                       type="button"
                       onClick={() => setIsSlipModalOpen(true)}
-                      className="flex-1 min-w-[140px] bg-white hover:bg-emerald-50 text-emerald-900 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/50"
+                      className="flex-1 min-w-[140px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-transparent"
                     >
-                      <Printer size={16} className="text-emerald-700" />
+                      <Printer size={16} />
                       <span>Cetak Slip (A4)</span>
                     </button>
                     <button 
@@ -2353,9 +2364,9 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                         }
                       }}
                       disabled={isExportingPDF}
-                      className="flex-1 min-w-[140px] bg-emerald-900/80 hover:bg-emerald-900 text-white border border-emerald-400/30 backdrop-blur-md px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="flex-1 min-w-[140px] bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xs hover:shadow-sm hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16} className="text-emerald-300" />}
+                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <Download size={16} className="text-slate-500 dark:text-slate-400" />}
                       <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
                     </button>
                   </div>
@@ -2585,42 +2596,40 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             </div>
           ) : (
             <>
-              {/* HERO KARTU BUKU PINJAMAN PEGAWAI */}
-              <div className="bg-gradient-to-br from-teal-700 via-teal-800 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-[0_20px_45px_-12px_rgba(20,184,166,0.35)] relative overflow-hidden border border-teal-400/30">
-                <div className="absolute -right-8 -top-8 w-44 h-44 bg-teal-400/20 rounded-full blur-2xl pointer-events-none"></div>
-                <div className="absolute -left-8 -bottom-8 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none"></div>
-                <div className="absolute right-4 bottom-4 text-white/[0.04] pointer-events-none select-none">
+              {/* HERO KARTU BUKU PINJAMAN PEGAWAI - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
+              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
+                <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
                   <CreditCard size={150} strokeWidth={1} />
                 </div>
 
                 <div className="relative z-10 flex flex-col items-center text-center">
                   <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black/25 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5 text-teal-100">
-                      <CreditCard size={13} className="text-teal-300" />
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                      <CreditCard size={13} className="text-slate-500 dark:text-slate-400" />
                       <span>Buku Kasbon &amp; Pinjaman</span>
                     </span>
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-teal-400/20 backdrop-blur-md text-teal-200 px-3 py-1 rounded-full border border-teal-300/30 flex items-center gap-1.5 shadow-xs">
-                      <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800/60 flex items-center gap-1.5 shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                       <span>{loanItems.length} Tagihan Aktif</span>
                     </span>
                   </div>
 
-                  <p className="text-xs font-bold text-teal-100/90 uppercase tracking-wider mt-1">
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mt-1">
                     Total Sisa Saldo Pinjaman Anda
                   </p>
 
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-white my-2.5 drop-shadow-md">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-2.5 select-none">
                     {formatRp(totalSisaHutang)}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                    <div className="bg-teal-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-teal-400/30 text-left shadow-inner">
-                      <span className="block text-[10px] sm:text-xs text-teal-200 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
-                      <span className="font-mono text-xs sm:text-sm font-black text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
+                    <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs">
+                      <span className="block text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
+                      <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
                     </div>
-                    <div className="bg-teal-950/40 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-teal-400/30 text-left shadow-inner">
-                      <span className="block text-[10px] sm:text-xs text-teal-200 font-bold mb-0.5">Metode Pelunasan</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-300">Potong Slip Gaji</span>
+                    <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-700/80 text-left shadow-xs">
+                      <span className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold mb-0.5">Metode Pelunasan</span>
+                      <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">Potong Slip Gaji</span>
                     </div>
                   </div>
                 </div>
@@ -3008,7 +3017,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     </div>
 
     {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
+    <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
       
       {/* Background Dasar Nav Bar */}
       <div className="absolute bottom-0 w-full h-[62px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-200/80 dark:border-slate-700/80"></div>

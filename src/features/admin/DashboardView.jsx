@@ -203,10 +203,10 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
         <div className="relative z-10">
           {/* Sapaan Personal */}
           <p className="text-blue-200 text-[11px] sm:text-xs md:text-sm font-bold mb-0.5 sm:mb-1 tracking-widest uppercase drop-shadow-md">
-             {user?.role === 'Kepala Sekolah' ? 'Ruang Kendali Pimpinan' : 'Ruang Kendali Administrator'}
+             {user?.role === 'Kepala Sekolah' ? 'Ruang Kendali Pimpinan' : user?.role === 'Yayasan' ? 'Ruang Kendali Pengurus Yayasan' : 'Ruang Kendali Administrator'}
           </p>
           <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.7)] mb-1 sm:mb-2 md:mb-3 leading-snug">
-             Halo, {user?.role === 'Kepala Sekolah' || user?.name === 'Kepala Sekolah' ? (settings?.principalName ? `Kepala Sekolah (${settings.principalName.split(',')[0]})` : 'Kepala Sekolah') : (user?.name?.split(' ')[0] || 'User')}!
+             Halo, {user?.role === 'Kepala Sekolah' || user?.name === 'Kepala Sekolah' ? (settings?.principalName ? `Kepala Sekolah (${settings.principalName.split(',')[0]})` : 'Kepala Sekolah') : user?.role === 'Yayasan' ? (user?.name || 'Pengurus Yayasan') : (user?.name?.split(' ')[0] || 'User')}!
           </h1>
           <p className="text-blue-100 opacity-90 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed">
             Pantau statistik kepegawaian, distribusi status guru, tingkat pendidikan, dan estimasi total pengeluaran gaji sekolah periode ini secara *real-time*.
@@ -221,9 +221,9 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
             </div>
             <div className="flex flex-col">
               <div className="text-[9px] sm:text-[10px] text-blue-200 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1">
-                Periode Gaji {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && <Edit size={10} className="opacity-50" />}
+                Periode Gaji {(user?.role === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan') && <Edit size={10} className="opacity-50" />}
               </div>
-              {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') ? (
+              {(user?.role === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan') ? (
                 <input 
                   type="month" 
                   value={settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} 
@@ -373,8 +373,8 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
         </div>
       )}
 
-      {/* PANEL JALAN PINTAS (QUICK ACTIONS) - DIPERBARUI: Tampil juga untuk Kepsek */}
-      {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && (
+      {/* PANEL JALAN PINTAS (QUICK ACTIONS) - DIPERBARUI: Tampil juga untuk Kepsek & Yayasan */}
+      {(user?.role === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan') && (
         <div className="grid grid-cols-4 gap-1.5 sm:gap-3 mb-2.5">
           <button onClick={() => setActiveTab('dataguru')} className="bg-white dark:bg-slate-800 p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md transition-all flex flex-col items-center justify-center gap-1 sm:gap-2 group cursor-pointer">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -403,8 +403,8 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
         </div>
       )}
 
-      {/* METRIK PERINGATAN CERDAS (SMART ALERTS) - DIPERBARUI: Tampil juga untuk Kepsek */}
-      {(user?.role === 'admin' || user?.role === 'Kepala Sekolah') && (alerts.lateTeachers > 0 || alerts.totalUnpaidLoans > 0) && (
+      {/* METRIK PERINGATAN CERDAS (SMART ALERTS) - DIPERBARUI: Tampil juga untuk Kepsek & Yayasan */}
+      {(user?.role === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan') && (alerts.lateTeachers > 0 || alerts.totalUnpaidLoans > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 mb-2.5">
           {alerts.lateTeachers > 0 && (
             <div onClick={onAbsensiAlertClick} className="cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all duration-300 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-4 shadow-sm animate-in fade-in zoom-in-95 group">
