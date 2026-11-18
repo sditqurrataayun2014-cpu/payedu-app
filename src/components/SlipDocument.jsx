@@ -19,7 +19,7 @@ function SlipDocument({ teacher, bulan, settings }) {
   // Helper BARU: untuk rincian baris agar titik dua (:) sejajar rapi sempurna layaknya "Tab"
   // DIPERBARUI: Diubah menjadi fungsi helper (renderDetailRow) untuk menghindari anti-pattern deklarasi komponen dalam komponen
   const renderDetailRow = (label, value) => (
-    <div className="flex mb-0.5 w-full">
+    <div className="flex mb-0.5 print:mb-0 w-full print:leading-tight">
       <span className="w-[55%] shrink-0 inline-block">{label}</span>
       <span className="w-4 shrink-0 text-center">:</span>
       <span className="flex-1">{value}</span>
@@ -55,7 +55,7 @@ function SlipDocument({ teacher, bulan, settings }) {
   const tanggalCetak = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="bg-white p-3 sm:p-4 md:p-5 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full min-w-[680px] md:min-w-[740px] relative min-h-auto flex flex-col font-sans print:p-0 print:m-0 print:border-0 print:shadow-none print:w-full print:max-w-full" style={{ maxWidth: '210mm', pageBreakInside: 'avoid', breakInside: 'avoid', pageBreakAfter: 'avoid', breakAfter: 'avoid' }} id="printable-area">
+    <div className="bg-white p-3 sm:p-4 md:p-5 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full min-w-[680px] md:min-w-[740px] relative min-h-auto flex flex-col font-sans print:p-0 print:m-0 print:border-0 print:shadow-none print:w-full print:max-w-full print:min-w-0 print:text-[10px] print:leading-tight" style={{ maxWidth: '210mm', pageBreakInside: 'avoid', breakInside: 'avoid', pageBreakAfter: 'avoid', breakAfter: 'avoid' }} id="printable-area">
       
       {/* TAMBAHAN: Watermark Logo Sekolah (Transparan 4%) */}
       {settings?.logoUrl && (
@@ -65,14 +65,14 @@ function SlipDocument({ teacher, bulan, settings }) {
       )}
 
       {/* Kop Surat / Header Slip - DIPERBARUI: Layout Flex Rapi & Lencana Putih */}
-      <div className="border-b-2 md:border-b-4 border-double border-black pb-2 mb-2 relative z-10 flex justify-between items-center w-full">
+      <div className="border-b-2 md:border-b-4 border-double border-black pb-2 mb-2 print:pb-1 print:mb-1 relative z-10 flex justify-between items-center w-full">
         
         {/* Kiri: Logo & Lencana Periode Gaji */}
-        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 shrink-0">
+        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 print:w-20 shrink-0">
           {settings?.logoUrl && (
-             <img src={settings.logoUrl} alt="Logo" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 object-contain drop-shadow-sm" />
+             <img src={settings.logoUrl} alt="Logo" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 print:w-11 print:h-11 object-contain drop-shadow-sm" />
           )}
-          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] px-2.5 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
+          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] print:text-[7.5px] px-2.5 py-0.5 print:px-1.5 print:py-0 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
             PERIODE: {bulan.toUpperCase()}
           </div>
         </div>
@@ -80,29 +80,29 @@ function SlipDocument({ teacher, bulan, settings }) {
         {/* Tengah: Identitas Sekolah (Lebar Maksimal agar nama Yayasan tidak turun ke bawah) */}
         <div className="flex flex-col justify-center text-center px-1 sm:px-3 flex-1 min-w-0">
           {settings?.foundationName && (
-             <h1 className="text-xs sm:text-sm md:text-[15px] font-black uppercase tracking-wider text-black leading-tight mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+             <h1 className="text-xs sm:text-sm md:text-[15px] print:text-[12.5px] font-black uppercase tracking-wider text-black leading-tight mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
                {settings.foundationName}
              </h1>
           )}
-          <h2 className="text-[10.5px] sm:text-xs md:text-sm font-extrabold uppercase tracking-wide text-black leading-snug mb-0.5">
+          <h2 className="text-[10.5px] sm:text-xs md:text-sm print:text-[10.5px] font-extrabold uppercase tracking-wide text-black leading-snug mb-0.5">
             {settings?.schoolName || 'Sekolah Islam Terpadu XYZ'}
           </h2>
-          <p className="text-[8px] sm:text-[9px] text-black font-semibold mt-0.5 leading-snug">
+          <p className="text-[8px] sm:text-[9px] print:text-[7.5px] text-black font-semibold mt-0.5 leading-snug">
             {settings?.address || 'Jl. Pendidikan No. 123, Kec. Banjarmasin, Kalimantan Selatan 70123'}
           </p>
         </div>
 
         {/* Kanan: QR Code & Lencana No Slip */}
-        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 shrink-0">
-          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=VERIFY-${encodeURIComponent(noSlip)}&color=000000`} alt="QR Code" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 border border-black p-0.5 rounded-lg bg-white shadow-xs" />
-          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] px-2.5 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
+        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 print:w-20 shrink-0">
+          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=VERIFY-${encodeURIComponent(noSlip)}&color=000000`} alt="QR Code" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 print:w-11 print:h-11 border border-black p-0.5 rounded-lg bg-white shadow-xs" />
+          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] print:text-[7.5px] px-2.5 py-0.5 print:px-1.5 print:py-0 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
             NO: {noSlip}
           </div>
         </div>
       </div>
 
       {/* Identitas Pegawai (DIPERBARUI: Disederhanakan tanpa No Rekening & Periode Gaji) */}
-      <div className="grid grid-cols-2 gap-3 mb-2 text-xs md:text-sm relative z-10">
+      <div className="grid grid-cols-2 gap-3 mb-2 print:mb-1 text-xs md:text-sm print:text-[10px] relative z-10">
         <div>
           {/* PERBAIKAN: Menghapus class 'uppercase' agar gelar (seperti S.Pd.I) tidak dipaksa menjadi S.PD.I */}
           <div className="flex"><span className="w-28 shrink-0 font-medium">Nama</span><span className="w-4 shrink-0 text-center">:</span><span className="font-bold flex-1">{teacher.name}</span></div>
@@ -116,82 +116,82 @@ function SlipDocument({ teacher, bulan, settings }) {
       </div>
 
       {/* Tabel Rincian Gaji */}
-      <div className="flex-1 mb-1.5 relative z-10">
-        <table className="w-full border-collapse border border-black text-xs md:text-sm">
+      <div className="flex-1 mb-1.5 print:mb-1 relative z-10">
+        <table className="w-full border-collapse border border-black text-xs md:text-sm print:text-[9.5px] print:leading-tight">
           <thead>
             <tr>
-              <th className="border border-black p-1.5 text-center uppercase w-10">NO.</th>
-              <th className="border border-black p-1.5 text-center uppercase"> RINCIAN KOMPONEN GAJI</th>
-              <th className="border border-black p-1.5 text-center uppercase w-48">NOMINAL</th>
+              <th className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center uppercase w-10">NO.</th>
+              <th className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center uppercase"> RINCIAN KOMPONEN GAJI</th>
+              <th className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center uppercase w-48">NOMINAL</th>
             </tr>
           </thead>
           <tbody>
             {/* A. TUNJANGAN */}
-            <tr className="bg-slate-50"><td colSpan="3" className="border border-black p-1.5 font-bold">A. TUNJANGAN</td></tr>
+            <tr className="bg-slate-50"><td colSpan="3" className="border border-black p-1.5 print:p-0.5 print:py-0.5 font-bold">A. TUNJANGAN</td></tr>
             <tr>
-              <td className="border border-black p-1.5 text-center align-top">1</td>
-              <td className="border border-black p-1.5">
-                <div className="mb-1 font-semibold">Tunjangan Berdasarkan Masa Kerja</div>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">1</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
+                <div className="mb-1 print:mb-0 font-semibold">Tunjangan Berdasarkan Masa Kerja</div>
                 {renderDetailRow(`TMT (Tahun Mulai Tugas) ${p.tahunMasaKerja}`, <>(<strong>{new Date().getFullYear() - p.tahunMasaKerja} tahun</strong>)</>)}
               </td>
-              <td className="border border-black p-1.5 align-top">{renderNominal(slip.tMasaKerja)}</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(slip.tMasaKerja)}</td>
             </tr>
             <tr>
-              <td className="border border-black p-1.5 text-center align-top">2</td>
-              <td className="border border-black p-1.5">
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">2</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
                 {renderDetailRow("Tunjangan Berdasarkan Pendidikan", <strong>{p.pendidikan?.tingkat || teacher.education}</strong>)}
               </td>
-              <td className="border border-black p-1.5 align-top">{renderNominal(slip.tPendidikan)}</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(slip.tPendidikan)}</td>
             </tr>
             {p.jabatans && p.jabatans.length > 0 ? p.jabatans.map((j, i) => (
               <tr key={`jab-${i}`}>
-                <td className="border border-black p-1.5 text-center align-top">{i === 0 ? 3 : ''}</td>
-                <td className="border border-black p-1.5">
-                  <div className="mb-1 font-semibold">Jabatan {i+1} ({j.detail})</div>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">{i === 0 ? 3 : ''}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
+                  <div className="mb-1 print:mb-0 font-semibold">Jabatan {i+1} ({j.detail})</div>
                   {renderDetailRow("Penilaian Kinerja", <strong>{j.kinerja}</strong>)}
                 </td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(j.nominal)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(j.nominal)}</td>
               </tr>
             )) : (
               <tr>
-                <td className="border border-black p-1.5 text-center align-top">3</td>
-                <td className="border border-black p-1.5 italic text-slate-500">Tidak ada jabatan</td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(0)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">3</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 italic text-slate-500">Tidak ada jabatan</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(0)}</td>
               </tr>
             )}
             {p.kompetensi && p.kompetensi.length > 0 ? p.kompetensi.map((k, i) => (
               <tr key={`komp-${i}`}>
-                <td className="border border-black p-1.5 text-center align-top">{i === 0 ? 4 : ''}</td>
-                <td className="border border-black p-1.5">
-                  <div className="mb-1 font-semibold">Tunjangan Kompetensi</div>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">{i === 0 ? 4 : ''}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
+                  <div className="mb-1 print:mb-0 font-semibold">Tunjangan Kompetensi</div>
                   {renderDetailRow("Bidang Keahlian Khusus", <span className="font-bold">{k.bidang}</span>)}
                   {renderDetailRow("Level Kompetensi", <span className="font-bold">{k.level}</span>)}
                 </td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(k.nominal)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(k.nominal)}</td>
               </tr>
             )) : (
               <tr>
-                <td className="border border-black p-1.5 text-center align-top">4</td>
-                <td className="border border-black p-1.5 italic text-slate-500">Tidak ada tunjangan kompetensi</td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(0)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">4</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 italic text-slate-500">Tidak ada tunjangan kompetensi</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(0)}</td>
               </tr>
             )}
             <tr>
-              <td className="border border-black p-1.5 text-center align-top">5</td>
-              <td className="border border-black p-1.5">
-                <div className="mb-1 font-semibold">Tunjangan Keluarga <span className="text-[11px] font-normal italic text-slate-600">({family.wife === 1 ? 'Menikah' : family.wife === 2 ? 'Menikah - Ditanggung Suami' : 'Belum Menikah'})</span></div>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">5</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
+                <div className="mb-1 print:mb-0 font-semibold">Tunjangan Keluarga <span className="text-[11px] font-normal italic text-slate-600">({family.wife === 1 ? 'Menikah' : family.wife === 2 ? 'Menikah - Ditanggung Suami' : 'Belum Menikah'})</span></div>
                 {/* DIPERBARUI: Label dinamis menyesuaikan gender dan pasangan 1 yayasan */}
                 {renderDetailRow(teacher.gender === 'P' ? 'Suami' : 'Isteri', <>{family.wife === 1 ? <>1 Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifSuamiIstri)})</span></> : family.wife === 2 ? <span className="italic text-slate-600 font-medium text-xs bg-slate-100 px-2 py-0.5 rounded">Ditanggung Suami</span> : '0 Orang'}</>)}
                 {renderDetailRow("Anak", <>{family.wife === 1 ? (family.children || 0) : 0} Orang <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(tarifAnak)})</span></>)}
               </td>
-              <td className="border border-black p-1.5 align-top">{renderNominal(slip.tKeluarga)}</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(slip.tKeluarga)}</td>
             </tr>
 
             {/* B. INSENTIF KEHADIRAN & JAM MENGAJAR */}
-            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 font-bold">B. INSENTIF KEHADIRAN & JAM MENGAJAR</td></tr>
+            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 print:p-0.5 print:py-0.5 font-bold">B. INSENTIF KEHADIRAN & JAM MENGAJAR</td></tr>
             <tr className="print:break-inside-avoid">
-              <td className="border border-black p-1.5 text-center align-top">1</td>
-              <td className="border border-black p-1.5">
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">1</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
                 {/* DIPERBARUI: Penambahan JSJM dan Penyesuaian Label Jam Mengajar */}
                 {renderDetailRow("Jabatan Setara Jam Mengajar (JSJM)", `${p.jamMengajar?.jsjm || 0} jam`)}
                 {renderDetailRow("Tambahan Jam (Jam +)", `${slip.jamPlus || 0} jam`)}
@@ -199,87 +199,87 @@ function SlipDocument({ teacher, bulan, settings }) {
                 {renderDetailRow("Jam Wajib Mengajar Guru Tetap", `${wajib} jam`)}
                 {renderDetailRow("Selisih Jam Mengajar", <>{slip.jamDihitung} jam <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(p.jamMengajar?.tarifJPL || 0)})</span></>)}
               </td>
-              <td className="border border-black p-1.5 align-top">{renderNominal(slip.tMengajar)}</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(slip.tMengajar)}</td>
             </tr>
             <tr className="print:break-inside-avoid">
-              <td className="border border-black p-1.5 text-center align-top">2</td>
-              <td className="border border-black p-1.5">
-                <div className="mb-1 font-semibold">Bonus Kedisiplinan Waktu Masuk Kelas</div>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">2</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
+                <div className="mb-1 print:mb-0 font-semibold">Bonus Kedisiplinan Waktu Masuk Kelas</div>
                 {renderDetailRow("Jumlah Kehadiran Tepat Waktu", <>{tepatWaktu} kali <span className="font-normal italic text-slate-600 ml-1">(x {formatRp(p.disiplin?.tarifHadir || 0)})</span></>)}
                 {renderDetailRow("Jumlah Keterlambatan", `${p.disiplin?.telat || 0} kali`)}
               </td>
-              <td className="border border-black p-1.5 align-top">{renderNominal(slip.bonusHadir)}</td>
+              <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(slip.bonusHadir)}</td>
             </tr>
 
             {/* C. INSENTIF TUGAS TAMBAHAN KHUSUS */}
-            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 font-bold">C. INSENTIF TUGAS TAMBAHAN KHUSUS</td></tr>
+            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 print:p-0.5 print:py-0.5 font-bold">C. INSENTIF TUGAS TAMBAHAN KHUSUS</td></tr>
             {p.insentifTambahan && p.insentifTambahan.length > 0 ? p.insentifTambahan.map((ins, i) => (
               <tr key={`ins-${i}`} className="print:break-inside-avoid">
-                <td className="border border-black p-1.5 text-center align-top">{i+1}</td>
-                <td className="border border-black p-1.5">{ins.ket}</td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(ins.nominal)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">{i+1}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">{ins.ket}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(ins.nominal)}</td>
               </tr>
             )) : (
                <tr className="print:break-inside-avoid">
-                 <td className="border border-black p-1.5 text-center align-top">1</td>
-                 <td className="border border-black p-1.5 italic text-slate-500">Tidak ada insentif tambahan</td>
-                 <td className="border border-black p-1.5 align-top">{renderNominal(0)}</td>
+                 <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">1</td>
+                 <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 italic text-slate-500">Tidak ada insentif tambahan</td>
+                 <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(0)}</td>
                </tr>
             )}
 
             {/* TOTAL GAJI KOTOR */}
             <tr className="bg-slate-200 print:bg-slate-200 print:break-inside-avoid" style={{WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact'}}>
-              <td colSpan="2" className="border border-black p-2 font-bold text-center uppercase tracking-wider">TOTAL GAJI KOTOR</td>
-              <td className="border border-black p-2 font-bold">{renderNominal(slip.totalKotor)}</td>
+              <td colSpan="2" className="border border-black p-1.5 sm:p-2 print:p-0.5 print:py-0.5 font-bold text-center uppercase tracking-wider print:text-[9.5px]">TOTAL GAJI KOTOR</td>
+              <td className="border border-black p-1.5 sm:p-2 print:p-0.5 print:py-0.5 font-bold print:text-[9.5px]">{renderNominal(slip.totalKotor)}</td>
             </tr>
 
                 {/* D. POTONGAN GAJI */}
-            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 font-bold">D. POTONGAN GAJI</td></tr>
+            <tr className="bg-slate-50 print:break-inside-avoid"><td colSpan="3" className="border border-black p-1.5 print:p-0.5 print:py-0.5 font-bold">D. POTONGAN GAJI</td></tr>
             {potongans.length > 0 ? potongans.map((pot, i) => (
               <tr key={`pot-${i}`} className="print:break-inside-avoid">
-                <td className="border border-black p-1.5 text-center align-top">{i === 0 ? 1 : ''}</td>
-                <td className="border border-black p-1.5">
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">{i === 0 ? 1 : ''}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5">
                   {pot.ket}
                   {/* TAMBAHAN POIN 4: Fitur Info Sisa Saldo Kasbon/Koperasi Dinamis */}
                   {(pot.ket.toLowerCase().includes('koperasi') || pot.ket.toLowerCase().includes('kasbon') || pot.ket.toLowerCase().includes('pinjaman')) && (
-                     <div className="text-[10px] text-slate-600 font-medium italic mt-0.5 ml-1">
+                     <div className="text-[10px] print:text-[8.5px] text-slate-600 font-medium italic mt-0.5 ml-1">
                         *(Sisa Saldo Pinjaman/Kasbon: {formatRp(pot.sisaHutang !== undefined ? pot.sisaHutang : (pot.nominal * 4))})
                      </div>
                   )}
                 </td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(pot.nominal)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(pot.nominal)}</td>
               </tr>
             )) : (
               <tr className="print:break-inside-avoid">
-                <td className="border border-black p-1.5 text-center align-top">1</td>
-                <td className="border border-black p-1.5 italic text-slate-500">Tidak ada potongan</td>
-                <td className="border border-black p-1.5 align-top">{renderNominal(0)}</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 text-center align-top">1</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 italic text-slate-500">Tidak ada potongan</td>
+                <td className="border border-black p-1.5 print:p-0.5 print:py-0.5 align-top">{renderNominal(0)}</td>
               </tr>
             )}
 
             {/* TOTAL POTONGAN */}
             <tr className="print:break-inside-avoid">
-              <td colSpan="2" className="border border-black p-2 font-bold text-center uppercase tracking-wider">TOTAL POTONGAN</td>
-              <td className="border border-black p-2 font-bold">{renderNominal(slip.totalPotongan)}</td>
+              <td colSpan="2" className="border border-black p-1.5 sm:p-2 print:p-0.5 print:py-0.5 font-bold text-center uppercase tracking-wider print:text-[9.5px]">TOTAL POTONGAN</td>
+              <td className="border border-black p-1.5 sm:p-2 print:p-0.5 print:py-0.5 font-bold print:text-[9.5px]">{renderNominal(slip.totalPotongan)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       {/* PENERIMAAN GAJI BERSIH THP (DIPERBARUI: TAMBAHAN Metode Pembayaran) */}
-      <table className="w-full border-collapse border-2 md:border-4 border-double border-black mb-2 mt-1 relative z-10 print:break-inside-avoid">
+      <table className="w-full border-collapse border-2 md:border-4 border-double border-black mb-2 mt-1 print:mb-1 print:mt-1 relative z-10 print:break-inside-avoid">
          <tbody>
             <tr className="bg-slate-200 text-black print:bg-slate-200 print:text-black" style={{WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact'}}>
-               <td className="border border-black p-1.5 md:p-2 font-bold text-center w-[60%] text-xs md:text-sm tracking-wide">
+               <td className="border border-black p-1.5 md:p-2 print:p-1 font-bold text-center w-[60%] text-xs md:text-sm print:text-[10px] tracking-wide">
                   PENERIMAAN GAJI BERSIH (THP)
-                  {teacher.bankName && <div className="text-[10px] font-normal italic mt-0.5 opacity-80">*Dana ditransfer ke rekening penerima</div>}
+                  {teacher.bankName && <div className="text-[10px] print:text-[8px] font-normal italic mt-0.5 opacity-80">*Dana ditransfer ke rekening penerima</div>}
                </td>
-               <td className="border border-black p-1.5 md:p-2 font-black text-center text-base md:text-lg w-[40%]">
+               <td className="border border-black p-1.5 md:p-2 print:p-1 font-black text-center text-base md:text-lg print:text-sm w-[40%]">
                   {formatRp(slip.totalBersih)}
                </td>
             </tr>
             <tr>
-               <td colSpan="2" className="border border-black p-1 text-center text-[10px] md:text-xs bg-slate-50">
+               <td colSpan="2" className="border border-black p-1 print:p-0.5 text-center text-[10px] md:text-xs print:text-[8.5px] bg-slate-50">
                   Terbilang: <strong className="ml-1 uppercase text-slate-800 italic"># {terbilang(slip.totalBersih).trim()} Rupiah #</strong>
                </td>
             </tr>
@@ -287,8 +287,8 @@ function SlipDocument({ teacher, bulan, settings }) {
       </table>
 
       {/* Keterangan Tidak Hadir (DIPERBARUI: Dibuat sejajar 1 baris untuk hemat tempat) */}
-      <div className="text-xs mb-2 mt-0.5 relative z-10 print:break-inside-avoid">
-         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6 font-medium border border-black p-1.5 bg-slate-50">
+      <div className="text-xs mb-2 mt-0.5 print:mb-1 print:mt-0.5 print:text-[9px] relative z-10 print:break-inside-avoid">
+         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6 font-medium border border-black p-1.5 print:p-0.5 bg-slate-50">
            <div className="font-bold mr-2">Keterangan Tidak Hadir:</div>
            <div className="flex items-center gap-1.5"><span className="w-16">Sakit (S)</span><span>:</span><span className="font-bold">{countS} Hari</span></div>
            <div className="flex items-center gap-1.5"><span className="w-16">Izin (I)</span><span>:</span><span className="font-bold">{countI} Hari</span></div>
@@ -297,22 +297,22 @@ function SlipDocument({ teacher, bulan, settings }) {
       </div>
 
       {/* Bagian Tanda Tangan (TAMBAHAN POIN 1: E-Sign & Stamp) */}
-      <div className="mt-1 grid grid-cols-2 text-center text-xs md:text-sm pt-1 relative z-10 print:break-inside-avoid">
+      <div className="mt-1 grid grid-cols-2 text-center text-xs md:text-sm pt-1 print:mt-0 print:pt-0 print:text-[10px] relative z-10 print:break-inside-avoid">
          <div className="flex flex-col items-center justify-end">
-           <p className="mb-8 md:mb-10">Penerima,</p>
+           <p className="mb-8 md:mb-10 print:mb-3">Penerima,</p>
            {/* PERBAIKAN: Menghapus class 'uppercase' agar gelar tanda tangan presisi */}
            <p className="font-bold underline tracking-wide">{teacher.name}</p>
          </div>
          <div className="flex flex-col items-center justify-end relative">
-           <p className="mb-1 text-[11px] md:text-xs">Kuala Pembuang, {tanggalCetak}<br/>Mengetahui, Kepala Sekolah</p>
+           <p className="mb-1 text-[11px] md:text-xs print:text-[9px] print:mb-0.5">Kuala Pembuang, {tanggalCetak}<br/>Mengetahui, Kepala Sekolah</p>
            
            {/* E-Sign Container */}
-           <div className="relative w-28 h-12 md:h-14 flex items-center justify-center my-0.5">
+           <div className="relative w-28 h-12 md:h-14 print:h-8 print:w-20 flex items-center justify-center my-0.5 print:my-0">
              {/* Tanda Tangan: Cek jika ada URL kustom di pengaturan */}
              {settings?.signatureUrl ? (
-               <img src={settings.signatureUrl} alt="Tanda Tangan" className="absolute w-28 h-12 md:h-14 object-contain z-10 mix-blend-multiply transform -rotate-2" />
+               <img src={settings.signatureUrl} alt="Tanda Tangan" className="absolute w-28 h-12 md:h-14 print:h-8 print:w-20 object-contain z-10 mix-blend-multiply transform -rotate-2" />
              ) : (
-               <svg className="absolute w-24 h-12 text-blue-900/80 transform rotate-[-5deg]" viewBox="0 0 100 50">
+               <svg className="absolute w-24 h-12 print:h-8 print:w-16 text-blue-900/80 transform rotate-[-5deg]" viewBox="0 0 100 50">
                  <path d="M10,40 C15,25 25,10 35,15 C45,20 40,45 50,35 C60,25 65,10 75,20 C85,30 80,45 95,30" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                  <path d="M25,28 L50,28" fill="none" stroke="currentColor" strokeWidth="1.5" />
                </svg>
@@ -325,7 +325,7 @@ function SlipDocument({ teacher, bulan, settings }) {
       </div>
 
       {/* TAMBAHAN: Catatan Kaki (Footer Disclaimer) */}
-      <div className="mt-2 border-t border-dashed border-slate-400 pt-1 text-[8.5px] md:text-[9px] text-slate-500 italic text-center relative z-10 pb-0 print:break-inside-avoid leading-tight">
+      <div className="mt-2 border-t border-dashed border-slate-400 pt-1 print:mt-1 print:pt-0.5 text-[8.5px] md:text-[9px] print:text-[7.5px] text-slate-500 italic text-center relative z-10 pb-0 print:break-inside-avoid leading-tight">
          Dokumen slip gaji ini diterbitkan secara otomatis oleh sistem penggajian Guru SDIT QA dan dilengkapi dengan validasi QR Code. Harap simpan dokumen ini sebagai bukti yang sah. Jika terdapat ketidaksesuaian rincian, mohon hubungi Bendahara maksimal 1x24 jam sejak dokumen ini diterima.
       </div>
     </div>

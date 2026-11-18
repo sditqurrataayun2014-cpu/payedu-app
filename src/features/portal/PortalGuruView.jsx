@@ -2761,124 +2761,51 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               </span>
             </div>
 
-            {/* Mobile View: Geser ke Samping (Horizontal Scroll Carousel) */}
-            <div className="md:hidden p-3 space-y-2">
-              {riwayatAsli.length > 0 && (
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 px-1 mb-1">
-                  <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                    <History size={13} />
-                    <span>Geser ke samping untuk melihat bulan lainnya →</span>
-                  </span>
-                  <span className="font-mono text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
-                    {riwayatAsli.length} Bulan
-                  </span>
-                </div>
-              )}
-
-              <div className="flex overflow-x-auto gap-3 pb-3 pt-1 snap-x snap-mandatory touch-pan-x hide-scrollbar scroll-smooth">
-                {riwayatAsli.map((item) => (
-                  <div 
-                    key={item.idArsip} 
-                    className="w-[280px] min-w-[280px] snap-center shrink-0 bg-white dark:bg-slate-800/95 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3.5 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 transition-all flex flex-col justify-between space-y-3"
-                  >
-                    {/* Baris 1: Periode & Badge Disahkan */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                          <Calendar size={15} />
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Periode Gaji</span>
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">{item.periode}</h4>
-                        </div>
-                      </div>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/50 dark:border-emerald-800/40">
-                        <CheckCircle2 size={11} className="text-emerald-500" /> Disahkan
-                      </span>
-                    </div>
-
-                    {/* Baris 2: Nominal THP & Tanggal */}
-                    <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gaji Bersih (THP)</span>
-                        <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(item.nominal)}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-medium text-slate-400 block">Tgl Pengesahan</span>
-                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{item.tanggal}</span>
-                      </div>
-                    </div>
-
-                    {/* Baris 3: Tombol Aksi Buka Slip */}
-                    <button 
-                      onClick={() => {
-                        setSelectedHistorySlip(item);
-                        setIsSlipModalOpen(true);
-                      }} 
-                      className="w-full py-2.5 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-[0.98]"
-                    >
-                      <FileText size={15} />
-                      <span>Buka &amp; Cetak Slip Gaji (A4)</span>
-                    </button>
-                  </div>
-                ))}
-
-                {riwayatAsli.length === 0 && (
-                  <div className="w-full py-8 px-4 text-center">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center mx-auto mb-3 text-indigo-400">
-                      <Archive size={24} />
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat gaji tersimpan</h4>
-                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Data akan muncul di sini setelah Admin/Bendahara melakukan Tutup Buku bulanan.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop View: Full Table (hidden md:block) */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
+            {/* Tabel Riwayat Gaji Resmi (Bisa Digeser ke Samping di Layar HP) */}
+            <div className="overflow-x-auto hide-scrollbar touch-pan-x">
+              <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap min-w-max">
                 <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
                   <tr>
-                    <th className="p-3.5 font-semibold">Periode Bulan</th>
-                    <th className="p-3.5 font-semibold text-right">Total Bersih (THP)</th>
-                    <th className="p-3.5 font-semibold">Tanggal Pengesahan</th>
-                    <th className="p-3.5 font-semibold text-center">Status</th>
-                    <th className="p-3.5 font-semibold text-center">Aksi Dokumen</th>
+                    <th className="p-3.5 sm:p-4 font-semibold">Periode Bulan</th>
+                    <th className="p-3.5 sm:p-4 font-semibold text-right">Total Bersih (THP)</th>
+                    <th className="p-3.5 sm:p-4 font-semibold text-center sm:text-left">Tanggal Pengesahan</th>
+                    <th className="p-3.5 sm:p-4 font-semibold text-center">Status</th>
+                    <th className="p-3.5 sm:p-4 font-semibold text-center">Aksi Dokumen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                   {riwayatAsli.map((item) => (
-                    <tr key={item.idArsip} className="hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 transition-colors group">
-                      <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={15} className="text-indigo-400" />
-                          <span className="font-semibold">{item.periode}</span>
+                    <tr key={item.idArsip} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors group">
+                      <td className="p-3.5 sm:p-4 font-medium text-slate-800 dark:text-slate-200">
+                        <div className="flex items-center gap-2.5">
+                          <Calendar size={16} className="text-indigo-400 shrink-0" />
+                          <span className="font-bold text-slate-800 dark:text-slate-100">{item.periode}</span>
                         </div>
                       </td>
-                      <td className="p-3.5 font-black text-emerald-600 dark:text-emerald-400 text-right">
+                      <td className="p-3.5 sm:p-4 font-black text-emerald-600 dark:text-emerald-400 text-right font-mono text-sm sm:text-base">
                         {formatRp(item.nominal)}
                       </td>
-                      <td className="p-3.5 text-xs text-slate-600 dark:text-slate-400">
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle2 size={13} className="text-emerald-500" />
+                      <td className="p-3.5 sm:p-4 text-xs text-slate-600 dark:text-slate-300">
+                        <div className="flex items-center justify-center sm:justify-start gap-1.5 font-medium">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
                           <span>{item.tanggal}</span>
                         </div>
                       </td>
-                      <td className="p-3.5 text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-bold border border-emerald-200/50 dark:border-emerald-800/40">
+                      <td className="p-3.5 sm:p-4 text-center">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-bold border border-emerald-200/60 dark:border-emerald-800/40">
                           Disahkan
                         </span>
                       </td>
-                      <td className="p-3.5 text-center">
+                      <td className="p-3.5 sm:p-4 text-center">
                         <button 
                           onClick={() => {
                             setSelectedHistorySlip(item);
                             setIsSlipModalOpen(true);
                           }} 
-                          className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 hover:border-indigo-300 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 mx-auto shadow-xs group-hover:shadow cursor-pointer"
+                          className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-400 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-xl font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs hover:shadow cursor-pointer"
                         >
-                          <FileText size={13} /> Lihat Rincian
+                          <FileText size={14} className="text-slate-500 dark:text-slate-400" /> 
+                          <span>Lihat Rincian</span>
                         </button>
                       </td>
                     </tr>

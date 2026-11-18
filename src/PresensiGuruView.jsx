@@ -1147,9 +1147,9 @@ function TeacherSelfService({
                 <button
                   type="button"
                   onClick={() => handleMulaiVerifikasi('pulang')}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-slate-900/90 hover:bg-slate-950 text-white font-black text-sm tracking-wide shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white/20 group"
+                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white font-black text-sm tracking-wide shadow-lg shadow-indigo-600/30 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white/30 group"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-indigo-500/30 text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                     <LogOut size={18} strokeWidth={2.5} />
                   </div>
                   <span>Absen Pulang Sekarang ({sesiAktif.nama})</span>
