@@ -696,7 +696,8 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
       gtTotalKotor = 0, gtPotong = 0, gtTHP = 0;
 
   return (
-    <div className="flex flex-col gap-5 animate-in fade-in relative">
+    <>
+    <div className={`flex flex-col gap-5 animate-in fade-in relative ${selectedSlip ? 'print:hidden print-hidden-on-slip' : ''}`}>
       
       {/* TAMBAHAN: Modal Konfirmasi Notif Massal */}
       {/* MODAL KONFIRMASI AJUKAN APPROVAL */}
@@ -961,32 +962,6 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
         </div>
       )}
 
-      {selectedSlip && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
-            <div className="no-print p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji</h3>
-              <button onClick={() => setSelectedSlip(null)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
-            </div>
-            <div className="overflow-y-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 print:bg-transparent print:p-0 print:m-0 print:overflow-visible">
-              <div className="print:p-0 print:m-0 print:w-full">
-                <SlipDocument teacher={selectedSlip} bulan={bulan} settings={settings} />
-              </div>
-            </div>
-            <div className="no-print p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer">
-                <Printer size={18}/> Print
-              </button>
-              <button onClick={(e) => exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`, e.currentTarget)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer">
-                <Download size={18}/> Unduh PDF
-              </button>
-              <button onClick={() => setSelectedSlip(null)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors cursor-pointer">
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Header Profesional Rekap Gaji */}
       <div className="bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
@@ -1733,6 +1708,42 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
 
       </div>
     </div>
+
+    {/* Modal Pratinjau Slip Gaji (Diisolasi di luar div utama agar saat diprint hanya modal ini yang terdeteksi browser) */}
+    {selectedSlip && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
+          <div className="no-print p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+            <h3 className="font-bold text-lg dark:text-white flex items-center gap-2"><FileText className="text-blue-500"/> Pratinjau Slip Gaji</h3>
+            <button onClick={() => setSelectedSlip(null)} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+          </div>
+          <div className="overflow-y-auto p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 print:bg-transparent print:p-0 print:m-0 print:overflow-visible">
+            <div className="print:p-0 print:m-0 print:w-full">
+              <SlipDocument teacher={selectedSlip} bulan={bulan} settings={settings} />
+            </div>
+          </div>
+          <div className="no-print p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
+            <button 
+              onClick={() => {
+                document.body.classList.add('printing-slip');
+                window.print();
+                setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
+              }} 
+              className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+            >
+              <Printer size={18}/> Print
+            </button>
+            <button onClick={(e) => exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`, e.currentTarget)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer">
+              <Download size={18}/> Unduh PDF
+            </button>
+            <button onClick={() => setSelectedSlip(null)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors cursor-pointer">
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

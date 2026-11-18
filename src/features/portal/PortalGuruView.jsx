@@ -711,7 +711,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   return (
     <>
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in pb-28 md:pb-10 relative">
+    <div className={`max-w-4xl mx-auto space-y-6 animate-in fade-in pb-28 md:pb-10 relative ${isSlipModalOpen ? 'print:hidden print-hidden-on-slip' : ''}`}>
       
       {/* 🪄 FITUR BARU: OVERLAY ANIMASI KONFETI SELEBRASI */}
       {showCelebration && (
@@ -919,71 +919,6 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               >
                 <Send size={16} /> Lanjut ke WhatsApp
               </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Slip Gaji */}
-      {isSlipModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
-          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
-            <div className="no-print p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
-                <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
-              </h3>
-              <button 
-                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                title="Tutup (Esc / Back)"
-              >
-                <X size={18}/>
-              </button>
-            </div>
-            
-            <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain print:bg-transparent print:p-0 print:m-0 print:overflow-visible" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {/* Petunjuk khusus pengguna ponsel */}
-              <div className="no-print md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
-                <span className="text-base">💡</span>
-                <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
-              </div>
-              <div className="min-w-fit flex justify-center pb-10 print:pb-0 print:p-0 print:w-full">
-                {selectedHistorySlip ? (
-                   <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
-                ) : (
-                   <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
-                )}
-              </div>
-            </div>
-
-            <div className="no-print p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
-              <button 
-                onClick={() => window.print()} 
-                className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Printer size={16}/> Print
-              </button>
-              <button 
-                onClick={async () => {
-                  setIsExportingPDF(true);
-                  try {
-                    await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${selectedHistorySlip ? selectedHistorySlip.periode.replace(/\s+/g, '_') : bulan}.pdf`);
-                  } finally {
-                    setIsExportingPDF(false);
-                  }
-                }} 
-                disabled={isExportingPDF}
-                className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
-                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
-              </button>
-              <button 
-                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
-                className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
-              >
-                Tutup
-              </button>
             </div>
           </div>
         </div>
@@ -2826,64 +2761,78 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               </span>
             </div>
 
-            {/* Mobile View: Dedicated Card Feed (md:hidden) */}
-            <div className="p-3 space-y-3 md:hidden">
-              {riwayatAsli.map((item) => (
-                <div 
-                  key={item.idArsip} 
-                  className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3.5 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-600 transition-all space-y-3"
-                >
-                  {/* Baris 1: Periode & Badge Disahkan */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                        <Calendar size={15} />
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Periode Gaji</span>
-                        <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">{item.periode}</h4>
-                      </div>
-                    </div>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/50 dark:border-emerald-800/40">
-                      <CheckCircle2 size={11} className="text-emerald-500" /> Disahkan
-                    </span>
-                  </div>
-
-                  {/* Baris 2: Nominal THP & Tanggal */}
-                  <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gaji Bersih (THP)</span>
-                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(item.nominal)}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-medium text-slate-400 block">Tgl Pengesahan</span>
-                      <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{item.tanggal}</span>
-                    </div>
-                  </div>
-
-                  {/* Baris 3: Tombol Aksi Buka Slip */}
-                  <button 
-                    onClick={() => {
-                      setSelectedHistorySlip(item);
-                      setIsSlipModalOpen(true);
-                    }} 
-                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-[0.98]"
-                  >
-                    <FileText size={15} />
-                    <span>Buka &amp; Cetak Slip Gaji (A4)</span>
-                  </button>
-                </div>
-              ))}
-
-              {riwayatAsli.length === 0 && (
-                <div className="py-8 px-4 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center mx-auto mb-3 text-indigo-400">
-                    <Archive size={24} />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat gaji tersimpan</h4>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Data akan muncul di sini setelah Admin/Bendahara melakukan Tutup Buku bulanan.</p>
+            {/* Mobile View: Geser ke Samping (Horizontal Scroll Carousel) */}
+            <div className="md:hidden p-3 space-y-2">
+              {riwayatAsli.length > 0 && (
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 px-1 mb-1">
+                  <span className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                    <History size={13} />
+                    <span>Geser ke samping untuk melihat bulan lainnya →</span>
+                  </span>
+                  <span className="font-mono text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    {riwayatAsli.length} Bulan
+                  </span>
                 </div>
               )}
+
+              <div className="flex overflow-x-auto gap-3 pb-3 pt-1 snap-x snap-mandatory touch-pan-x hide-scrollbar scroll-smooth">
+                {riwayatAsli.map((item) => (
+                  <div 
+                    key={item.idArsip} 
+                    className="w-[280px] min-w-[280px] snap-center shrink-0 bg-white dark:bg-slate-800/95 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 p-3.5 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 transition-all flex flex-col justify-between space-y-3"
+                  >
+                    {/* Baris 1: Periode & Badge Disahkan */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                          <Calendar size={15} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Periode Gaji</span>
+                          <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">{item.periode}</h4>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200/50 dark:border-emerald-800/40">
+                        <CheckCircle2 size={11} className="text-emerald-500" /> Disahkan
+                      </span>
+                    </div>
+
+                    {/* Baris 2: Nominal THP & Tanggal */}
+                    <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Gaji Bersih (THP)</span>
+                        <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{formatRp(item.nominal)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-medium text-slate-400 block">Tgl Pengesahan</span>
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{item.tanggal}</span>
+                      </div>
+                    </div>
+
+                    {/* Baris 3: Tombol Aksi Buka Slip */}
+                    <button 
+                      onClick={() => {
+                        setSelectedHistorySlip(item);
+                        setIsSlipModalOpen(true);
+                      }} 
+                      className="w-full py-2.5 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-[0.98]"
+                    >
+                      <FileText size={15} />
+                      <span>Buka &amp; Cetak Slip Gaji (A4)</span>
+                    </button>
+                  </div>
+                ))}
+
+                {riwayatAsli.length === 0 && (
+                  <div className="w-full py-8 px-4 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center mx-auto mb-3 text-indigo-400">
+                      <Archive size={24} />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Belum ada riwayat gaji tersimpan</h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">Data akan muncul di sini setelah Admin/Bendahara melakukan Tutup Buku bulanan.</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Desktop View: Full Table (hidden md:block) */}
@@ -3015,6 +2964,75 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
       </div>
     </div>
+
+    {/* Modal Slip Gaji (Diisolasi di luar kontainer utama agar tidak terdeteksi ganda saat window.print) */}
+    {isSlipModalOpen && (
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
+        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
+          <div className="no-print p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+            <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
+              <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
+            </h3>
+            <button 
+              onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              title="Tutup (Esc / Back)"
+            >
+              <X size={18}/>
+            </button>
+          </div>
+          
+          <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain print:bg-transparent print:p-0 print:m-0 print:overflow-visible" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {/* Petunjuk khusus pengguna ponsel */}
+            <div className="no-print md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
+              <span className="text-base">💡</span>
+              <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
+            </div>
+            <div className="min-w-fit flex justify-center pb-10 print:pb-0 print:p-0 print:w-full">
+              {selectedHistorySlip ? (
+                 <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
+              ) : (
+                 <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
+              )}
+            </div>
+          </div>
+
+          <div className="no-print p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
+            <button 
+              onClick={() => {
+                document.body.classList.add('printing-slip');
+                window.print();
+                setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
+              }} 
+              className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            >
+              <Printer size={16}/> Print
+            </button>
+            <button 
+              onClick={async () => {
+                setIsExportingPDF(true);
+                try {
+                  await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${selectedHistorySlip ? selectedHistorySlip.periode.replace(/\s+/g, '_') : bulan}.pdf`);
+                } finally {
+                  setIsExportingPDF(false);
+                }
+              }} 
+              disabled={isExportingPDF}
+              className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
+              {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
+            </button>
+            <button 
+              onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
+              className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
     <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">

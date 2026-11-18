@@ -779,15 +779,24 @@ export default function App() {
       @media print {
         @page {
           size: A4 portrait; /* Ukuran Standar Resmi Cetak Slip A4 Presisi */
-          margin: 6mm 8mm 6mm 8mm;
+          margin: 4mm 6mm 4mm 6mm;
         }
         body, html, #root { 
           background: white !important; 
           color: black !important; 
+          margin: 0 !important;
+          padding: 0 !important;
         }
         /* Sembunyikan sidebar, header, navigasi, dan tombol yang tidak perlu */
         aside, header, nav, footer, [role="navigation"], .no-print { 
           display: none !important; 
+        }
+        /* Sembunyikan halaman belakang saat mencetak modal slip gaji */
+        body:has(#printable-area) .print-hidden-on-slip,
+        body.printing-slip .print-hidden-on-slip,
+        body:has(#printable-area) main > *:not(:has(#printable-area)),
+        body.printing-slip main > *:not(:has(#printable-area)) {
+          display: none !important;
         }
         /* Buka kuncian scroll agar elemen bisa dicetak presisi */
         .h-screen, .min-h-screen, main, .overflow-hidden, .overflow-auto, .overflow-y-auto { 
@@ -809,6 +818,8 @@ export default function App() {
           border: none !important;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          page-break-after: avoid !important;
+          break-after: avoid !important;
         }
         /* Reset background colors for print to save ink, except for important highlights */
         * { 

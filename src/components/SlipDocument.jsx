@@ -55,7 +55,7 @@ function SlipDocument({ teacher, bulan, settings }) {
   const tanggalCetak = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="bg-white p-3 sm:p-4 md:p-5 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full min-w-[680px] md:min-w-[740px] relative min-h-auto flex flex-col font-sans print:p-0 print:m-0 print:border-0 print:shadow-none print:w-full print:max-w-full" style={{ maxWidth: '210mm', pageBreakInside: 'avoid', breakInside: 'avoid' }} id="printable-area">
+    <div className="bg-white p-3 sm:p-4 md:p-5 rounded-sm shadow-sm border border-slate-300 text-black mx-auto print-area w-full min-w-[680px] md:min-w-[740px] relative min-h-auto flex flex-col font-sans print:p-0 print:m-0 print:border-0 print:shadow-none print:w-full print:max-w-full" style={{ maxWidth: '210mm', pageBreakInside: 'avoid', breakInside: 'avoid', pageBreakAfter: 'avoid', breakAfter: 'avoid' }} id="printable-area">
       
       {/* TAMBAHAN: Watermark Logo Sekolah (Transparan 4%) */}
       {settings?.logoUrl && (
@@ -68,34 +68,34 @@ function SlipDocument({ teacher, bulan, settings }) {
       <div className="border-b-2 md:border-b-4 border-double border-black pb-2 mb-2 relative z-10 flex justify-between items-center w-full">
         
         {/* Kiri: Logo & Lencana Periode Gaji */}
-        <div className="flex flex-col items-center gap-1.5 w-1/4 shrink-0">
+        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 shrink-0">
           {settings?.logoUrl && (
-             <img src={settings.logoUrl} alt="Logo" className="w-14 h-14 md:w-16 md:h-16 object-contain drop-shadow-sm" />
+             <img src={settings.logoUrl} alt="Logo" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 object-contain drop-shadow-sm" />
           )}
-          <div className="bg-white text-black font-black text-[8.5px] md:text-[9.5px] px-3 py-1 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
+          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] px-2.5 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
             PERIODE: {bulan.toUpperCase()}
           </div>
         </div>
         
-        {/* Tengah: Identitas Sekolah */}
-        <div className="flex flex-col justify-center text-center px-2 flex-1 min-w-0">
+        {/* Tengah: Identitas Sekolah (Lebar Maksimal agar nama Yayasan tidak turun ke bawah) */}
+        <div className="flex flex-col justify-center text-center px-1 sm:px-3 flex-1 min-w-0">
           {settings?.foundationName && (
-             <h1 className="text-sm md:text-base font-black uppercase tracking-wider text-black leading-tight mb-0.5 whitespace-pre-line">
+             <h1 className="text-xs sm:text-sm md:text-[15px] font-black uppercase tracking-wider text-black leading-tight mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
                {settings.foundationName}
              </h1>
           )}
-          <h1 className="text-xs md:text-sm font-extrabold uppercase tracking-wide text-black leading-snug mb-0.5 whitespace-pre-line">
+          <h2 className="text-[10.5px] sm:text-xs md:text-sm font-extrabold uppercase tracking-wide text-black leading-snug mb-0.5">
             {settings?.schoolName || 'Sekolah Islam Terpadu XYZ'}
-          </h1>
-          <p className="text-[9.5px] md:text-[10.5px] text-black font-semibold mt-0.5 leading-snug whitespace-pre-line">
+          </h2>
+          <p className="text-[8px] sm:text-[9px] text-black font-semibold mt-0.5 leading-snug">
             {settings?.address || 'Jl. Pendidikan No. 123, Kec. Banjarmasin, Kalimantan Selatan 70123'}
           </p>
         </div>
 
         {/* Kanan: QR Code & Lencana No Slip */}
-        <div className="flex flex-col items-center gap-2 w-1/4 shrink-0">
-          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=VERIFY-${encodeURIComponent(noSlip)}&color=000000`} alt="QR Code" className="w-14 h-14 md:w-16 md:h-16 border border-black p-0.5 rounded-lg bg-white shadow-xs" />
-          <div className="bg-white text-black font-black text-[8.5px] md:text-[9.5px] px-3 py-1 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
+        <div className="flex flex-col items-center gap-1 w-24 sm:w-28 shrink-0">
+          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=VERIFY-${encodeURIComponent(noSlip)}&color=000000`} alt="QR Code" className="w-13 h-13 sm:w-14 sm:h-14 md:w-15 md:h-15 border border-black p-0.5 rounded-lg bg-white shadow-xs" />
+          <div className="bg-white text-black font-black text-[8px] sm:text-[8.5px] md:text-[9px] px-2.5 py-0.5 rounded-full whitespace-nowrap tracking-wider shadow-xs border border-black">
             NO: {noSlip}
           </div>
         </div>

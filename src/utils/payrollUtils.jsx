@@ -435,10 +435,16 @@ export const exportToPDF = (elementId, filename) => {
     }
     
     const opt = {
-      margin:       [4, 6, 4, 6],
+      margin:       [4, 5, 4, 5],
       filename:     filename,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0 },
+      html2canvas:  { 
+        scale: 2, 
+        useCORS: true, 
+        logging: false, 
+        scrollY: 0,
+        windowWidth: 1024
+      },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };

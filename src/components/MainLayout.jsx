@@ -656,7 +656,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
 
         {/* FITUR BARU: Tombol Melayang (Floating Action Widget) Scroll Ke Paling Atas (⬆️) & Paling Bawah (⬇️) Khusus Admin & Kepsek */}
         {isManagementRole && (
-          <div className="fixed bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
+          <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-[90] flex flex-col gap-2.5 no-print">
             <button
               type="button"
               onClick={() => {
@@ -685,6 +685,55 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
             >
               <ChevronDown size={22} strokeWidth={3} />
             </button>
+          </div>
+        )}
+
+        {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS ADMIN/MANAJEMEN PADA HP) */}
+        {isManagementRole && (
+          <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
+            {/* Background Dasar Nav Bar */}
+            <div className="absolute bottom-0 w-full h-[62px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.12)] pointer-events-auto border-t border-slate-200/80 dark:border-slate-800"></div>
+
+            {/* Scrollable Container dengan Touch Snapping Halus */}
+            <div className="relative flex items-center justify-between px-1.5 h-[62px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto gap-0.5">
+              {adminNav.map(item => {
+                const isActive = activeTab === item.id;
+                const IconComponent = item.icon;
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigateTab(item.id)}
+                    className="snap-center relative flex flex-col items-center justify-center shrink-0 min-w-[58px] sm:min-w-[66px] h-full outline-none group py-1 cursor-pointer"
+                  >
+                    {/* Icon Container */}
+                    <div className={`flex items-center justify-center transition-all duration-200 relative ${
+                      isActive 
+                        ? `w-9 h-9 rounded-xl ${item.bg} ${item.glow} shadow-md scale-105` 
+                        : 'w-8 h-8 rounded-lg bg-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}>
+                      <IconComponent 
+                        size={isActive ? 19 : 18} 
+                        strokeWidth={isActive ? 2.5 : 2} 
+                        className={isActive ? 'text-white' : ''} 
+                      />
+                    </div>
+
+                    {/* Teks Label */}
+                    <span className={`text-[10px] tracking-tight mt-0.5 transition-colors duration-200 truncate max-w-[56px] text-center ${
+                      isActive 
+                        ? 'font-black text-blue-600 dark:text-blue-400' 
+                        : 'font-semibold text-slate-400 dark:text-slate-500'
+                    }`}>
+                      {item.label}
+                    </span>
+
+                    {/* Indikator Titik Aktif */}
+                    <div className={`w-1 h-1 rounded-full mt-0.5 transition-all duration-200 ${isActive ? 'bg-blue-600 dark:bg-blue-400 opacity-100 scale-100' : 'opacity-0 scale-0'}`}></div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </main>
