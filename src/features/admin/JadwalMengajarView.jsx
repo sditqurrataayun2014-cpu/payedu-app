@@ -7,7 +7,7 @@ import {
 
 import {
   generateUniqueId, getFormattedPeriod, isTeacherActive, safeStorageSet,
-  DEFAULT_MAPEL_KBM, DEFAULT_KELAS_KBM, calculateJurnalSummary,
+  DEFAULT_MAPEL_KBM, DEFAULT_KELAS_KBM, DEFAULT_JAM_KBM, calculateJurnalSummary,
   syncTeacherJurnalKbm, formatDateId, formatRp, getLocalIsoDate
 } from '../../utils/payrollUtils';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
@@ -35,6 +35,10 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   // --- STATE & DATA TAB 4: MONITORING JURNAL KBM & BEBAN KERJA (PENGGANTI RESMI GOOGLE FORM) ---
   const [jurnalSearch, setJurnalSearch] = useState('');
   const [jurnalFilterKepatuhan, setJurnalFilterKepatuhan] = useState('all'); // 'all' | 'sudah' | 'belum'
+  const [jurnalFilterMapel, setJurnalFilterMapel] = useState('all');
+  const [jurnalFilterKelas, setJurnalFilterKelas] = useState('all');
+  const [jurnalFilterJam, setJurnalFilterJam] = useState('all');
+
   const [selectedTeacherForLog, setSelectedTeacherForLog] = useState(null);
   const [saldoAwalModalTeacher, setSaldoAwalModalTeacher] = useState(null);
   const [saldoAwalInput, setSaldoAwalInput] = useState(0);
@@ -46,11 +50,14 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   const [editingAdminEntry, setEditingAdminEntry] = useState(null);
   const [adminEntryForm, setAdminEntryForm] = useState({
     tgl: new Date().getDate(),
-    mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
-    kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
-    jamKbm: 2,
-    jamPiket: 0,
+    jamMasukKelas: 2,
+    jamHalaqoh: 0,
+    jamPiketKantor: 0,
+    jamPiketSholat: 0,
     jamRapat: 0,
+    mapel: ['TAHSIN'],
+    kelas: ['I A Putra'],
+    jamKe: [1, 2],
     catatan: ''
   });
 
@@ -110,21 +117,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       });
   }, [teachers, todayIso, todayDay]);
 
-  // Filter daftar guru di tabel monitoring jurnal
-  const filteredJurnalList = useMemo(() => {
-    return jurnalTeacherData.filter(item => {
-      const matchSearch = item.name.toLowerCase().includes(jurnalSearch.toLowerCase()) || 
-                          item.nipy.toLowerCase().includes(jurnalSearch.toLowerCase());
-      if (!matchSearch) return false;
-      if (jurnalFilterKepatuhan === 'sudah') return item.hasToday;
-      if (jurnalFilterKepatuhan === 'belum') return !item.hasToday;
-      return true;
-    });
-  }, [jurnalTeacherData, jurnalSearch, jurnalFilterKepatuhan]);
 
-  // Indikator Kinerja Utama (KPI) Jurnal KBM
+
+  // Indikator Kinerja Utama (KPI) Jurnal KBM dengan 5 Pilar Terpisah
   const aggregateKpis = useMemo(() => {
+    let totalMasukKelas = 0;
+    let totalHalaqoh = 0;
     let totalKbm = 0;
+    let totalPiketKantor = 0;
+    let totalPiketSholat = 0;
     let totalPiket = 0;
     let totalRapat = 0;
     let totalSaldoAwal = 0;
@@ -132,11 +133,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     let sudahIsiCount = 0;
 
     jurnalTeacherData.forEach(item => {
-      totalKbm += item.summary.jamKbm;
-      totalPiket += item.summary.jamPiket;
-      totalRapat += item.summary.jamRapat;
-      totalSaldoAwal += item.summary.saldoAwal;
-      totalAkumulasi += item.summary.totalAkumulasi;
+      totalMasukKelas += item.summary.jamMasukKelas || 0;
+      totalHalaqoh += item.summary.jamHalaqoh || 0;
+      totalKbm += item.summary.jamKbm || 0;
+      totalPiketKantor += item.summary.jamPiketKantor || 0;
+      totalPiketSholat += item.summary.jamPiketSholat || 0;
+      totalPiket += item.summary.jamPiket || 0;
+      totalRapat += item.summary.jamRapat || 0;
+      totalSaldoAwal += item.summary.saldoAwal || 0;
+      totalAkumulasi += item.summary.totalAkumulasi || 0;
       if (item.hasToday) sudahIsiCount++;
     });
 
@@ -144,7 +149,11 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     const persentaseKepatuhan = totalGuru > 0 ? Math.round((sudahIsiCount / totalGuru) * 100) : 0;
 
     return {
+      totalMasukKelas,
+      totalHalaqoh,
       totalKbm,
+      totalPiketKantor,
+      totalPiketSholat,
       totalPiket,
       totalRapat,
       totalSaldoAwal,
@@ -154,6 +163,45 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       persentaseKepatuhan
     };
   }, [jurnalTeacherData]);
+
+  // Filter daftar guru di tabel monitoring jurnal dengan dukungan Mapel, Kelas, dan Jam
+  const filteredJurnalList = useMemo(() => {
+    return jurnalTeacherData.filter(item => {
+      const matchSearch = item.name.toLowerCase().includes(jurnalSearch.toLowerCase()) || 
+                          item.nipy.toLowerCase().includes(jurnalSearch.toLowerCase());
+      if (!matchSearch) return false;
+      if (jurnalFilterKepatuhan === 'sudah' && !item.hasToday) return false;
+      if (jurnalFilterKepatuhan === 'belum' && item.hasToday) return false;
+
+      const entries = item.teacher.payroll?.jurnalKbm || [];
+      if (jurnalFilterMapel !== 'all') {
+        const hasMapel = entries.some(e => {
+          if (Array.isArray(e.mapel)) return e.mapel.includes(jurnalFilterMapel);
+          return String(e.mapel || '').includes(jurnalFilterMapel);
+        });
+        if (!hasMapel) return false;
+      }
+
+      if (jurnalFilterKelas !== 'all') {
+        const hasKelas = entries.some(e => {
+          if (Array.isArray(e.kelas)) return e.kelas.includes(jurnalFilterKelas);
+          return String(e.kelas || '').includes(jurnalFilterKelas);
+        });
+        if (!hasKelas) return false;
+      }
+
+      if (jurnalFilterJam !== 'all') {
+        const jamNum = Number(jurnalFilterJam);
+        const hasJam = entries.some(e => {
+          if (Array.isArray(e.jamKe)) return e.jamKe.includes(jamNum);
+          return String(e.jamKe || '').includes(String(jamNum));
+        });
+        if (!hasJam) return false;
+      }
+
+      return true;
+    });
+  }, [jurnalTeacherData, jurnalSearch, jurnalFilterKepatuhan, jurnalFilterMapel, jurnalFilterKelas, jurnalFilterJam]);
 
   // Handler Saldo Awal (Transisi Google Form s/d 17 Nov)
   const handleOpenSaldoAwalModal = (teacher) => {
@@ -203,24 +251,50 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     setEditingAdminEntry(null);
     setAdminEntryForm({
       tgl: new Date().getDate(),
-      mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
-      kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
-      jamKbm: 2,
-      jamPiket: 0,
+      jamMasukKelas: 2,
+      jamHalaqoh: 0,
+      jamPiketKantor: 0,
+      jamPiketSholat: 0,
       jamRapat: 0,
+      mapel: ['TAHSIN'],
+      kelas: ['I A Putra'],
+      jamKe: [1, 2],
       catatan: ''
     });
   };
 
   const handleStartEditAdminEntry = (entry) => {
     setEditingAdminEntry(entry);
+    const rawMapel = entry.mapel;
+    const mapelArr = Array.isArray(rawMapel)
+      ? rawMapel
+      : (typeof rawMapel === 'string' && rawMapel ? rawMapel.split(',').map(s => s.trim()) : ['TAHSIN']);
+
+    const rawKelas = entry.kelas;
+    const kelasArr = Array.isArray(rawKelas)
+      ? rawKelas
+      : (typeof rawKelas === 'string' && rawKelas ? rawKelas.split(',').map(s => s.trim()) : ['I A Putra']);
+
+    const rawJamKe = entry.jamKe;
+    const jamKeArr = Array.isArray(rawJamKe)
+      ? rawJamKe.map(Number)
+      : (typeof rawJamKe === 'string' && rawJamKe ? rawJamKe.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n)) : [1, 2]);
+
+    const mk = Number(entry.jamMasukKelas);
+    const hq = Number(entry.jamHalaqoh);
+    const pk = Number(entry.jamPiketKantor);
+    const ps = Number(entry.jamPiketSholat);
+
     setAdminEntryForm({
       tgl: entry.tgl || 1,
-      mapel: entry.mapel || DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
-      kelas: entry.kelas || DEFAULT_KELAS_KBM[0] || 'I A Putra',
-      jamKbm: entry.jamKbm || 0,
-      jamPiket: entry.jamPiket || 0,
-      jamRapat: entry.jamRapat || 0,
+      jamMasukKelas: !isNaN(mk) ? mk : (Number(entry.jamKbm) || 0),
+      jamHalaqoh: !isNaN(hq) ? hq : 0,
+      jamPiketKantor: !isNaN(pk) ? pk : (Number(entry.jamPiket) || 0),
+      jamPiketSholat: !isNaN(ps) ? ps : 0,
+      jamRapat: Number(entry.jamRapat) || 0,
+      mapel: mapelArr.length > 0 ? mapelArr : ['TAHSIN'],
+      kelas: kelasArr.length > 0 ? kelasArr : ['I A Putra'],
+      jamKe: jamKeArr,
       catatan: entry.catatan || ''
     });
     setIsAdminAddingEntry(true);
@@ -239,16 +313,34 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     const formattedIso = `${curY}-${String(curM).padStart(2, '0')}-${String(tglNum).padStart(2, '0')}`;
     const tanggalStr = formatDateId(formattedIso);
 
+    const mk = Math.max(0, Number(adminEntryForm.jamMasukKelas) || 0);
+    const hq = Math.max(0, Number(adminEntryForm.jamHalaqoh) || 0);
+    const pk = Math.max(0, Number(adminEntryForm.jamPiketKantor) || 0);
+    const ps = Math.max(0, Number(adminEntryForm.jamPiketSholat) || 0);
+    const rp = Math.max(0, Number(adminEntryForm.jamRapat) || 0);
+
+    const totalKbm = mk + hq;
+    const totalPiket = pk + ps;
+
+    const mapelArr = Array.isArray(adminEntryForm.mapel) && adminEntryForm.mapel.length > 0 ? adminEntryForm.mapel : ['TAHSIN'];
+    const kelasArr = Array.isArray(adminEntryForm.kelas) && adminEntryForm.kelas.length > 0 ? adminEntryForm.kelas : ['I A Putra'];
+    const jamKeArr = Array.isArray(adminEntryForm.jamKe) ? adminEntryForm.jamKe : [];
+
     const entryData = {
       id: editingAdminEntry ? editingAdminEntry.id : generateUniqueId('jrn_adm_'),
       tanggal: formattedIso,
       tanggalStr: tanggalStr,
       tgl: tglNum,
-      mapel: adminEntryForm.mapel || '',
-      kelas: adminEntryForm.kelas || '',
-      jamKbm: Math.max(0, Number(adminEntryForm.jamKbm) || 0),
-      jamPiket: Math.max(0, Number(adminEntryForm.jamPiket) || 0),
-      jamRapat: Math.max(0, Number(adminEntryForm.jamRapat) || 0),
+      jamMasukKelas: mk,
+      jamHalaqoh: hq,
+      jamPiketKantor: pk,
+      jamPiketSholat: ps,
+      jamRapat: rp,
+      jamKbm: totalKbm,
+      jamPiket: totalPiket,
+      mapel: mapelArr,
+      kelas: kelasArr,
+      jamKe: jamKeArr,
       catatan: adminEntryForm.catatan || '',
       inputBy: 'admin',
       updatedAt: new Date().toISOString()
@@ -1093,7 +1185,20 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
               <div className="divide-y divide-slate-100 dark:divide-slate-700/60 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                 {(selectedTeacherForLog.payroll?.jurnalKbm || []).length > 0 ? (
                   (selectedTeacherForLog.payroll?.jurnalKbm || []).map((entri) => {
-                    const totalHours = (Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + (Number(entri.jamRapat) || 0);
+                    const mk = Number(entri.jamMasukKelas);
+                    const hq = Number(entri.jamHalaqoh);
+                    const pk = Number(entri.jamPiketKantor);
+                    const ps = Number(entri.jamPiketSholat);
+                    const rp = Number(entri.jamRapat) || 0;
+
+                    const totalHours = (!isNaN(mk) || !isNaN(hq) || !isNaN(pk) || !isNaN(ps))
+                      ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp)
+                      : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp);
+
+                    const mapelText = Array.isArray(entri.mapel) ? entri.mapel.join(', ') : (entri.mapel || 'Kegiatan Umum');
+                    const kelasText = Array.isArray(entri.kelas) ? entri.kelas.join(', ') : (entri.kelas || '');
+                    const jamKeList = Array.isArray(entri.jamKe) ? entri.jamKe : [];
+
                     return (
                       <div key={entri.id} className="p-3 sm:p-3.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors flex items-center justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
@@ -1102,13 +1207,18 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                             <span className="text-sm font-black">{entri.tgl}</span>
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
-                                {entri.mapel || 'Kegiatan Umum'}
+                                {mapelText}
                               </span>
-                              {entri.kelas && (
+                              {kelasText && (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                  {entri.kelas}
+                                  {kelasText}
+                                </span>
+                              )}
+                              {jamKeList.length > 0 && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                  Jam {jamKeList.join(', ')}
                                 </span>
                               )}
                               {entri.inputBy === 'admin' && (
@@ -1118,11 +1228,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
-                              <span>KBM: <b>{entri.jamKbm || 0} JPL</b></span>
+                              <span>Kelas: <b>{!isNaN(mk) ? mk : (Number(entri.jamKbm) || 0)} JPL</b></span>
                               <span>•</span>
-                              <span>Piket: <b>{entri.jamPiket || 0} JPL</b></span>
+                              <span>Halaqoh: <b>{!isNaN(hq) ? hq : 0} JPL</b></span>
                               <span>•</span>
-                              <span>Rapat: <b>{entri.jamRapat || 0} JPL</b></span>
+                              <span>Piket Ktr: <b>{!isNaN(pk) ? pk : (Number(entri.jamPiket) || 0)} JPL</b></span>
+                              <span>•</span>
+                              <span>Sholat: <b>{!isNaN(ps) ? ps : 0} JPL</b></span>
+                              <span>•</span>
+                              <span>Rapat: <b>{rp} JPL</b></span>
                             </div>
                             {entri.catatan && (
                               <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-0.5 line-clamp-1">
@@ -1496,6 +1610,378 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                            ))}
                         </div>
                      </div>
+               </div>
+            )}
+
+            {/* TAB 4: MONITORING JURNAL KBM & BEBAN KERJA GURU (PENGGANTI RESMI GOOGLE FORM) */}
+            {activeTab === 'monitoring_jurnal' && (
+               <div className="p-3.5 sm:p-5 md:p-6 flex-1 bg-white dark:bg-slate-800 flex flex-col h-full overflow-hidden">
+                  {/* Top Summary KPI Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 shrink-0">
+                     <div className="bg-blue-50 dark:bg-blue-950/30 p-2.5 sm:p-3 rounded-2xl border border-blue-200 dark:border-blue-800/50">
+                        <span className="text-[10px] text-blue-700 dark:text-blue-300 font-bold uppercase tracking-wider block mb-0.5">
+                           Masuk Kelas / Mapel
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-blue-800 dark:text-blue-200">{aggregateKpis.totalMasukKelas}</span>
+                           <span className="text-[10px] font-bold text-blue-500">JPL</span>
+                        </div>
+                        <span className="text-[9px] text-blue-600/70 dark:text-blue-300/60 block truncate">Tatap muka mapel</span>
+                     </div>
+
+                     <div className="bg-indigo-50 dark:bg-indigo-950/30 p-2.5 sm:p-3 rounded-2xl border border-indigo-200 dark:border-indigo-800/50">
+                        <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider block mb-0.5">
+                           Jam Halaqoh
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-indigo-800 dark:text-indigo-200">{aggregateKpis.totalHalaqoh}</span>
+                           <span className="text-[10px] font-bold text-indigo-500">JPL</span>
+                        </div>
+                        <span className="text-[9px] text-indigo-600/70 dark:text-indigo-300/60 block truncate">Tahfidz &amp; halaqoh</span>
+                     </div>
+
+                     <div className="bg-teal-50 dark:bg-teal-950/30 p-2.5 sm:p-3 rounded-2xl border border-teal-200 dark:border-teal-800/50">
+                        <span className="text-[10px] text-teal-700 dark:text-teal-300 font-bold uppercase tracking-wider block mb-0.5">
+                           Piket Kantor &amp; Sholat
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-teal-800 dark:text-teal-200">{aggregateKpis.totalPiket}</span>
+                           <span className="text-[10px] font-bold text-teal-500">JPL</span>
+                        </div>
+                        <span className="text-[9px] text-teal-600/70 dark:text-teal-300/60 block truncate">
+                           Ktr: {aggregateKpis.totalPiketKantor} • Shlt: {aggregateKpis.totalPiketSholat}
+                        </span>
+                     </div>
+
+                     <div className="bg-purple-50 dark:bg-purple-950/30 p-2.5 sm:p-3 rounded-2xl border border-purple-200 dark:border-purple-800/50">
+                        <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider block mb-0.5">
+                           Rapat &amp; Sore
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-purple-800 dark:text-purple-200">{aggregateKpis.totalRapat}</span>
+                           <span className="text-[10px] font-bold text-purple-500">JPL</span>
+                        </div>
+                        <span className="text-[9px] text-purple-600/70 dark:text-purple-300/60 block truncate">Evaluasi dinas</span>
+                     </div>
+
+                     <div className="bg-emerald-50 dark:bg-emerald-950/30 p-2.5 sm:p-3 rounded-2xl border border-emerald-200 dark:border-emerald-800/50">
+                        <div className="flex items-center justify-between mb-0.5">
+                           <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-black uppercase tracking-wider">
+                              Total Realisasi
+                           </span>
+                           {aggregateKpis.totalSaldoAwal > 0 && (
+                              <span className="text-[8px] bg-emerald-200 text-emerald-800 px-1 py-0.2 rounded font-bold" title="Saldo Awal Google Form">
+                                 +{aggregateKpis.totalSaldoAwal} Awal
+                              </span>
+                           )}
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-300">{aggregateKpis.totalAkumulasi}</span>
+                           <span className="text-[10px] font-bold text-emerald-600">JPL</span>
+                        </div>
+                        <span className="text-[9px] text-emerald-600/80 dark:text-emerald-300/70 block truncate">Terkoneksi slip gaji</span>
+                     </div>
+
+                     <div className="col-span-2 sm:col-span-1 bg-amber-50 dark:bg-amber-950/30 p-2.5 sm:p-3 rounded-2xl border border-amber-200 dark:border-amber-800/50">
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold uppercase tracking-wider block mb-0.5">
+                           Kepatuhan Hari Ini
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                           <span className="text-lg sm:text-xl font-black text-amber-700 dark:text-amber-300">{aggregateKpis.persentaseKepatuhan}%</span>
+                           <span className="text-[10px] font-bold text-amber-600">({aggregateKpis.sudahIsiCount}/{aggregateKpis.totalGuru})</span>
+                        </div>
+                        <span className="text-[9px] text-amber-600/80 dark:text-amber-300/70 block truncate">Guru sudah input</span>
+                     </div>
+                  </div>
+
+                  {/* Toolbar & Filter Bar */}
+                  <div className="p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 mb-3.5 shrink-0 flex flex-col gap-2.5">
+                     <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+                        {/* Search Input */}
+                        <div className="relative flex-1 min-w-[200px]">
+                           <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                           <input
+                              type="text"
+                              placeholder="Cari nama guru atau NIPY..."
+                              value={jurnalSearch}
+                              onChange={(e) => setJurnalSearch(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-slate-800 dark:text-slate-100"
+                           />
+                        </div>
+
+                        {/* Filter Kepatuhan Tabs */}
+                        <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start lg:self-auto shrink-0">
+                           <button
+                              onClick={() => setJurnalFilterKepatuhan('all')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${jurnalFilterKepatuhan === 'all' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                           >
+                              Semua ({jurnalTeacherData.length})
+                           </button>
+                           <button
+                              onClick={() => setJurnalFilterKepatuhan('sudah')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${jurnalFilterKepatuhan === 'sudah' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                           >
+                              Sudah Isi ({aggregateKpis.sudahIsiCount})
+                           </button>
+                           <button
+                              onClick={() => setJurnalFilterKepatuhan('belum')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${jurnalFilterKepatuhan === 'belum' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                           >
+                              Belum Isi ({aggregateKpis.totalGuru - aggregateKpis.sudahIsiCount})
+                           </button>
+                        </div>
+
+                        {/* Ekspor Excel Button */}
+                        <button
+                           onClick={handleExportJurnalExcel}
+                           className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                           title="Unduh laporan excel jurnal KBM resmi"
+                        >
+                           <FileSpreadsheet size={15} />
+                           <span>Ekspor Excel (.xlsx)</span>
+                        </button>
+                     </div>
+
+                     {/* Filter Tambahan: Mapel, Kelas, dan Jam */}
+                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700 text-xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                           <Filter size={12} /> Filter Spesifik:
+                        </span>
+
+                        {/* Filter Mapel */}
+                        <select
+                           value={jurnalFilterMapel}
+                           onChange={(e) => setJurnalFilterMapel(e.target.value)}
+                           className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
+                        >
+                           <option value="all">Semua Mata Pelajaran</option>
+                           {DEFAULT_MAPEL_KBM.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                           ))}
+                        </select>
+
+                        {/* Filter Kelas */}
+                        <select
+                           value={jurnalFilterKelas}
+                           onChange={(e) => setJurnalFilterKelas(e.target.value)}
+                           className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
+                        >
+                           <option value="all">Semua Kelas</option>
+                           {DEFAULT_KELAS_KBM.map(k => (
+                              <option key={k} value={k}>{k}</option>
+                           ))}
+                        </select>
+
+                        {/* Filter Jam Ke- */}
+                        <select
+                           value={jurnalFilterJam}
+                           onChange={(e) => setJurnalFilterJam(e.target.value)}
+                           className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
+                        >
+                           <option value="all">Semua Jam Pembelajaran</option>
+                           {DEFAULT_JAM_KBM.map(j => (
+                              <option key={j.id} value={j.id}>{j.label} ({j.time})</option>
+                           ))}
+                        </select>
+
+                        {(jurnalFilterMapel !== 'all' || jurnalFilterKelas !== 'all' || jurnalFilterJam !== 'all') && (
+                           <button
+                              onClick={() => {
+                                 setJurnalFilterMapel('all');
+                                 setJurnalFilterKelas('all');
+                                 setJurnalFilterJam('all');
+                              }}
+                              className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                           >
+                              Reset Filter
+                           </button>
+                        )}
+                     </div>
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-900/20 shadow-xs flex-1">
+                     <table className="w-full text-left text-xs whitespace-nowrap min-w-max">
+                        <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-xs">
+                           <tr>
+                              <th className="p-3 font-bold text-center w-10">No</th>
+                              <th className="p-3 font-bold">Nama Guru &amp; NIPY</th>
+                              <th className="p-3 font-bold text-center">Status</th>
+                              <th className="p-3 font-bold text-center">Masuk Kelas</th>
+                              <th className="p-3 font-bold text-center">Halaqoh</th>
+                              <th className="p-3 font-bold text-center">Piket Ktr</th>
+                              <th className="p-3 font-bold text-center">Piket Shlt</th>
+                              <th className="p-3 font-bold text-center">Rapat</th>
+                              <th className="p-3 font-bold text-center">Saldo Awal</th>
+                              <th className="p-3 font-bold text-center">Total Realisasi</th>
+                              <th className="p-3 font-bold text-center">Status Hari Ini</th>
+                              <th className="p-3 font-bold text-center w-36">Aksi Manajemen</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                           {filteredJurnalList.map((item, idx) => (
+                              <tr key={item.id} className="hover:bg-emerald-50/30 dark:hover:bg-slate-800/40 transition-colors">
+                                 <td className="p-3 text-center font-bold text-slate-400 dark:text-slate-500 w-10">{idx + 1}</td>
+                                 <td className="p-3">
+                                    <div className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm">{item.name}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">{item.nipy}</div>
+                                 </td>
+                                 <td className="p-3 text-center">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                       {item.role}
+                                    </span>
+                                 </td>
+                                 <td className="p-3 text-center font-bold text-blue-600 dark:text-blue-400">
+                                    {item.summary.jamMasukKelas || 0} JPL
+                                 </td>
+                                 <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400">
+                                    {item.summary.jamHalaqoh || 0} JPL
+                                 </td>
+                                 <td className="p-3 text-center font-bold text-teal-600 dark:text-teal-400">
+                                    {item.summary.jamPiketKantor || 0} JPL
+                                 </td>
+                                 <td className="p-3 text-center font-bold text-cyan-600 dark:text-cyan-400">
+                                    {item.summary.jamPiketSholat || 0} JPL
+                                 </td>
+                                 <td className="p-3 text-center font-bold text-purple-600 dark:text-purple-400">
+                                    {item.summary.jamRapat || 0} JPL
+                                 </td>
+                                 <td className="p-3 text-center">
+                                    {item.summary.saldoAwal > 0 ? (
+                                       <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                          +{item.summary.saldoAwal} JPL
+                                       </span>
+                                    ) : (
+                                       <span className="text-slate-300 dark:text-slate-600">-</span>
+                                    )}
+                                 </td>
+                                 <td className="p-3 text-center">
+                                    <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/40 px-2.5 py-1 rounded-lg border border-emerald-300 dark:border-emerald-700 shadow-xs">
+                                       {item.summary.totalAkumulasi} JPL
+                                    </span>
+                                 </td>
+                                 <td className="p-3 text-center">
+                                    {item.hasToday ? (
+                                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                                          <CheckCircle size={12} />
+                                          <span>Sudah ({item.todayHours} JPL)</span>
+                                       </span>
+                                    ) : (
+                                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-full border border-amber-200 dark:border-amber-800">
+                                          <AlertCircle size={12} />
+                                          <span>Belum Isi</span>
+                                       </span>
+                                    )}
+                                 </td>
+                                 <td className="p-3 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                       <button
+                                          onClick={() => handleOpenSaldoAwalModal(item.teacher)}
+                                          className="p-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                          title="Set Saldo Awal Google Form"
+                                       >
+                                          <BookOpen size={14} />
+                                       </button>
+                                       <button
+                                          onClick={() => handleOpenLogModal(item.teacher)}
+                                          className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                          title="Lihat &amp; Kelola Rincian Entri Jurnal"
+                                       >
+                                          <Eye size={13} />
+                                          <span>Log ({item.entriesCount})</span>
+                                       </button>
+                                    </div>
+                                 </td>
+                              </tr>
+                           ))}
+                           {filteredJurnalList.length === 0 && (
+                              <tr>
+                                 <td colSpan="12" className="p-8 text-center text-slate-500 italic bg-white dark:bg-slate-800">
+                                    Tidak ada data guru yang cocok dengan kriteria pencarian dan filter saat ini.
+                                 </td>
+                              </tr>
+                           )}
+                        </tbody>
+                     </table>
+                  </div>
+
+                  {/* Mobile Card Feed View */}
+                  <div className="md:hidden space-y-3 overflow-y-auto flex-1 pr-0.5">
+                     {filteredJurnalList.map((item, idx) => (
+                        <div key={item.id} className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs space-y-2.5">
+                           <div className="flex justify-between items-start">
+                              <div>
+                                 <span className="text-[10px] font-bold text-slate-400">#{idx + 1} • {item.role}</span>
+                                 <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{item.name}</h4>
+                                 <span className="text-[10px] text-slate-400 font-mono">{item.nipy}</span>
+                              </div>
+                              {item.hasToday ? (
+                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                                    <CheckCircle size={10} />
+                                    <span>Sudah ({item.todayHours} JPL)</span>
+                                 </span>
+                              ) : (
+                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                                    <AlertCircle size={10} />
+                                    <span>Belum</span>
+                                 </span>
+                              )}
+                           </div>
+
+                           <div className="grid grid-cols-5 gap-1 text-center text-[10px] bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200/70 dark:border-slate-700/70">
+                              <div>
+                                 <span className="text-slate-400 block text-[9px]">Kelas</span>
+                                 <span className="font-black text-blue-600">{item.summary.jamMasukKelas || 0}</span>
+                              </div>
+                              <div>
+                                 <span className="text-slate-400 block text-[9px]">Halaqoh</span>
+                                 <span className="font-black text-indigo-600">{item.summary.jamHalaqoh || 0}</span>
+                              </div>
+                              <div>
+                                 <span className="text-slate-400 block text-[9px]">Piket</span>
+                                 <span className="font-black text-teal-600">{item.summary.jamPiket || 0}</span>
+                              </div>
+                              <div>
+                                 <span className="text-slate-400 block text-[9px]">Rapat</span>
+                                 <span className="font-black text-purple-600">{item.summary.jamRapat || 0}</span>
+                              </div>
+                              <div>
+                                 <span className="text-slate-400 block text-[9px]">Awal</span>
+                                 <span className="font-black text-emerald-600">{item.summary.saldoAwal || 0}</span>
+                              </div>
+                           </div>
+
+                           <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700/60">
+                              <div className="flex items-baseline gap-1">
+                                 <span className="text-[10px] text-slate-400">Total:</span>
+                                 <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                                    {item.summary.totalAkumulasi} JPL
+                                 </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                 <button
+                                    onClick={() => handleOpenSaldoAwalModal(item.teacher)}
+                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                 >
+                                    Saldo Awal
+                                 </button>
+                                 <button
+                                    onClick={() => handleOpenLogModal(item.teacher)}
+                                    className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer"
+                                 >
+                                    <Eye size={12} />
+                                    <span>Log ({item.entriesCount})</span>
+                                 </button>
+                              </div>
+                           </div>
+                        </div>
+                     ))}
+                     {filteredJurnalList.length === 0 && (
+                        <div className="p-6 text-center text-slate-500 bg-slate-50 dark:bg-slate-900/30 rounded-xl border border-slate-200 dark:border-slate-700 text-xs italic">
+                           Tidak ada data guru yang cocok dengan kriteria pencarian dan filter saat ini.
+                        </div>
+                     )}
+                  </div>
                </div>
             )}
 

@@ -945,10 +945,14 @@ export const exportJurnalKbmToExcel = ({
       'NIPY',
       'Nama Lengkap Guru',
       'Status Kepegawaian',
-      'Jam Mengajar/Halaqoh (JPL)',
-      'Jam Piket Kantor & Sholat (JPL)',
+      'Jam Masuk Kelas (JPL)',
+      'Jam Halaqoh (JPL)',
+      'Total KBM (JPL)',
+      'Piket Kantor (JPL)',
+      'Piket Sholat (JPL)',
+      'Total Piket (JPL)',
       'Jam Rapat & Kegiatan Guru (JPL)',
-      'Saldo Awal Transisi (JPL)',
+      'Saldo Awal Transisi Google Form (JPL)',
       'Total Akumulasi Realisasi (JPL)',
       'Target Wajib (JPL)',
       'Selisih Jam (+/-)',
@@ -956,7 +960,11 @@ export const exportJurnalKbmToExcel = ({
     ]
   ];
 
+  let totalMasukKelasAll = 0;
+  let totalHalaqohAll = 0;
   let totalKbmAll = 0;
+  let totalPiketKantorAll = 0;
+  let totalPiketSholatAll = 0;
   let totalPiketAll = 0;
   let totalRapatAll = 0;
   let totalSaldoAll = 0;
@@ -966,16 +974,48 @@ export const exportJurnalKbmToExcel = ({
 
   activeTeachers.forEach((t, idx) => {
     const p = t.payroll || {};
-    const jList = p.jurnalKbm || [];
-    const kbm = jList.reduce((s, j) => s + (Number(j.jamKbm) || 0), 0);
-    const piket = jList.reduce((s, j) => s + (Number(j.jamPiket) || 0), 0);
-    const rapat = jList.reduce((s, j) => s + (Number(j.jamRapat) || 0), 0);
+    const jList = Array.isArray(p.jurnalKbm) ? p.jurnalKbm : [];
+
+    let masukKelas = 0;
+    let halaqoh = 0;
+    let piketKantor = 0;
+    let piketSholat = 0;
+    let rapat = 0;
+
+    jList.forEach(j => {
+      const mk = Number(j.jamMasukKelas);
+      const hq = Number(j.jamHalaqoh);
+      const pk = Number(j.jamPiketKantor);
+      const ps = Number(j.jamPiketSholat);
+      const rp = Number(j.jamRapat) || 0;
+
+      const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
+      const actualMk = !isNaN(mk) ? mk : (Number(j.jamKbm) || 0);
+      const actualHq = !isNaN(hq) ? hq : 0;
+
+      const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
+      const actualPk = !isNaN(pk) ? pk : (Number(j.jamPiket) || 0);
+      const actualPs = !isNaN(ps) ? ps : 0;
+
+      masukKelas += actualMk;
+      halaqoh += actualHq;
+      piketKantor += actualPk;
+      piketSholat += actualPs;
+      rapat += rp;
+    });
+
+    const kbm = masukKelas + halaqoh;
+    const piket = piketKantor + piketSholat;
     const saldo = Number(p.jamMengajar?.saldoAwalJam) || 0;
     const totalRealisasi = Number(p.jamMengajar?.realisasi) || (kbm + piket + rapat + saldo);
     const wajib = p.jamMengajar?.wajib !== undefined && p.jamMengajar?.wajib !== '' ? Number(p.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
     const selisih = totalRealisasi - wajib;
 
+    totalMasukKelasAll += masukKelas;
+    totalHalaqohAll += halaqoh;
     totalKbmAll += kbm;
+    totalPiketKantorAll += piketKantor;
+    totalPiketSholatAll += piketSholat;
     totalPiketAll += piket;
     totalRapatAll += rapat;
     totalSaldoAll += saldo;
@@ -988,7 +1028,11 @@ export const exportJurnalKbmToExcel = ({
       t.nipy || t.id || '-',
       t.name || '-',
       t.status || 'Tetap',
+      masukKelas,
+      halaqoh,
       kbm,
+      piketKantor,
+      piketSholat,
       piket,
       rapat,
       saldo,
@@ -1005,7 +1049,11 @@ export const exportJurnalKbmToExcel = ({
     '',
     '',
     '',
+    totalMasukKelasAll,
+    totalHalaqohAll,
     totalKbmAll,
+    totalPiketKantorAll,
+    totalPiketSholatAll,
     totalPiketAll,
     totalRapatAll,
     totalSaldoAll,

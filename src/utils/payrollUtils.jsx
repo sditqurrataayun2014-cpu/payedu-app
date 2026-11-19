@@ -724,21 +724,75 @@ export const DEFAULT_KELAS_KBM = [
 ];
 
 /**
+ * ⏰ DAFTAR PILIHAN JAM PEMBELAJARAN KE- (SESUAI GOOGLE FORM ASLI)
+ */
+export const DEFAULT_JAM_KBM = [
+  { id: 1, label: "Jam 1", time: "07.00 - 07.35", full: "1 (07.00 - 07.35)" },
+  { id: 2, label: "Jam 2", time: "07.35 - 08.10", full: "2 (07.35 - 08.10)" },
+  { id: 3, label: "Jam 3", time: "08.10 - 08.45", full: "3 (08.10 - 08.45)" },
+  { id: 4, label: "Jam 4", time: "09.00 - 09.35", full: "4 (09.00 - 09.35)" },
+  { id: 5, label: "Jam 5", time: "09.35 - 10.10", full: "5 (09.35 - 10.10)" },
+  { id: 6, label: "Jam 6", time: "10.25 - 11.00", full: "6 (10.25 - 11.00)" },
+  { id: 7, label: "Jam 7", time: "11.00 - 11.35", full: "7 (11.00 - 11.35)" },
+  { id: 8, label: "Jam 8", time: "15.00 - 15.35", full: "8 (15.00 - 15.35)" },
+  { id: 9, label: "Jam 9", time: "15.35 - 16.10", full: "9 (15.35 - 16.10)" }
+];
+
+/**
  * 🧮 HELPER RINGKASAN JURNAL KBM & BEBAN KERJA GURU
- * Mengakumulasikan jam mengajar, jam piket, jam rapat, dan saldo awal transisi
+ * Mengakumulasikan jam masuk kelas/mapel, halaqoh, piket kantor, piket sholat, rapat, dan saldo awal transisi
  */
 export const calculateJurnalSummary = (teacher) => {
   const p = teacher?.payroll || {};
   const entries = Array.isArray(p.jurnalKbm) ? p.jurnalKbm : [];
-  const jamKbm = entries.reduce((s, e) => s + (Number(e.jamKbm) || 0), 0);
-  const jamPiket = entries.reduce((s, e) => s + (Number(e.jamPiket) || 0), 0);
-  const jamRapat = entries.reduce((s, e) => s + (Number(e.jamRapat) || 0), 0);
+
+  let jamMasukKelas = 0;
+  let jamHalaqoh = 0;
+  let jamKbm = 0;
+  let jamPiketKantor = 0;
+  let jamPiketSholat = 0;
+  let jamPiket = 0;
+  let jamRapat = 0;
+
+  entries.forEach(e => {
+    const mk = Number(e.jamMasukKelas);
+    const hq = Number(e.jamHalaqoh);
+    const pk = Number(e.jamPiketKantor);
+    const ps = Number(e.jamPiketSholat);
+    const rp = Number(e.jamRapat) || 0;
+
+    // Kompatibilitas mundur jika entri lama hanya menyimpan jamKbm & jamPiket
+    const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
+    const actualMk = !isNaN(mk) ? mk : (Number(e.jamKbm) || 0);
+    const actualHq = !isNaN(hq) ? hq : 0;
+    const actualKbm = hasDetailedKbm ? (actualMk + actualHq) : (Number(e.jamKbm) || 0);
+
+    const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
+    const actualPk = !isNaN(pk) ? pk : (Number(e.jamPiket) || 0);
+    const actualPs = !isNaN(ps) ? ps : 0;
+    const actualPiket = hasDetailedPiket ? (actualPk + actualPs) : (Number(e.jamPiket) || 0);
+
+    jamMasukKelas += actualMk;
+    jamHalaqoh += actualHq;
+    jamKbm += actualKbm;
+
+    jamPiketKantor += actualPk;
+    jamPiketSholat += actualPs;
+    jamPiket += actualPiket;
+
+    jamRapat += rp;
+  });
+
   const saldoAwal = Number(p.jamMengajar?.saldoAwalJam) || 0;
   const totalAkumulasi = jamKbm + jamPiket + jamRapat + saldoAwal;
   
   return {
     entries,
+    jamMasukKelas,
+    jamHalaqoh,
     jamKbm,
+    jamPiketKantor,
+    jamPiketSholat,
     jamPiket,
     jamRapat,
     saldoAwal,
@@ -770,7 +824,19 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
   entries.forEach(e => {
     const day = Number(e.tgl);
     if (day >= 1 && day <= 31) {
-      const dayTotal = (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0);
+      const mk = Number(e.jamMasukKelas);
+      const hq = Number(e.jamHalaqoh);
+      const pk = Number(e.jamPiketKantor);
+      const ps = Number(e.jamPiketSholat);
+      const rp = Number(e.jamRapat) || 0;
+
+      const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
+      const entryKbm = hasDetailedKbm ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0)) : (Number(e.jamKbm) || 0);
+
+      const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
+      const entryPiket = hasDetailedPiket ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
+
+      const dayTotal = entryKbm + entryPiket + rp;
       dailyMap[day] = (dailyMap[day] || 0) + dayTotal;
     }
   });
@@ -783,8 +849,22 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
   });
 
   // Hitung total realisasi jam keseluruhan (Jurnal + Saldo Awal Transisi)
-  const totalJurnal = entries.reduce((s, e) => 
-    s + (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0), 0);
+  const totalJurnal = entries.reduce((s, e) => {
+    const mk = Number(e.jamMasukKelas);
+    const hq = Number(e.jamHalaqoh);
+    const pk = Number(e.jamPiketKantor);
+    const ps = Number(e.jamPiketSholat);
+    const rp = Number(e.jamRapat) || 0;
+
+    const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
+    const entryKbm = hasDetailedKbm ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0)) : (Number(e.jamKbm) || 0);
+
+    const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
+    const entryPiket = hasDetailedPiket ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
+
+    return s + entryKbm + entryPiket + rp;
+  }, 0);
+
   const newRealisasi = totalJurnal + saldoAwal;
 
   return {

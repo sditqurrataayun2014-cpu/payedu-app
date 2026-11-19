@@ -10,35 +10,36 @@ import {
 import PresensiGuruView from '../../PresensiGuruView';
 import SlipDocument from '../../components/SlipDocument';
 
-import { 
-  calculatePayroll, 
-  exportToPDF, 
-  formatDateId, 
-  formatRp, 
-  formatToInputDate, 
-  generateUniqueId, 
-  getFormattedPeriod, 
-  getLocalIsoDate, 
+import {
+  calculatePayroll,
+  exportToPDF,
+  formatDateId,
+  formatRp,
+  formatToInputDate,
+  generateUniqueId,
+  getFormattedPeriod,
+  getLocalIsoDate,
   safeStorageSet,
   DEFAULT_MAPEL_KBM,
   DEFAULT_KELAS_KBM,
+  DEFAULT_JAM_KBM,
   calculateJurnalSummary,
   syncTeacherJurnalKbm
 } from '../../utils/payrollUtils';
 
 import { getSesiTheme } from '../../utils/sesiTheme';
 
-import { 
+import {
   createTeacherPatchHandler,
   pushSinglePresensiRecord,
   pushCloudData as pushToSupabase
 } from '../../services/dbService';
 
-import { 
-  isBiometricSupported, 
-  getSavedBiometricAccount, 
-  registerBiometricLogin, 
-  removeBiometricAccount 
+import {
+  isBiometricSupported,
+  getSavedBiometricAccount,
+  registerBiometricLogin,
+  removeBiometricAccount
 } from '../../services/biometricService';
 
 import { verifyTeacherDevice } from '../../services/deviceService';
@@ -54,12 +55,12 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
     purple: 'text-purple-600 bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800/50',
     rose: 'text-rose-600 bg-rose-100 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800/50',
   };
-  
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center border shadow-inner ${colorMap[colorClass]}`}>
-           <Icon size={24} className="drop-shadow-sm" strokeWidth={2.5} />
+          <Icon size={24} className="drop-shadow-sm" strokeWidth={2.5} />
         </div>
         <h3 className="font-extrabold text-lg md:text-xl text-slate-800 dark:text-slate-200">{title}</h3>
       </div>
@@ -74,24 +75,24 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
 export default function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru, saveAuditLog }) {
   const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
   const myData = teachers.find(t => t.id === user.id);
-  
+
   if (!myData) {
     const isExecutive = user?.role === 'Yayasan' || user?.role === 'Kepala Sekolah' || String(user?.role || '').toLowerCase() === 'admin';
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 sm:p-10 text-center animate-in fade-in zoom-in-95">
         <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-5 ${isExecutive ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-red-50 dark:bg-red-900/30 text-red-500'}`}>
-           {isExecutive ? <Building size={36} /> : <AlertCircle size={40} />}
+          {isExecutive ? <Building size={36} /> : <AlertCircle size={40} />}
         </div>
         <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 mb-2">
           {isExecutive ? `Ruang Kendali ${user?.role === 'Yayasan' ? 'Akses Yayasan' : user?.role || 'Manajemen'}` : 'Data Pegawai Tidak Ditemukan'}
         </h2>
         <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto text-xs sm:text-sm leading-relaxed mb-6">
-          {isExecutive 
+          {isExecutive
             ? `Anda saat ini masuk dengan peran ${user?.role || 'Pimpinan'}. Akun manajemen dapat memantau dashboard eksekutif, rekapitulasi gaji, dan pengawasan operasional sekolah secara terpusat.`
             : 'Profil rincian data Anda tidak ditemukan pada database pegawai aktif. Silakan hubungi Tata Usaha Sekolah.'}
         </p>
-        <button 
-          onClick={() => setActiveTab ? setActiveTab('dashboard') : window.location.reload()} 
+        <button
+          onClick={() => setActiveTab ? setActiveTab('dashboard') : window.location.reload()}
           className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all text-xs sm:text-sm flex items-center gap-2 cursor-pointer"
         >
           {isExecutive ? <LayoutDashboard size={16} /> : null}
@@ -110,14 +111,14 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [feedbackSubject, setFeedbackSubject] = useState('Saran & Masukan Umum');
-  
+
   // State untuk form komplain WA
   const [isKomplainModalOpen, setIsKomplainModalOpen] = useState(false);
   const [komplainText, setKomplainText] = useState('');
 
   // TAMBAHAN: State untuk menangkap history slip yang spesifik
   const [selectedHistorySlip, setSelectedHistorySlip] = useState(null);
-  
+
   // TAMBAHAN NO 3: State Loading PDF
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
@@ -159,8 +160,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     { id: 'sore', nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' },
     { id: 'rapat', nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' }
   ];
-  const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0 
-    ? presensiSettings.sesiList 
+  const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0
+    ? presensiSettings.sesiList
     : defaultSesiList;
 
   // Pastikan opsi multi-sesi lengkap tersedia agar guru bisa memilih sesi Pagi, Sore, maupun Rapat
@@ -363,18 +364,25 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
-  // 📚 FITUR BARU: Jurnal KBM & Beban Kerja Harian Guru (Pengganti Google Form)
+  // 📚 FITUR RESMI: Jurnal KBM & Beban Kerja Guru (Pengganti Google Form)
   const [isJurnalModalOpen, setIsJurnalModalOpen] = useState(false);
   const [isSavingJurnal, setIsSavingJurnal] = useState(false);
+  const [isMapelExpanded, setIsMapelExpanded] = useState(false);
+  const [isKelasExpanded, setIsKelasExpanded] = useState(false);
+  const [isJamKeExpanded, setIsJamKeExpanded] = useState(false);
+
   const [jurnalForm, setJurnalForm] = useState({
     id: null,
     tanggalStr: todayIsoDate,
     tgl: new Date().getDate(),
-    jamKbm: 2,
-    jamPiket: 0,
+    jamMasukKelas: 2,
+    jamHalaqoh: 0,
+    jamPiketKantor: 0,
+    jamPiketSholat: 0,
     jamRapat: 0,
-    mapel: 'TAHSIN',
-    kelas: 'I A Putra',
+    mapel: ['TAHSIN'],
+    kelas: ['I A Putra'],
+    jamKe: [1, 2],
     catatan: ''
   });
 
@@ -391,15 +399,38 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   const handleOpenJurnalModal = (entryToEdit = null, defaultDateStr = null) => {
     if (entryToEdit) {
+      const rawMapel = entryToEdit.mapel;
+      const mapelArr = Array.isArray(rawMapel)
+        ? rawMapel
+        : (typeof rawMapel === 'string' && rawMapel ? rawMapel.split(',').map(s => s.trim()) : ['TAHSIN']);
+
+      const rawKelas = entryToEdit.kelas;
+      const kelasArr = Array.isArray(rawKelas)
+        ? rawKelas
+        : (typeof rawKelas === 'string' && rawKelas ? rawKelas.split(',').map(s => s.trim()) : ['I A Putra']);
+
+      const rawJamKe = entryToEdit.jamKe;
+      const jamKeArr = Array.isArray(rawJamKe)
+        ? rawJamKe.map(Number)
+        : (typeof rawJamKe === 'string' && rawJamKe ? rawJamKe.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n)) : [1, 2]);
+
+      const mk = Number(entryToEdit.jamMasukKelas);
+      const hq = Number(entryToEdit.jamHalaqoh);
+      const pk = Number(entryToEdit.jamPiketKantor);
+      const ps = Number(entryToEdit.jamPiketSholat);
+
       setJurnalForm({
         id: entryToEdit.id,
         tanggalStr: entryToEdit.tanggalStr || todayIsoDate,
         tgl: entryToEdit.tgl || Number(entryToEdit.tanggalStr?.split('-')[2]) || new Date().getDate(),
-        jamKbm: Number(entryToEdit.jamKbm) || 0,
-        jamPiket: Number(entryToEdit.jamPiket) || 0,
+        jamMasukKelas: !isNaN(mk) ? mk : (Number(entryToEdit.jamKbm) || 0),
+        jamHalaqoh: !isNaN(hq) ? hq : 0,
+        jamPiketKantor: !isNaN(pk) ? pk : (Number(entryToEdit.jamPiket) || 0),
+        jamPiketSholat: !isNaN(ps) ? ps : 0,
         jamRapat: Number(entryToEdit.jamRapat) || 0,
-        mapel: entryToEdit.mapel || 'TAHSIN',
-        kelas: entryToEdit.kelas || 'I A Putra',
+        mapel: mapelArr.length > 0 ? mapelArr : ['TAHSIN'],
+        kelas: kelasArr.length > 0 ? kelasArr : ['I A Putra'],
+        jamKe: jamKeArr,
         catatan: entryToEdit.catatan || ''
       });
     } else {
@@ -409,15 +440,61 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         id: null,
         tanggalStr: targetDate,
         tgl: day,
-        jamKbm: 2,
-        jamPiket: 0,
+        jamMasukKelas: 2,
+        jamHalaqoh: 0,
+        jamPiketKantor: 0,
+        jamPiketSholat: 0,
         jamRapat: 0,
-        mapel: 'TAHSIN',
-        kelas: 'I A Putra',
+        mapel: ['TAHSIN'],
+        kelas: ['I A Putra'],
+        jamKe: [1, 2],
         catatan: ''
       });
     }
+    setIsMapelExpanded(false);
+    setIsKelasExpanded(false);
+    setIsJamKeExpanded(false);
     setIsJurnalModalOpen(true);
+  };
+
+  const handleToggleMapel = (m) => {
+    setJurnalForm(prev => {
+      const current = Array.isArray(prev.mapel) ? [...prev.mapel] : [];
+      const idx = current.indexOf(m);
+      if (idx > -1) {
+        if (current.length === 1) return prev; // Minimal 1 dipilih
+        return { ...prev, mapel: current.filter(x => x !== m) };
+      } else {
+        return { ...prev, mapel: [...current, m] };
+      }
+    });
+  };
+
+  const handleToggleKelas = (k) => {
+    setJurnalForm(prev => {
+      const current = Array.isArray(prev.kelas) ? [...prev.kelas] : [];
+      const idx = current.indexOf(k);
+      if (idx > -1) {
+        if (current.length === 1) return prev; // Minimal 1 dipilih
+        return { ...prev, kelas: current.filter(x => x !== k) };
+      } else {
+        return { ...prev, kelas: [...current, k] };
+      }
+    });
+  };
+
+  const handleToggleJamKe = (jamNum) => {
+    setJurnalForm(prev => {
+      const current = Array.isArray(prev.jamKe) ? [...prev.jamKe] : [];
+      const idx = current.indexOf(jamNum);
+      let updated;
+      if (idx > -1) {
+        updated = current.filter(x => x !== jamNum);
+      } else {
+        updated = [...current, jamNum].sort((a, b) => a - b);
+      }
+      return { ...prev, jamKe: updated };
+    });
   };
 
   const handleSaveJurnalEntry = async (e) => {
@@ -427,6 +504,19 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     const dayNum = Number(jurnalForm.tanggalStr?.split('-')[2]) || jurnalForm.tgl || new Date().getDate();
     const existingEntries = Array.isArray(myData.payroll?.jurnalKbm) ? [...myData.payroll.jurnalKbm] : [];
 
+    const mk = Number(jurnalForm.jamMasukKelas) || 0;
+    const hq = Number(jurnalForm.jamHalaqoh) || 0;
+    const pk = Number(jurnalForm.jamPiketKantor) || 0;
+    const ps = Number(jurnalForm.jamPiketSholat) || 0;
+    const rp = Number(jurnalForm.jamRapat) || 0;
+
+    const totalKbm = mk + hq;
+    const totalPiket = pk + ps;
+
+    const mapelArr = Array.isArray(jurnalForm.mapel) && jurnalForm.mapel.length > 0 ? jurnalForm.mapel : ['TAHSIN'];
+    const kelasArr = Array.isArray(jurnalForm.kelas) && jurnalForm.kelas.length > 0 ? jurnalForm.kelas : ['I A Putra'];
+    const jamKeArr = Array.isArray(jurnalForm.jamKe) ? jurnalForm.jamKe : [];
+
     let updatedEntries;
     if (jurnalForm.id) {
       updatedEntries = existingEntries.map(item => {
@@ -435,12 +525,17 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             ...item,
             tanggalStr: jurnalForm.tanggalStr,
             tgl: dayNum,
-            jamKbm: Number(jurnalForm.jamKbm) || 0,
-            jamPiket: Number(jurnalForm.jamPiket) || 0,
-            jamRapat: Number(jurnalForm.jamRapat) || 0,
-            mapel: jurnalForm.mapel,
-            kelas: jurnalForm.kelas,
-            catatan: jurnalForm.catatan,
+            jamMasukKelas: mk,
+            jamHalaqoh: hq,
+            jamPiketKantor: pk,
+            jamPiketSholat: ps,
+            jamRapat: rp,
+            jamKbm: totalKbm,
+            jamPiket: totalPiket,
+            mapel: mapelArr,
+            kelas: kelasArr,
+            jamKe: jamKeArr,
+            catatan: jurnalForm.catatan || '',
             updatedAt: new Date().toISOString()
           };
         }
@@ -448,19 +543,26 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       });
     } else {
       const newEntry = {
-        id: generateUniqueId(),
+        id: generateUniqueId('jrn_'),
         tanggalStr: jurnalForm.tanggalStr,
         tgl: dayNum,
-        jamKbm: Number(jurnalForm.jamKbm) || 0,
-        jamPiket: Number(jurnalForm.jamPiket) || 0,
-        jamRapat: Number(jurnalForm.jamRapat) || 0,
-        mapel: jurnalForm.mapel,
-        kelas: jurnalForm.kelas,
-        catatan: jurnalForm.catatan,
+        jamMasukKelas: mk,
+        jamHalaqoh: hq,
+        jamPiketKantor: pk,
+        jamPiketSholat: ps,
+        jamRapat: rp,
+        jamKbm: totalKbm,
+        jamPiket: totalPiket,
+        mapel: mapelArr,
+        kelas: kelasArr,
+        jamKe: jamKeArr,
+        catatan: jurnalForm.catatan || '',
         createdAt: new Date().toISOString()
       };
       updatedEntries = [newEntry, ...existingEntries];
     }
+
+    updatedEntries.sort((a, b) => (Number(b.tgl) || 0) - (Number(a.tgl) || 0));
 
     const updatedTeacher = syncTeacherJurnalKbm(myData, updatedEntries);
     const updatedTeachers = teachers.map(t => t.id === myData.id ? updatedTeacher : t);
@@ -470,7 +572,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
     try {
       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
-      const totalHours = Number(jurnalForm.jamKbm) + Number(jurnalForm.jamPiket) + Number(jurnalForm.jamRapat);
+      const totalHours = totalKbm + totalPiket + rp;
       saveAuditLog?.(myData.name, 'Catat Jurnal KBM', `Tgl ${dayNum}`, `${totalHours} JPL`);
     } catch (err) {
       console.warn('[Jurnal KBM] Cloud sync warning:', err);
@@ -547,71 +649,71 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   }, [isEditBiodataOpen]);
   const [isSavingBiodata, setIsSavingBiodata] = useState(false);
   const [biodataForm, setBiodataForm] = useState({
-     name: '', pob: '', dob: '', phone: '', address: '', education: 'S1', bankName: '', bankAccount: ''
+    name: '', pob: '', dob: '', phone: '', address: '', education: 'S1', bankName: '', bankAccount: ''
   });
 
   const handleOpenEditBiodata = () => {
-     setBiodataForm({
-        name: myData.name || '',
-        pob: myData.pob || '',
-        dob: formatToInputDate(myData.dob) || '',
-        phone: myData.phone || '',
-        address: myData.address || '',
-        education: myData.education || 'S1',
-        bankName: myData.bankName || '',
-        bankAccount: myData.bankAccount || '',
-     });
-     setIsEditBiodataOpen(true);
+    setBiodataForm({
+      name: myData.name || '',
+      pob: myData.pob || '',
+      dob: formatToInputDate(myData.dob) || '',
+      phone: myData.phone || '',
+      address: myData.address || '',
+      education: myData.education || 'S1',
+      bankName: myData.bankName || '',
+      bankAccount: myData.bankAccount || '',
+    });
+    setIsEditBiodataOpen(true);
   };
 
   const handleSaveBiodata = async (e) => {
-     e.preventDefault();
-     setIsSavingBiodata(true);
+    e.preventDefault();
+    setIsSavingBiodata(true);
 
-     const updatedTeachers = teachers.map(t => {
-        if (t.id === myData.id) {
-           return {
-              ...t,
-              name: biodataForm.name,
-              pob: biodataForm.pob,
-              dob: biodataForm.dob,
-              phone: biodataForm.phone,
-              address: biodataForm.address,
-              education: biodataForm.education,
-              bankName: biodataForm.bankName,
-              bankAccount: biodataForm.bankAccount
-           };
-        }
-        return t;
-     });
+    const updatedTeachers = teachers.map(t => {
+      if (t.id === myData.id) {
+        return {
+          ...t,
+          name: biodataForm.name,
+          pob: biodataForm.pob,
+          dob: biodataForm.dob,
+          phone: biodataForm.phone,
+          address: biodataForm.address,
+          education: biodataForm.education,
+          bankName: biodataForm.bankName,
+          bankAccount: biodataForm.bankAccount
+        };
+      }
+      return t;
+    });
 
-     setTeachers(updatedTeachers);
+    setTeachers(updatedTeachers);
 
-     try {
-        safeStorageSet('payedu_teachers', updatedTeachers);
-        await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
-        alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
-        setIsEditBiodataOpen(false);
-     } catch (err) {
-        alert('Gagal menyimpan ke server. Pastikan koneksi internet aktif.');
-     } finally {
-        setIsSavingBiodata(false);
-     }
+    try {
+      safeStorageSet('payedu_teachers', updatedTeachers);
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+      alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
+      setIsEditBiodataOpen(false);
+    } catch (err) {
+      alert('Gagal menyimpan ke server. Pastikan koneksi internet aktif.');
+    } finally {
+      setIsSavingBiodata(false);
+    }
   };
 
   // Helper untuk simulasi jika data harian belum pernah disave manual oleh admin
   const getDailyHours = (total, teacherId) => {
     const days = Array(31).fill('');
     if (total > 0) {
-       let remaining = total;
-       let dayIdx = teacherId.charCodeAt(teacherId.length - 1) % 7;
-       while (remaining > 0 && dayIdx < 31) {
-          const hoursToday = Math.min(4, remaining);
-          days[dayIdx] = hoursToday;
-          remaining -= hoursToday;
-          dayIdx += 2;
-          if (dayIdx >= 31 && remaining > 0) dayIdx = 1;
-       }
+      let remaining = total;
+      let dayIdx = teacherId.charCodeAt(teacherId.length - 1) % 7;
+      while (remaining > 0 && dayIdx < 31) {
+        const hoursToday = Math.min(4, remaining);
+        days[dayIdx] = hoursToday;
+        remaining -= hoursToday;
+        dayIdx += 2;
+        if (dayIdx >= 31 && remaining > 0) dayIdx = 1;
+      }
     }
     return days;
   };
@@ -627,11 +729,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   // 🪄 TAMBALAN CERDAS: Kalkulasi Kehadiran Otomatis dari Array Harian
   let autoHadir = 0, autoSakit = 0, autoIzin = 0, autoAlpa = 0;
   dailyData.forEach(val => {
-     const v = String(val).toUpperCase();
-     if (v === 'S') autoSakit++;
-     else if (v === 'I') autoIzin++;
-     else if (v === 'A') autoAlpa++;
-     else if (!isNaN(v) && Number(v) > 0) autoHadir++;
+    const v = String(val).toUpperCase();
+    if (v === 'S') autoSakit++;
+    else if (v === 'I') autoIzin++;
+    else if (v === 'A') autoAlpa++;
+    else if (!isNaN(v) && Number(v) > 0) autoHadir++;
   });
 
   // 🪄 PERBAIKAN UX: Push Mutlak Saran ke Server
@@ -639,7 +741,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     e.preventDefault();
     if (!feedbackMsg.trim()) return;
     setIsSendingFeedback(true);
-    
+
     const newFeedback = {
       id: generateUniqueId('fb-'),
       name: myData.name,
@@ -648,52 +750,52 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       message: feedbackMsg,
       status: 'Menunggu'
     };
-    
+
     const updatedFeedbacks = [newFeedback, ...(feedbacks || [])];
     setFeedbacks(updatedFeedbacks);
-    
+
     try {
-       // Tembak langsung ke awan tanpa menunggu debounce App.jsx
-       safeStorageSet('payedu_feedbacks', updatedFeedbacks);
-       await pushToSupabase('SAVE_FEEDBACKS', updatedFeedbacks);
-       
-       alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
-       setFeedbackMsg('');
-       setFeedbackSubject('Saran & Masukan Umum');
-    } catch(err) {
-       alert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
+      // Tembak langsung ke awan tanpa menunggu debounce App.jsx
+      safeStorageSet('payedu_feedbacks', updatedFeedbacks);
+      await pushToSupabase('SAVE_FEEDBACKS', updatedFeedbacks);
+
+      alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
+      setFeedbackMsg('');
+      setFeedbackSubject('Saran & Masukan Umum');
+    } catch (err) {
+      alert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
     } finally {
-       setIsSendingFeedback(false);
+      setIsSendingFeedback(false);
     }
   };
 
   // 🪄 PERBAIKAN UX MUTLAK: Gamifikasi Konfeti saat Konfirmasi Gaji & Bypass Auto-Save
   const handleKonfirmasi = async () => {
     setIsConfirming(true);
-    const updatedTeachers = teachers.map(t => 
+    const updatedTeachers = teachers.map(t =>
       t.id === user.id ? { ...t, payroll: { ...t.payroll, isConfirmed: true } } : t
     );
-    
+
     // Update state UI seketika
     setTeachers(updatedTeachers);
-    
-    try {
-       // PAKSA TEMBAK KE SERVER (BYPASS DEBOUNCE 2 DETIK)
-       safeStorageSet('payedu_teachers', updatedTeachers);
-       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
 
-       // Memicu selebrasi
-       setShowCelebration(true);
-       
-       // Menghilangkan selebrasi setelah 5 detik
-       setTimeout(() => {
-          setShowCelebration(false);
-       }, 5000);
-    } catch(e) {
-       console.error("Gagal simpan konfirmasi:", e);
-       alert("Koneksi tidak stabil. Konfirmasi Anda mungkin belum masuk ke server.");
+    try {
+      // PAKSA TEMBAK KE SERVER (BYPASS DEBOUNCE 2 DETIK)
+      safeStorageSet('payedu_teachers', updatedTeachers);
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+
+      // Memicu selebrasi
+      setShowCelebration(true);
+
+      // Menghilangkan selebrasi setelah 5 detik
+      setTimeout(() => {
+        setShowCelebration(false);
+      }, 5000);
+    } catch (e) {
+      console.error("Gagal simpan konfirmasi:", e);
+      alert("Koneksi tidak stabil. Konfirmasi Anda mungkin belum masuk ke server.");
     } finally {
-       setIsConfirming(false);
+      setIsConfirming(false);
     }
   };
 
@@ -703,14 +805,14 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   };
 
   // URL WhatsApp Generator
-  const waNumber = '628565011130'; 
+  const waNumber = '628565011130';
   const waMessage = `Assalamu'alaikum Bendahara,\n\nSaya *${myData.name}* (NIPY: ${myData.nipy}).\nSaya ingin mengajukan pertanyaan/komplain terkait selisih gaji pada periode *${bulan}*.\n\nKeterangan Komplain:\n"${komplainText}"\n\nMohon bantuannya untuk dicek kembali. Terima kasih.`;
   const waUrl = `https://api.whatsapp.com/send?phone=${waNumber}&text=${encodeURIComponent(waMessage)}`;
 
   // PERBAIKAN KRUSIAL: Mengekstrak Data Riwayat dari Arsip Asli (Bukan Dummy) dengan Perisai Data
   const riwayatAsli = useMemo(() => {
     if (!archives || !Array.isArray(archives)) return [];
-    
+
     const myTmtMonth = myData.tmt ? formatToInputDate(myData.tmt).substring(0, 7) : '';
 
     // Map data dari archives global
@@ -723,8 +825,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       }
 
       // Cari data guru ini pada saat arsip tersebut dibuat (cocokkan ID & Nama)
-      const historicalData = (arc?.dataGuru || []).find(t => 
-        String(t.id) === String(myData.id) && 
+      const historicalData = (arc?.dataGuru || []).find(t =>
+        String(t.id) === String(myData.id) &&
         (!t.name || !myData.name || t.name.trim().toLowerCase() === myData.name.trim().toLowerCase())
       );
       if (!historicalData) return null;
@@ -743,9 +845,9 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   }, [archives, myData.id, myData.name, myData.tmt]);
 
   // Ekstraksi Data Pinjaman Guru
-  const loanItems = (myData.payroll?.potonganLainnya || []).filter(p => 
-    p.ket.toLowerCase().includes('kasbon') || 
-    p.ket.toLowerCase().includes('koperasi') || 
+  const loanItems = (myData.payroll?.potonganLainnya || []).filter(p =>
+    p.ket.toLowerCase().includes('kasbon') ||
+    p.ket.toLowerCase().includes('koperasi') ||
     p.ket.toLowerCase().includes('pinjaman')
   );
 
@@ -765,8 +867,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   // Helper cerdas untuk merender teks kebijakan menjadi UI Card elegan (Tanpa mengubah format data Admin)
   const renderElegantInfo = (text) => {
-    if (!text) return <div className="flex flex-col items-center justify-center p-8 text-slate-400"><Info size={40} className="mb-3 opacity-50"/><p className="text-sm italic font-medium">Belum ada informasi sistem penggajian.</p></div>;
-    
+    if (!text) return <div className="flex flex-col items-center justify-center p-8 text-slate-400"><Info size={40} className="mb-3 opacity-50" /><p className="text-sm italic font-medium">Belum ada informasi sistem penggajian.</p></div>;
+
     const lines = text.split('\n');
     return (
       <div className="space-y-3 mt-1">
@@ -774,10 +876,10 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
           const trimmedLine = line.trim();
           if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
             let content = trimmedLine.substring(1).trim();
-            
+
             // Tangani asterik ganda / markdown jika ada
             if (content.startsWith('*') && content.endsWith('*')) {
-               content = content.substring(1, content.length - 1).trim();
+              content = content.substring(1, content.length - 1).trim();
             }
 
             const colonIndex = content.indexOf(':');
@@ -807,7 +909,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
               </div>
             );
           } else if (trimmedLine === '') {
-             return null;
+            return null;
           } else {
             // Paragraf pembuka / penutup (Beri style banner mencolok)
             return (
@@ -825,8 +927,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   // Komponen Reusable untuk Lonceng Notifikasi agar rapi
   const NotificationBell = (settings?.payrollStatus === 'Approved' || myData.payroll?.isNotified) && !myData.payroll?.isConfirmed ? (
-    <button 
-      onClick={() => setActiveTab('portal_gaji')} 
+    <button
+      onClick={() => setActiveTab('portal_gaji')}
       className="absolute top-3 right-3 sm:top-4 sm:right-4 md:top-6 md:right-6 w-9 h-9 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 rounded-full shadow-[0_8px_16px_-6px_rgba(245,158,11,0.8)] flex items-center justify-center animate-bounce border-2 border-white/50 z-30 hover:scale-110 transition-transform cursor-pointer"
       title="Notifikasi Gaji Baru! Mohon Konfirmasi Kesesuaian."
     >
@@ -851,74 +953,74 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   return (
     <>
-    <div className={`max-w-4xl mx-auto space-y-6 animate-in fade-in pb-28 md:pb-10 relative ${isSlipModalOpen ? 'print:hidden print-hidden-on-slip' : ''}`}>
-      
-      {/* 🪄 FITUR BARU: OVERLAY ANIMASI KONFETI SELEBRASI */}
-      {showCelebration && (
-        <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center overflow-hidden">
-          {/* Latar gelap tipis */}
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300"></div>
-          
-          {/* Partikel Konfeti menggunakan CSS */}
-          {Array.from({ length: 100 }).map((_, i) => {
-            const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#06b6d4'];
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const left = Math.random() * 100;
-            const animDuration = 2 + Math.random() * 3;
-            const animDelay = Math.random() * 0.5;
-            const isCircle = Math.random() > 0.5;
-            return (
-              <div
-                key={i}
-                className={`absolute w-3 h-3 ${isCircle ? 'rounded-full' : 'rounded-sm'}`}
-                style={{
-                  backgroundColor: color,
-                  left: `${left}%`,
-                  top: '-10%',
-                  animation: `confetti-fall ${animDuration}s ease-in ${animDelay}s forwards`,
-                }}
-              />
-            );
-          })}
+      <div className={`max-w-4xl mx-auto space-y-6 animate-in fade-in pb-28 md:pb-10 relative ${isSlipModalOpen ? 'print:hidden print-hidden-on-slip' : ''}`}>
 
-          {/* Kartu Ucapan Apresiasi */}
-          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl p-8 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(16,185,129,0.3)] text-center animate-in zoom-in slide-in-from-bottom-10 duration-500 border border-emerald-200 dark:border-emerald-700/50 max-w-sm mx-4 relative z-10 flex flex-col items-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/50 dark:to-emerald-800/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-5 shadow-inner border border-emerald-300 dark:border-emerald-700/50">
-              <CheckCircle size={56} className="animate-pulse" />
+        {/* 🪄 FITUR BARU: OVERLAY ANIMASI KONFETI SELEBRASI */}
+        {showCelebration && (
+          <div className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center overflow-hidden">
+            {/* Latar gelap tipis */}
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300"></div>
+
+            {/* Partikel Konfeti menggunakan CSS */}
+            {Array.from({ length: 100 }).map((_, i) => {
+              const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#06b6d4'];
+              const color = colors[Math.floor(Math.random() * colors.length)];
+              const left = Math.random() * 100;
+              const animDuration = 2 + Math.random() * 3;
+              const animDelay = Math.random() * 0.5;
+              const isCircle = Math.random() > 0.5;
+              return (
+                <div
+                  key={i}
+                  className={`absolute w-3 h-3 ${isCircle ? 'rounded-full' : 'rounded-sm'}`}
+                  style={{
+                    backgroundColor: color,
+                    left: `${left}%`,
+                    top: '-10%',
+                    animation: `confetti-fall ${animDuration}s ease-in ${animDelay}s forwards`,
+                  }}
+                />
+              );
+            })}
+
+            {/* Kartu Ucapan Apresiasi */}
+            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl p-8 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(16,185,129,0.3)] text-center animate-in zoom-in slide-in-from-bottom-10 duration-500 border border-emerald-200 dark:border-emerald-700/50 max-w-sm mx-4 relative z-10 flex flex-col items-center">
+              <div className="w-24 h-24 bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/50 dark:to-emerald-800/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-5 shadow-inner border border-emerald-300 dark:border-emerald-700/50">
+                <CheckCircle size={56} className="animate-pulse" />
+              </div>
+              <h3 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2 drop-shadow-sm">Alhamdulillah!</h3>
+              <p className="text-slate-600 dark:text-slate-300 font-medium text-lg leading-snug">Terima kasih atas dedikasi Anda bulan ini!</p>
             </div>
-            <h3 className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2 drop-shadow-sm">Alhamdulillah!</h3>
-            <p className="text-slate-600 dark:text-slate-300 font-medium text-lg leading-snug">Terima kasih atas dedikasi Anda bulan ini!</p>
-          </div>
 
-          {/* Keyframes Animasi Khusus */}
-          <style>{`
+            {/* Keyframes Animasi Khusus */}
+            <style>{`
             @keyframes confetti-fall {
               0% { transform: translateY(0) rotate(0deg); opacity: 1; }
               100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
             }
           `}</style>
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* 🪄 MODAL BARU: Edit Biodata Mandiri Guru */}
-      {isEditBiodataOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2">
-                <Edit className="text-blue-500" /> Perbarui Biodata Mandiri Saya
-              </h3>
-              <button onClick={() => setIsEditBiodataOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
-            </div>
-            
-            <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
-               <form id="editBiodataForm" onSubmit={handleSaveBiodata} className="space-y-4">
+        {/* 🪄 MODAL BARU: Edit Biodata Mandiri Guru */}
+        {isEditBiodataOpen && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+                <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2">
+                  <Edit className="text-blue-500" /> Perbarui Biodata Mandiri Saya
+                </h3>
+                <button onClick={() => setIsEditBiodataOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
+              </div>
+
+              <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
+                <form id="editBiodataForm" onSubmit={handleSaveBiodata} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Lengkap & Gelar</label>
-                    <input 
+                    <input
                       type="text"
-                      value={biodataForm.name} 
-                      onChange={e => setBiodataForm({...biodataForm, name: e.target.value})}
+                      value={biodataForm.name}
+                      onChange={e => setBiodataForm({ ...biodataForm, name: e.target.value })}
                       className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                       required
                     />
@@ -927,20 +1029,20 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tempat Lahir</label>
-                      <input 
+                      <input
                         type="text"
-                        value={biodataForm.pob} 
-                        onChange={e => setBiodataForm({...biodataForm, pob: e.target.value})}
+                        value={biodataForm.pob}
+                        onChange={e => setBiodataForm({ ...biodataForm, pob: e.target.value })}
                         className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                         placeholder="Cth: Pekanbaru"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tanggal Lahir</label>
-                      <input 
+                      <input
                         type="date"
-                        value={biodataForm.dob} 
-                        onChange={e => setBiodataForm({...biodataForm, dob: e.target.value})}
+                        value={biodataForm.dob}
+                        onChange={e => setBiodataForm({ ...biodataForm, dob: e.target.value })}
                         className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                       />
                     </div>
@@ -949,19 +1051,19 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">No. WhatsApp / HP</label>
-                      <input 
+                      <input
                         type="text"
-                        value={biodataForm.phone} 
-                        onChange={e => setBiodataForm({...biodataForm, phone: e.target.value})}
+                        value={biodataForm.phone}
+                        onChange={e => setBiodataForm({ ...biodataForm, phone: e.target.value })}
                         className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                         placeholder="0812xxxxxxxx"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Pendidikan Terakhir</label>
-                      <select 
-                        value={biodataForm.education} 
-                        onChange={e => setBiodataForm({...biodataForm, education: e.target.value})}
+                      <select
+                        value={biodataForm.education}
+                        onChange={e => setBiodataForm({ ...biodataForm, education: e.target.value })}
                         className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white font-bold"
                       >
                         <option value="S2">S2</option>
@@ -974,1195 +1076,1484 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Alamat Tempat Tinggal</label>
-                    <textarea 
+                    <textarea
                       rows="2"
-                      value={biodataForm.address} 
-                      onChange={e => setBiodataForm({...biodataForm, address: e.target.value})}
+                      value={biodataForm.address}
+                      onChange={e => setBiodataForm({ ...biodataForm, address: e.target.value })}
                       className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none"
                       placeholder="Alamat lengkap rumah..."
                     />
                   </div>
 
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <h4 className="font-bold text-sm dark:text-white mb-3 text-emerald-600 flex items-center gap-1.5"><CreditCard size={16}/> Informasi Rekening Bank Penggajian</h4>
+                    <h4 className="font-bold text-sm dark:text-white mb-3 text-emerald-600 flex items-center gap-1.5"><CreditCard size={16} /> Informasi Rekening Bank Penggajian</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nama Bank</label>
-                        <input 
+                        <input
                           type="text"
-                          value={biodataForm.bankName} 
-                          onChange={e => setBiodataForm({...biodataForm, bankName: e.target.value})}
+                          value={biodataForm.bankName}
+                          onChange={e => setBiodataForm({ ...biodataForm, bankName: e.target.value })}
                           className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
                           placeholder="Cth: Bank Riau Kepri / BSI / BCA"
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nomor Rekening</label>
-                        <input 
+                        <input
                           type="text"
-                          value={biodataForm.bankAccount} 
-                          onChange={e => setBiodataForm({...biodataForm, bankAccount: e.target.value})}
+                          value={biodataForm.bankAccount}
+                          onChange={e => setBiodataForm({ ...biodataForm, bankAccount: e.target.value })}
                           className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-900 text-sm font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white"
                           placeholder="1234567890"
                         />
                       </div>
                     </div>
                   </div>
-               </form>
-            </div>
-            
-            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
-              <button type="button" onClick={() => setIsEditBiodataOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center cursor-pointer">Batal</button>
-              <button type="submit" form="editBiodataForm" disabled={isSavingBiodata} className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70 cursor-pointer">
-                {isSavingBiodata ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
-                {isSavingBiodata ? 'Menyimpan...' : 'Simpan Perubahan'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                </form>
+              </div>
 
-      {/* Modal Komplain WA */}
-      {isKomplainModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
-              <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2"><MessageSquare className="text-emerald-500"/> Komplain Selisih Gaji</h3>
-              <button onClick={() => setIsKomplainModalOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
-            </div>
-            <div className="p-4 sm:p-6">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Silakan tuliskan detail perbedaan nominal yang Anda temukan. Sistem akan mengarahkan Anda ke WhatsApp Bendahara secara otomatis.</p>
-              <textarea 
-                rows="4" 
-                value={komplainText}
-                onChange={e => setKomplainText(e.target.value)}
-                placeholder="Cth: Nominal tunjangan masa kerja saya sepertinya belum disesuaikan..."
-                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white resize-none"
-              ></textarea>
-            </div>
-            <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
-              <button onClick={() => setIsKomplainModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center">Batal</button>
-              <a 
-                href={komplainText.trim() ? waUrl : '#'} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                onClick={(e) => {
-                  if (!komplainText.trim()) {
-                     e.preventDefault();
-                     alert("Harap tuliskan keterangan komplain terlebih dahulu.");
-                  } else {
-                     setIsKomplainModalOpen(false);
-                     setKomplainText('');
-                  }
-                }}
-                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 ${komplainText.trim() ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}`}
-              >
-                <Send size={16} /> Lanjut ke WhatsApp
-              </a>
+              <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
+                <button type="button" onClick={() => setIsEditBiodataOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center cursor-pointer">Batal</button>
+                <button type="submit" form="editBiodataForm" disabled={isSavingBiodata} className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-70 cursor-pointer">
+                  {isSavingBiodata ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={16} />}
+                  {isSavingBiodata ? 'Menyimpan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Header Banner Dinamis Berdasarkan Tab Aktif */}
-      {/* DIPERBARUI: Header "portal_dashboard" & "portal_presensi" digabung ke dalam Card di bawahnya agar tidak ganda */}
-
-      {/* Header Banner Portal Jadwal (Responsive & Mobile Ergonomic) */}
-      {activeSection === 'portal_jadwal' && (
-        <div className="bg-gradient-to-br from-pink-600 via-rose-600 to-rose-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-pink-400/30">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
-              <CalendarDays size={11} className="text-pink-100" />
-              <span>Roster Rutin &amp; Pemetaan</span>
+        {/* Modal Komplain WA */}
+        {isKomplainModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
+                <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2"><MessageSquare className="text-emerald-500" /> Komplain Selisih Gaji</h3>
+                <button onClick={() => setIsKomplainModalOpen(false)} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
+              </div>
+              <div className="p-4 sm:p-6">
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Silakan tuliskan detail perbedaan nominal yang Anda temukan. Sistem akan mengarahkan Anda ke WhatsApp Bendahara secara otomatis.</p>
+                <textarea
+                  rows="4"
+                  value={komplainText}
+                  onChange={e => setKomplainText(e.target.value)}
+                  placeholder="Cth: Nominal tunjangan masa kerja saya sepertinya belum disesuaikan..."
+                  className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white resize-none"
+                ></textarea>
+              </div>
+              <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-2.5 shrink-0">
+                <button onClick={() => setIsKomplainModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-bold transition-colors text-sm text-center">Batal</button>
+                <a
+                  href={komplainText.trim() ? waUrl : '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (!komplainText.trim()) {
+                      e.preventDefault();
+                      alert("Harap tuliskan keterangan komplain terlebih dahulu.");
+                    } else {
+                      setIsKomplainModalOpen(false);
+                      setKomplainText('');
+                    }
+                  }}
+                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2 ${komplainText.trim() ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed'}`}
+                >
+                  <Send size={16} /> Lanjut ke WhatsApp
+                </a>
+              </div>
             </div>
-            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-              <CalendarDays className="text-pink-100 shrink-0" size={20} /> Jadwal Mengajar &amp; Penugasan
-            </h1>
-            <p className="text-pink-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
-              Pantau jadwal rutin mingguan (Roster) dan rincian alokasi jam mengajar harian Anda secara transparan.
-            </p>
           </div>
-          <CalendarDays size={80} className="absolute -right-3 -bottom-3 text-white/10 transform rotate-12 pointer-events-none" />
-        </div>
-      )}
+        )}
 
-      {/* Header Banner Portal Kehadiran (Responsive & Mobile Ergonomic) */}
-      {activeSection === 'portal_kehadiran' && (
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-amber-400/30">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
-              <Calendar size={11} className="text-amber-100" />
-              <span>Periode: {bulan}</span>
+        {/* Header Banner Dinamis Berdasarkan Tab Aktif */}
+        {/* DIPERBARUI: Header "portal_dashboard" & "portal_presensi" digabung ke dalam Card di bawahnya agar tidak ganda */}
+
+        {/* Header Banner Portal Jadwal (Responsive & Mobile Ergonomic) */}
+        {activeSection === 'portal_jadwal' && (
+          <div className="bg-gradient-to-br from-pink-600 via-rose-600 to-rose-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-pink-400/30">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+                <CalendarDays size={11} className="text-pink-100" />
+                <span>Roster Rutin &amp; Pemetaan</span>
+              </div>
+              <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+                <CalendarDays className="text-pink-100 shrink-0" size={20} /> Jadwal Mengajar &amp; Penugasan
+              </h1>
+              <p className="text-pink-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+                Pantau jadwal rutin mingguan (Roster) dan rincian alokasi jam mengajar harian Anda secara transparan.
+              </p>
             </div>
-            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-              <Clock className="text-amber-100 shrink-0" size={20} /> Rekap Kehadiran &amp; Jam Mengajar
-            </h1>
-            <p className="text-amber-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
-              Detail kehadiran harian, ketepatan waktu, dan pencapaian target jam mengajar Anda bulan ini.
-            </p>
+            <CalendarDays size={80} className="absolute -right-3 -bottom-3 text-white/10 transform rotate-12 pointer-events-none" />
           </div>
-          <Clock size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
-        </div>
-      )}
+        )}
 
-      {activeSection === 'portal_gaji' && (
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Wallet className="text-emerald-100 shrink-0" size={24} /> Slip Gaji & Estimasi THP ({bulan})</h1>
-            <p className="text-emerald-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Transparansi rincian tunjangan, insentif, dan potongan gaji Anda pada periode pencairan ini.</p>
-          </div>
-          <Wallet size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
-        </div>
-      )}
-
-      {activeSection === 'portal_pinjaman' && (
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100 shrink-0" size={24} /> Dashboard Pemantauan Pinjaman</h1>
-            <p className="text-teal-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
-          </div>
-          <CreditCard size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
-        </div>
-      )}
-
-      {/* Header Banner Portal Riwayat Gaji (Responsive & Mobile Ergonomic) */}
-      {activeSection === 'portal_riwayat' && (
-        <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-indigo-400/30">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
-              <History size={11} className="text-indigo-100" />
-              <span>Arsip Slip Resmi</span>
+        {/* Header Banner Portal Kehadiran (Responsive & Mobile Ergonomic) */}
+        {activeSection === 'portal_kehadiran' && (
+          <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-amber-400/30">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+                <Calendar size={11} className="text-amber-100" />
+                <span>Periode: {bulan}</span>
+              </div>
+              <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+                <Clock className="text-amber-100 shrink-0" size={20} /> Rekap Kehadiran &amp; Jam Mengajar
+              </h1>
+              <p className="text-amber-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+                Detail kehadiran harian, ketepatan waktu, dan pencapaian target jam mengajar Anda bulan ini.
+              </p>
             </div>
-            <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-              <History className="text-indigo-100 shrink-0" size={20} /> Riwayat Penerimaan Gaji
-            </h1>
-            <p className="text-indigo-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
-              Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.
-            </p>
+            <Clock size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
           </div>
-          <History size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
-        </div>
-      )}
+        )}
 
-      {activeSection === 'portal_info' && (
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Info className="text-purple-100 shrink-0" size={24} /> Informasi Sistem Penggajian</h1>
-            <p className="text-purple-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pelajari pedoman, aturan kedisiplinan, dan rincian kebijakan komponen perhitungan sistem penggajian.</p>
+        {activeSection === 'portal_gaji' && (
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Wallet className="text-emerald-100 shrink-0" size={24} /> Slip Gaji & Estimasi THP ({bulan})</h1>
+              <p className="text-emerald-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Transparansi rincian tunjangan, insentif, dan potongan gaji Anda pada periode pencairan ini.</p>
+            </div>
+            <Wallet size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
           </div>
-          <Info size={90} className="absolute -right-4 -bottom-4 text-white/10 transform rotate-12 pointer-events-none" />
-        </div>
-      )}
+        )}
 
-      {activeSection === 'portal_saran' && (
-        <div className="bg-gradient-to-r from-rose-600 to-red-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
-          {NotificationBell}
-          <div className="relative z-10 pr-2">
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><MessageSquare className="text-rose-100 shrink-0" size={24} /> Form Kritik & Saran</h1>
-            <p className="text-rose-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Sampaikan masukan, aspirasi, atau kendala Anda secara langsung dan aman ke pihak manajemen sekolah.</p>
+        {activeSection === 'portal_pinjaman' && (
+          <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100 shrink-0" size={24} /> Dashboard Pemantauan Pinjaman</h1>
+              <p className="text-teal-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
+            </div>
+            <CreditCard size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
           </div>
-          <MessageSquare size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
-        </div>
-      )}
+        )}
 
-      <div className="space-y-4">
-        
-        {/* 1. Biodata Guru (DIPERBARUI: Tanpa Card Wrapper, Desain Premium) */}
-        {activeSection === 'portal_dashboard' && (
-          <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-             
-             {/* Banner Cover Profile (DIPERBARUI: Desain Terpadu) */}
-             <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 relative pt-6 pb-7 sm:pt-10 sm:pb-12 md:pt-14 md:pb-16 px-4 sm:px-6 md:px-10 flex flex-col md:flex-row items-center gap-4 sm:gap-6 md:gap-8 text-center md:text-left">
+        {/* Header Banner Portal Riwayat Gaji (Responsive & Mobile Ergonomic) */}
+        {activeSection === 'portal_riwayat' && (
+          <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-700 rounded-2xl p-4 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-300 border border-indigo-400/30">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+                <History size={11} className="text-indigo-100" />
+                <span>Arsip Slip Resmi</span>
+              </div>
+              <h1 className="text-base sm:text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+                <History className="text-indigo-100 shrink-0" size={20} /> Riwayat Penerimaan Gaji
+              </h1>
+              <p className="text-indigo-100/90 text-[11px] sm:text-xs md:text-sm mt-1 max-w-lg line-clamp-2">
+                Arsip dokumen slip gaji bulan-bulan sebelumnya yang telah disahkan dan ditransfer kepada Anda.
+              </p>
+            </div>
+            <History size={80} className="absolute -right-3 -bottom-3 text-white/10 transform -rotate-12 pointer-events-none" />
+          </div>
+        )}
+
+        {activeSection === 'portal_info' && (
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><Info className="text-purple-100 shrink-0" size={24} /> Informasi Sistem Penggajian</h1>
+              <p className="text-purple-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pelajari pedoman, aturan kedisiplinan, dan rincian kebijakan komponen perhitungan sistem penggajian.</p>
+            </div>
+            <Info size={90} className="absolute -right-4 -bottom-4 text-white/10 transform rotate-12 pointer-events-none" />
+          </div>
+        )}
+
+        {activeSection === 'portal_saran' && (
+          <div className="bg-gradient-to-r from-rose-600 to-red-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+            {NotificationBell}
+            <div className="relative z-10 pr-2">
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><MessageSquare className="text-rose-100 shrink-0" size={24} /> Form Kritik & Saran</h1>
+              <p className="text-rose-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Sampaikan masukan, aspirasi, atau kendala Anda secara langsung dan aman ke pihak manajemen sekolah.</p>
+            </div>
+            <MessageSquare size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
+          </div>
+        )}
+
+        <div className="space-y-4">
+
+          {/* 1. Biodata Guru (DIPERBARUI: Tanpa Card Wrapper, Desain Premium) */}
+          {activeSection === 'portal_dashboard' && (
+            <div className="bg-white dark:bg-slate-800 rounded-[2rem] border border-slate-200 dark:border-slate-700 overflow-hidden shadow-lg relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+              {/* Banner Cover Profile (DIPERBARUI: Desain Terpadu) */}
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 relative pt-6 pb-7 sm:pt-10 sm:pb-12 md:pt-14 md:pb-16 px-4 sm:px-6 md:px-10 flex flex-col md:flex-row items-center gap-4 sm:gap-6 md:gap-8 text-center md:text-left">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay"></div>
-                
+
                 {/* Lonceng Notifikasi */}
                 {NotificationBell}
 
                 {/* Avatar */}
                 <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-full border-4 border-white/30 shadow-2xl bg-white/10 backdrop-blur-sm overflow-hidden shrink-0 relative z-10 transition-transform hover:scale-105 duration-300">
-                   <img 
-                      src={myData.gender === 'P' 
-                        ? (settings?.avatarFemaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png')
-                        : (settings?.avatarMaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png')
-                      } 
-                      alt="Avatar" 
-                      className="w-full h-full object-cover scale-110"
-                    />
+                  <img
+                    src={myData.gender === 'P'
+                      ? (settings?.avatarFemaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-woman-avatar-5813359-4861184.png')
+                      : (settings?.avatarMaleUrl || 'https://cdn3d.iconscout.com/3d/premium/thumb/muslim-man-avatar-5813358-4861183.png')
+                    }
+                    alt="Avatar"
+                    className="w-full h-full object-cover scale-110"
+                  />
                 </div>
 
                 {/* Info Text inside Banner */}
                 <div className="relative z-10 flex-1">
-                   <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md mb-1.5">{myData.name}</h2>
-                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2 text-blue-100 font-medium text-xs sm:text-sm">
-                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><Briefcase size={12}/> {myData.position}</span>
-                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><CheckCircle size={12}/> Guru {myData.status}</span>
-                      <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm font-mono text-[11px] sm:text-xs">{myData.nipy}</span>
-                   </div>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md mb-1.5">{myData.name}</h2>
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2 text-blue-100 font-medium text-xs sm:text-sm">
+                    <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><Briefcase size={12} /> {myData.position}</span>
+                    <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm"><CheckCircle size={12} /> Guru {myData.status}</span>
+                    <span className="flex items-center gap-1 bg-black/20 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10 shadow-sm font-mono text-[11px] sm:text-xs">{myData.nipy}</span>
+                  </div>
                 </div>
-                
+
                 {/* Aksen transisi di bagian bawah banner */}
                 <div className="absolute -bottom-1 -left-1 -right-1 h-8 sm:h-12 bg-gradient-to-t from-white dark:from-slate-800 to-transparent pointer-events-none z-10"></div>
-             </div>
-
-              <div className="px-3.5 sm:px-6 md:px-8 pb-6 pt-5 sm:pt-7 md:pb-10 relative">
-                  
-                  {/* 🪄 WIDGET PRESENSI CEPAT GURU (KOMPAK, RAPI & ERGONOMIS) */}
-                  {(() => {
-                     const currentTheme = getSesiTheme(currentQuickSesi);
-                     const currentHourMin = liveTimeStr ? liveTimeStr.slice(0, 5) : '';
-                     const jamPulangTarget = currentQuickSesi.jamPulang || '14:00';
-                     const isWaktuPulangTiba = currentHourMin >= jamPulangTarget;
-
-                     return (
-                        <div className={`mb-6 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden backdrop-blur-sm transition-all duration-300 border ${
-                           currentTheme.type === 'sore'
-                              ? 'bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-violet-500/10 dark:from-indigo-950/40 dark:via-slate-800/60 dark:to-purple-950/40 border-purple-200/80 dark:border-purple-800/60'
-                              : currentTheme.type === 'rapat'
-                              ? 'bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-rose-500/10 dark:from-rose-950/40 dark:via-slate-800/60 dark:to-pink-950/40 border-rose-200/80 dark:border-rose-800/60'
-                              : 'bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-cyan-500/10 dark:from-teal-950/40 dark:via-slate-800/60 dark:to-emerald-950/40 border-teal-200/80 dark:border-teal-800/60'
-                        }`}>
-                           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                           {/* 1. BARIS HEADER: SESI SELECTOR, TANGGAL & JAM REALTIME, CLOUD BADGE */}
-                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-200/70 dark:border-slate-700/60 relative z-10">
-                              {/* Pilihan Sesi (Pagi, Sore/Halaqoh, Rapat) */}
-                              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                 <span className="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 uppercase tracking-wider">
-                                    <Clock3 size={13} className={currentTheme.type === 'sore' ? 'text-purple-600' : currentTheme.type === 'rapat' ? 'text-rose-600' : 'text-teal-600'} />
-                                    Presensi:
-                                 </span>
-                                 <div className="flex items-center gap-1 bg-white/90 dark:bg-slate-900/80 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs overflow-x-auto hide-scrollbar max-w-full">
-                                    {sesiList.map(s => {
-                                       const isSel = s.id === currentQuickSesi.id;
-                                       const theme = getSesiTheme(s);
-                                       const sRec = (presensiGuru || []).find(r => 
-                                          (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) && 
-                                          r.date === todayIsoDate && 
-                                          (r.sesiId === s.id || (!r.sesiId && s.id === sesiList[0]?.id))
-                                       );
-                                       const isDone = !!sRec?.jamMasuk;
-                                       const namaSingkat = s.nama ? s.nama.split(' ')[0] : 'Sesi';
-                                       return (
-                                          <button
-                                             key={s.id}
-                                             type="button"
-                                             onClick={() => setSelectedQuickSesiId(s.id)}
-                                             className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
-                                                isSel 
-                                                   ? `${theme.bgActive} shadow-xs scale-102` 
-                                                   : `${theme.bgInactive}`
-                                             }`}
-                                          >
-                                             <span className="text-[11px]">{theme.iconEmoji}</span>
-                                             <span className="sm:inline hidden">{s.nama}</span>
-                                             <span className="sm:hidden inline">{namaSingkat}</span>
-                                             {isDone && <span className={`w-1.5 h-1.5 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : theme.dotPulse}`}></span>}
-                                          </button>
-                                       );
-                                    })}
-                                 </div>
-                              </div>
-
-                              {/* Jam Realtime & Tanggal & Cloud Badge */}
-                              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
-                                 <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
-                                    {liveDateStr}
-                                 </span>
-                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    <div className={`font-mono text-sm sm:text-base font-black tracking-tight ${
-                                       currentTheme.type === 'sore'
-                                          ? 'text-purple-700 dark:text-purple-300'
-                                          : currentTheme.type === 'rapat'
-                                          ? 'text-rose-700 dark:text-rose-300'
-                                          : 'text-teal-700 dark:text-teal-300'
-                                    }`}>
-                                       {liveTimeStr} <span className="text-[9px] font-sans font-bold text-slate-400">WIB</span>
-                                    </div>
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-black text-[9px] border border-emerald-300/80 dark:border-emerald-800/70" title="Data presensi tersimpan permanen di Cloud Database">
-                                       <Cloud size={9} className="text-emerald-600 dark:text-emerald-400" /> Cloud
-                                    </span>
-                                 </div>
-                              </div>
-                           </div>
-
-                           {/* 2. PENGINGAT RINGKAS (SLIM INLINE BANNER - RAMPING & TIDAK MENUMPUK) */}
-                           <div className="pt-2.5 pb-1 relative z-10">
-                              {!sudahAbsenMasuk && !isIzinToday ? (
-                                 <div className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-300 dark:border-amber-700/60 flex items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                       <BellRing size={15} className="text-amber-600 dark:text-amber-400 shrink-0 animate-bounce" />
-                                       <p className="text-amber-900 dark:text-amber-200 font-bold truncate">
-                                          Pengingat: Belum Absen Masuk Sesi <b>{currentQuickSesi.nama}</b> (Batas: {currentQuickSesi.jamMasuk || '07:00'} WIB)
-                                       </p>
-                                    </div>
-                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500 text-white shrink-0">Wajib Masuk</span>
-                                 </div>
-                              ) : sudahAbsenMasuk && !sudahAbsenPulang ? (
-                                 <div className={`px-3.5 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${
-                                    isWaktuPulangTiba 
-                                       ? 'bg-blue-500/15 border-blue-400 dark:border-blue-700/70' 
-                                       : 'bg-teal-500/10 border-teal-200 dark:border-teal-800/40'
-                                 }`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                       <LogOut size={15} className={`${isWaktuPulangTiba ? 'text-blue-600 dark:text-blue-400 animate-pulse' : 'text-teal-600 dark:text-teal-400'} shrink-0`} />
-                                       <p className={`font-bold truncate ${isWaktuPulangTiba ? 'text-blue-900 dark:text-blue-200' : 'text-slate-700 dark:text-slate-300'}`}>
-                                          {isWaktuPulangTiba 
-                                             ? `Waktunya Pulang! Sesi ${currentQuickSesi.nama} selesai pukul ${jamPulangTarget} WIB. Silakan absen pulang.` 
-                                             : `Absen masuk tercatat pukul ${todayAttendance?.jamMasuk?.slice(0, 5)} WIB. Pulang pukul ${jamPulangTarget} WIB.`}
-                                       </p>
-                                    </div>
-                                    <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shrink-0 ${
-                                       isWaktuPulangTiba ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                                    }`}>
-                                       {isWaktuPulangTiba ? 'Waktunya Pulang' : 'Sedang KBM'}
-                                    </span>
-                                 </div>
-                              ) : sudahAbsenMasuk && sudahAbsenPulang ? (
-                                 <div className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                       <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                       <p className="text-emerald-900 dark:text-emerald-200 font-bold truncate">
-                                          Alhamdulillah, Presensi Sesi <b>{currentQuickSesi.nama}</b> telah LENGKAP (Masuk {todayAttendance?.jamMasuk?.slice(0, 5)} • Pulang {todayAttendance?.jamPulang?.slice(0, 5)} WIB).
-                                       </p>
-                                    </div>
-                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-600 text-white shrink-0">Lengkap</span>
-                                 </div>
-                              ) : isIzinToday ? (
-                                 <div className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between gap-2 text-xs text-blue-800 dark:text-blue-200 font-bold">
-                                    <div className="flex items-center gap-2 truncate">
-                                       <Info size={15} className="text-blue-600 shrink-0" />
-                                       <span>Status hari ini: <b>{todayAttendance?.status}</b> {todayAttendance?.keterangan ? `("${todayAttendance.keterangan}")` : ''}</span>
-                                    </div>
-                                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-600 text-white shrink-0">Izin Resmi</span>
-                                 </div>
-                              ) : null}
-                           </div>
-
-                           {/* 3. DUA KARTU AKSI TERPADU (SEJAJAR): KIRI = MASUK, KANAN = PULANG */}
-                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1.5 relative z-10">
-                              {/* KARTU MASUK */}
-                              <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${
-                                 sudahAbsenMasuk 
-                                    ? 'bg-white/80 dark:bg-slate-900/60 border-emerald-200 dark:border-emerald-800/60' 
-                                    : 'bg-white/95 dark:bg-slate-900/80 border-slate-200/90 dark:border-slate-700/80 shadow-xs'
-                              }`}>
-                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                       <LogIn size={15} className="text-emerald-500" />
-                                       Jam Masuk
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                       Batas: {currentQuickSesi.jamMasuk || '07:00'} WIB
-                                    </span>
-                                 </div>
-
-                                 <div className="flex items-baseline justify-between gap-2">
-                                    <div className="font-mono text-2xl font-black text-slate-800 dark:text-white">
-                                       {todayAttendance?.jamMasuk ? todayAttendance.jamMasuk.slice(0, 5) : '--:--'}
-                                       <span className="text-xs font-sans text-slate-400 ml-1">WIB</span>
-                                    </div>
-                                    <div>
-                                       {sudahAbsenMasuk ? (
-                                          todayAttendance?.status === 'Terlambat' ? (
-                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-extrabold text-[10px]">
-                                                <AlertCircle size={11} /> Telat {todayAttendance.terlambatMenit}m
-                                             </span>
-                                          ) : (
-                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-extrabold text-[10px]">
-                                                <CheckCircle size={11} /> Tepat Waktu
-                                             </span>
-                                          )
-                                       ) : (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-bold text-[10px]">
-                                             Belum Masuk
-                                          </span>
-                                       )}
-                                    </div>
-                                 </div>
-
-                                 {/* Tombol Aksi Masuk */}
-                                 <button
-                                    type="button"
-                                    onClick={handleQuickAbsenMasuk}
-                                    disabled={sudahAbsenMasuk || isIzinToday}
-                                    className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                       sudahAbsenMasuk || isIzinToday
-                                          ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
-                                          : currentTheme.type === 'sore'
-                                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 active:scale-98'
-                                          : currentTheme.type === 'rapat'
-                                          ? 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md shadow-rose-500/20 active:scale-98'
-                                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20 active:scale-98'
-                                    }`}
-                                 >
-                                    {sudahAbsenMasuk ? (
-                                       <>
-                                          <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
-                                          <span>Tercatat Masuk</span>
-                                       </>
-                                    ) : (
-                                       <>
-                                          <LogIn size={14} />
-                                          <span>Absen Masuk Sekarang</span>
-                                       </>
-                                    )}
-                                 </button>
-                              </div>
-
-                              {/* KARTU PULANG */}
-                              <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${
-                                 sudahAbsenPulang 
-                                    ? 'bg-white/80 dark:bg-slate-900/60 border-indigo-200 dark:border-indigo-800/60' 
-                                    : isWaktuPulangTiba && sudahAbsenMasuk
-                                    ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/80 shadow-sm'
-                                    : 'bg-white/95 dark:bg-slate-900/80 border-slate-200/90 dark:border-slate-700/80 shadow-xs'
-                              }`}>
-                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                       <LogOut size={15} className="text-blue-500" />
-                                       Jam Pulang
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                       Jadwal: {jamPulangTarget} WIB
-                                    </span>
-                                 </div>
-
-                                 <div className="flex items-baseline justify-between gap-2">
-                                    <div className="font-mono text-2xl font-black text-slate-800 dark:text-white">
-                                       {todayAttendance?.jamPulang ? todayAttendance.jamPulang.slice(0, 5) : '--:--'}
-                                       <span className="text-xs font-sans text-slate-400 ml-1">WIB</span>
-                                    </div>
-                                    <div>
-                                       {sudahAbsenPulang ? (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 font-extrabold text-[10px]">
-                                             <CheckCircle size={11} /> Selesai Pulang
-                                          </span>
-                                       ) : sudahAbsenMasuk ? (
-                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] ${
-                                             isWaktuPulangTiba 
-                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 animate-pulse' 
-                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                          }`}>
-                                             {isWaktuPulangTiba ? 'Belum Pulang' : 'Belum Waktunya'}
-                                          </span>
-                                       ) : (
-                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold text-[10px]">
-                                             --
-                                          </span>
-                                       )}
-                                    </div>
-                                 </div>
-
-                                 {/* Tombol Aksi Pulang */}
-                                 <button
-                                    type="button"
-                                    onClick={handleQuickAbsenPulang}
-                                    disabled={!sudahAbsenMasuk || sudahAbsenPulang}
-                                    className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                       !sudahAbsenMasuk || sudahAbsenPulang
-                                          ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
-                                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 active:scale-98'
-                                    }`}
-                                 >
-                                    {sudahAbsenPulang ? (
-                                       <>
-                                          <Check size={14} className="text-indigo-600 dark:text-indigo-400" />
-                                          <span>Tercatat Pulang</span>
-                                       </>
-                                    ) : (
-                                       <>
-                                          <LogOut size={14} />
-                                          <span>Absen Pulang Sekarang</span>
-                                       </>
-                                    )}
-                                 </button>
-                              </div>
-                           </div>
-
-                            {/* 📚 PINTASAN CEPAT JURNAL KBM & BEBAN KERJA HARIAN (Pengganti Google Form) */}
-                            <div className="mt-3 p-3 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-slate-900/50 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3 shadow-xs">
-                               <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                                     <BookOpen size={16} />
-                                  </div>
-                                  <div className="min-w-0">
-                                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                                        {hasFilledTodayJurnal ? 'Jurnal KBM Hari Ini Sudah Dicatat' : 'Jurnal Mengajar & Piket Hari Ini'}
-                                     </p>
-                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                        {hasFilledTodayJurnal 
-                                           ? 'Ketuk untuk memeriksa rincian atau menambah jam kegiatan' 
-                                           : 'Catat jam mengajar, piket, dan rapat sebelum pulang'}
-                                     </p>
-                                  </div>
-                               </div>
-                               <button
-                                  type="button"
-                                  onClick={() => handleOpenJurnalModal(null, todayIsoDate)}
-                                  className="px-3 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer active:scale-95"
-                               >
-                                  <Plus size={13} strokeWidth={2.5} />
-                                  <span>{hasFilledTodayJurnal ? 'Kelola' : 'Catat'}</span>
-                               </button>
-                            </div>
-
-                           {/* 4. FOOTER: LINK HALAMAN LENGKAP */}
-                           <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/50 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-                              <span className="flex items-center gap-1.5 text-[11px] font-medium">
-                                 <Sparkles size={13} className="text-amber-500" />
-                                 Presensi otomatis tersinkron ke cloud sekolah secara real-time.
-                              </span>
-                              <button 
-                                 type="button"
-                                 onClick={() => setActiveTab('portal_presensi')}
-                                 className={`flex items-center gap-1 hover:underline transition-colors cursor-pointer text-xs font-black uppercase tracking-wider ${
-                                    currentTheme.type === 'sore'
-                                       ? 'text-purple-700 dark:text-purple-400'
-                                       : currentTheme.type === 'rapat'
-                                       ? 'text-rose-700 dark:text-rose-400'
-                                       : 'text-teal-700 dark:text-teal-400'
-                                 }`}
-                              >
-                                 <span>Presensi Lengkap & Ajukan Izin</span>
-                                 <ChevronRight size={14} />
-                              </button>
-                           </div>
-                        </div>
-                     );
-                  })()}
-
-                {/* 🪄 BIODATA GURU (DIKEMBALIKAN & DIRAPIKAN) */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                   
-                   {/* KIRI: Informasi Profil Lengkap */}
-                   <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-                      <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-2">
-                         <div className="flex items-center gap-3">
-                           <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl">
-                             <UserCircle size={20} />
-                           </div>
-                           <h3 className="font-bold text-slate-800 dark:text-white">Data Personal & Kepegawaian</h3>
-                         </div>
-                         <div className="flex items-center gap-2">
-                           <button 
-                             onClick={handleOpenEditBiodata} 
-                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                           >
-                             <Edit size={14}/> <span className="hidden sm:inline">Edit Biodata Saya</span><span className="sm:hidden">Edit</span>
-                           </button>
-                           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">
-                             <CheckCircle size={14}/> Terverifikasi
-                           </div>
-                         </div>
-                      </div>
-                      <div className="p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 flex-1">
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Building size={14} className="text-slate-300 group-hover:text-blue-500 transition-colors"/> Tempat, Tanggal Lahir</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.pob}, {formatDateId(myData.dob)}</p>
-                            <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold mt-1 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded w-fit">{!isNaN(new Date(myData.dob).getTime()) ? new Date().getFullYear() - new Date(myData.dob).getFullYear() : '?'} Tahun</p>
-                         </div>
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><GraduationCap size={14} className="text-slate-300 group-hover:text-purple-500 transition-colors"/> Pendidikan Terakhir</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.education}</p>
-                         </div>
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Briefcase size={14} className="text-slate-300 group-hover:text-emerald-500 transition-colors"/> Jabatan & Tugas Inti</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.position}</p>
-                         </div>
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar size={14} className="text-slate-300 group-hover:text-amber-500 transition-colors"/> Mulai Tugas (TMT)</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{formatDateId(myData.tmt)}</p>
-                            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded w-fit">{!isNaN(new Date(myData.tmt).getTime()) ? new Date().getFullYear() - new Date(myData.tmt).getFullYear() : '?'} Tahun Mengabdi</p>
-                         </div>
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Users size={14} className="text-slate-300 group-hover:text-rose-500 transition-colors"/> Status Keluarga</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">
-                              {myData.family?.wife === 1 ? 'Menikah' : myData.family?.wife === 2 ? 'Menikah (Ditanggung Pasangan)' : 'Belum Menikah'}
-                            </p>
-                            {myData.family?.wife === 1 && myData.family?.children > 0 && (
-                               <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1 bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded w-fit">{myData.family.children} Anak Terdaftar</p>
-                            )}
-                         </div>
-                         <div className="group">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><MessageSquare size={14} className="text-slate-300 group-hover:text-teal-500 transition-colors"/> Kontak (WhatsApp)</p>
-                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.phone || 'Belum diisi'}</p>
-                         </div>
-                      </div>
-                   </div>
-
-                   {/* KARTU KEAMANAN & BIOMETRIK HP */}
-                {isBioSupported && (
-                  <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 animate-in fade-in">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-inner">
-                          <Fingerprint size={26} />
-                        </div>
-                        <div>
-                          <h4 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            Login Cepat Biometrik / Sidik Jari HP
-                            {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
-                              <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
-                                Aktif di HP Ini
-                              </span>
-                            ) : (
-                              <span className="text-[10px] bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-bold px-2 py-0.5 rounded-full">
-                                Belum Terhubung
-                              </span>
-                            )}
-                          </h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-lg">
-                            {savedBioAccount && String(savedBioAccount.userId) === String(myData.id)
-                              ? 'Sensor biometrik HP Anda telah terhubung. Anda dapat masuk ke PayEdu cukup dengan satu sentuhan sensor tanpa perlu mengetik kata sandi.'
-                              : 'Hubungkan sensor sidik jari atau Face Unlock bawaan HP Anda agar bisa masuk ke aplikasi PayEdu secara instan tanpa ribet mengetik.'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                        {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
-                          <button
-                            type="button"
-                            onClick={handleUnlinkBiometric}
-                            className="w-full sm:w-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Lepas Sidik Jari
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleRegisterBiometric}
-                            disabled={isEnrollingBio}
-                            className="w-full sm:w-auto px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70"
-                          >
-                            <Fingerprint size={16} />
-                            {isEnrollingBio ? 'Menghubungkan Sensor...' : 'Hubungkan Sidik Jari'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* KANAN: Rekening Bank */}
-                   <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-800 dark:from-emerald-700 dark:to-teal-900 p-6 md:p-8 rounded-3xl shadow-lg border border-emerald-400/30 flex flex-col justify-between min-h-[260px] transform transition-transform hover:scale-[1.02] duration-300">
-                      <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
-                      <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/30 rounded-full blur-2xl pointer-events-none"></div>
-                      
-                      <div className="relative z-10 flex justify-between items-start mb-8">
-                         <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner flex items-center justify-center text-white border border-white/30">
-                            <CreditCard size={28} />
-                         </div>
-                         <div className="flex gap-1.5">
-                           <div className="w-10 h-7 bg-white/20 rounded-md flex items-center justify-center border border-white/30 backdrop-blur-sm shadow-sm">
-                             <div className="w-5 h-3 bg-white/40 rounded-sm"></div>
-                           </div>
-                         </div>
-                      </div>
-
-                      <div className="relative z-10">
-                         <p className="text-[10px] font-bold text-emerald-100 uppercase tracking-widest mb-1.5 opacity-90 flex items-center gap-2">
-                           Rekening Penggajian
-                         </p>
-                         {myData.bankName ? (
-                           <>
-                             <h4 className="text-2xl font-black text-white tracking-widest font-mono drop-shadow-md mb-4">{myData.bankAccount}</h4>
-                             <div className="flex justify-between items-end border-t border-white/20 pt-3">
-                                <div>
-                                  <p className="text-[9px] text-emerald-200 uppercase tracking-wider mb-0.5 opacity-80">Atas Nama</p>
-                                  <p className="text-xs font-bold text-white uppercase tracking-wider truncate max-w-[150px] drop-shadow-sm">{myData.name}</p>
-                                </div>
-                                <span className="text-lg font-black text-white italic drop-shadow-md">{myData.bankName}</span>
-                             </div>
-                           </>
-                         ) : (
-                           <div className="flex flex-col items-start gap-2 mt-4 border-t border-white/20 pt-3">
-                              <h4 className="text-lg font-extrabold text-white opacity-95 tracking-wide">Belum Diatur</h4>
-                              <p className="text-[11px] font-medium text-emerald-100 opacity-80">Penerimaan via tunai.</p>
-                           </div>
-                         )}
-                      </div>
-                   </div>
-                </div>
-
-                {/* 🪄 TAMBALAN CERDAS: Ringkasan & Akses Cepat Menu Tambahan (Disembunyikan di Mobile, Digantikan Bottom Nav) */}
-                <div className="pt-2 hidden md:block">
-                   <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                      <LayoutDashboard size={20} className="text-blue-500"/> Akses Cepat Menu
-                   </h3>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      
-                      {/* Kehadiran (3D Glassmorphism) */}
-                      <div onClick={() => setActiveTab('portal_kehadiran')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(245,158,11,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
-                         <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-colors duration-500"></div>
-                         <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(245,158,11,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
-                               <Clock size={24} className="text-white drop-shadow-md" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-amber-100 dark:group-hover:bg-amber-900/40 transition-colors">
-                              <ChevronRight size={18} className="text-slate-400 group-hover:text-amber-500 transition-all group-hover:translate-x-0.5" />
-                            </div>
-                         </div>
-                         <div className="relative z-10">
-                            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Rekap Kehadiran</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hadir: <span className="font-bold text-amber-600 dark:text-amber-400">{autoHadir} Hari</span> • Telat: <span className="font-bold text-red-500">{telatDisiplin}x</span></p>
-                         </div>
-                      </div>
-                      
-                      {/* Gaji (3D Glassmorphism) */}
-                      <div onClick={() => setActiveTab('portal_gaji')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(16,185,129,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
-                         <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
-                         <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-300 to-emerald-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(16,185,129,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                               <Wallet size={24} className="text-white drop-shadow-md" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 transition-colors">
-                              <ChevronRight size={18} className="text-slate-400 group-hover:text-emerald-500 transition-all group-hover:translate-x-0.5" />
-                            </div>
-                         </div>
-                         <div className="relative z-10">
-                            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Slip Gaji Bulanan</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Status: {settings?.payrollStatus === 'Approved' ? <span className="text-emerald-600 font-bold">Tersedia</span> : <span className="text-amber-500 font-bold">Terkunci</span>}</p>
-                         </div>
-                      </div>
-
-                      {/* Kasbon/Pinjaman (3D Glassmorphism) */}
-                      <div onClick={() => setActiveTab('portal_pinjaman')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(20,184,166,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
-                         <div className="absolute -right-6 -bottom-6 bg-teal-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-colors duration-500"></div>
-                         <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(20,184,166,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
-                               <CreditCard size={24} className="text-white drop-shadow-md" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-teal-100 dark:group-hover:bg-teal-900/40 transition-colors">
-                              <ChevronRight size={18} className="text-slate-400 group-hover:text-teal-500 transition-all group-hover:translate-x-0.5" />
-                            </div>
-                         </div>
-                         <div className="relative z-10">
-                            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Buku Kasbon</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{loanItems.length > 0 ? <><span className="font-bold text-teal-600 dark:text-teal-400">{loanItems.length} Tagihan</span> Aktif</> : 'Tidak ada tanggungan'}</p>
-                         </div>
-                      </div>
-
-                      {/* Riwayat (3D Glassmorphism) */}
-                      <div onClick={() => setActiveTab('portal_riwayat')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(99,102,241,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
-                         <div className="absolute -right-6 -bottom-6 bg-indigo-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-colors duration-500"></div>
-                         <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(99,102,241,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
-                               <History size={24} className="text-white drop-shadow-md" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40 transition-colors">
-                              <ChevronRight size={18} className="text-slate-400 group-hover:text-indigo-500 transition-all group-hover:translate-x-0.5" />
-                            </div>
-                         </div>
-                         <div className="relative z-10">
-                            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Riwayat Gaji</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Arsip: <span className="font-bold text-indigo-600 dark:text-indigo-400">{riwayatAsli.length} Bulan</span></p>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-
-             </div>
-          </div>
-        )}
-
-        {/* FITUR BARU: Portal Presensi Saya */}
-        {activeSection === 'portal_presensi' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <PresensiGuruView 
-              teachers={teachers} 
-              presensiGuru={presensiGuru} 
-              setPresensiGuru={setPresensiGuru} 
-              initialSesiId={selectedQuickSesiId}
-              initialAction={autoTriggerPresensiMode}
-              onActionConsumed={() => setAutoTriggerPresensiMode(null)}
-              currentUser={{ id: user.id, teacherId: user.id, name: user.name, username: user.username, role: user.role, portal: 'Teacher' }} 
-              schoolProfile={{ 
-                nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
-                npsn: settings.schoolNpsn || '10404040', 
-                alamat: settings.schoolAddress || 'Kandis', 
-                kepsek: settings.kepsekName || 'Kepala Sekolah', 
-                presensiGuruSettings: settings.presensiGuruSettings 
-              }} 
-              setSchoolProfile={(updater) => { 
-                if (typeof setSettings === 'function') {
-                  const currentSettings = settings || {};
-                  const rawUpdated = typeof updater === 'function' ? updater(currentSettings?.presensiGuruSettings ? { presensiGuruSettings: currentSettings.presensiGuruSettings } : currentSettings) : updater; 
-                  const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
-                  const newSettings = { ...currentSettings, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() }; 
-                  setSettings(newSettings);
-                  safeStorageSet('payedu_settings', newSettings); 
-                  try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
-                  pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
-                } 
-              }} 
-              addAuditLog={saveAuditLog} 
-              onUpdateTeacher={handleUpdateTeacherPatch}
-            />
-          </div>
-        )}
-
-        {/* FITUR BARU: Jadwal Saya (Roster Mingguan & Insidental) */}
-        {activeSection === 'portal_jadwal' && (() => {
-          const rosterDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-          const rosterObj = myData.payroll?.roster || {};
-          const totalRosterJpl = rosterDays.reduce((acc, h) => acc + (Number(rosterObj[h.toLowerCase()]) || 0), 0);
-          const activeTeachingDays = rosterDays.filter(h => (Number(rosterObj[h.toLowerCase()]) || 0) > 0).length;
-
-          return (
-            <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
-              {/* KARTU 0: JURNAL BEBAN KERJA & AKUMULASI JAM (PENGGANTI RESMI GOOGLE FORM) */}
-              <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl relative overflow-hidden border border-indigo-700/50">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-indigo-300 border border-white/20 shadow-inner shrink-0">
-                      <BookOpen size={24} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                          Jurnal KBM Harian
-                        </span>
-                        <span className="text-[10px] font-semibold text-indigo-200/80">Periode {bulan}</span>
-                      </div>
-                      <h3 className="text-sm sm:text-lg font-black tracking-tight mt-0.5">
-                        Akumulasi Beban Kerja &amp; Mengajar
-                      </h3>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenJurnalModal()}
-                    className="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 hover:from-blue-600 hover:via-indigo-600 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/30"
-                  >
-                    <Plus size={16} strokeWidth={3} />
-                    <span>Catat Jam Kegiatan / KBM</span>
-                  </button>
-                </div>
-
-                {/* 4 Pilar Jam Beban Kerja */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pt-4 relative z-10">
-                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
-                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
-                      Jam Mengajar/Halaqoh
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamKbm}</span>
-                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
-                    </div>
-                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Tatap muka kelas</span>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
-                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
-                      Jam Piket Kantor &amp; Sholat
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamPiket}</span>
-                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
-                    </div>
-                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Tugas piket dinas</span>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
-                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
-                      Rapat &amp; Kegiatan Sore
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamRapat}</span>
-                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
-                    </div>
-                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Evaluasi &amp; rapat guru</span>
-                  </div>
-
-                  <div className="bg-emerald-500/20 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-emerald-400/30">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] sm:text-xs text-emerald-200 font-black uppercase tracking-wider">
-                        Total Akumulasi
-                      </span>
-                      {jurnalSummary.saldoAwal > 0 && (
-                        <span className="text-[9px] bg-emerald-400/30 text-emerald-100 px-1.5 py-0.5 rounded font-bold" title="Termasuk saldo awal transisi">
-                          +{jurnalSummary.saldoAwal} Awal
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black text-emerald-300">{jurnalSummary.totalAkumulasi}</span>
-                      <span className="text-xs font-semibold text-emerald-200">JPL</span>
-                    </div>
-                    <span className="text-[10px] text-emerald-200/80 mt-1 block">Terhubung ke slip gaji</span>
-                  </div>
-                </div>
               </div>
 
-              {/* RIWAYAT ENTRI JURNAL BULAN INI */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
-                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                    <BookOpen size={16} className="text-indigo-500" />
-                    <span>Daftar Entri Jurnal Mengajar Bulan Ini</span>
-                  </h4>
-                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                    {(jurnalSummary.entries || []).length} Catatan
-                  </span>
-                </div>
+              <div className="px-3.5 sm:px-6 md:px-8 pb-6 pt-5 sm:pt-7 md:pb-10 relative">
 
-                {(jurnalSummary.entries || []).length > 0 ? (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                    {(jurnalSummary.entries || []).map((entri) => {
-                      const totalEntryHours = (Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + (Number(entri.jamRapat) || 0);
-                      return (
-                        <div key={entri.id} className="p-3 sm:p-4 hover:bg-slate-50/80 dark:hover:bg-slate-750 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex flex-col items-center justify-center shrink-0 border border-indigo-200/60 dark:border-indigo-800/40">
-                              <span className="text-[9px] uppercase leading-none text-slate-400">Tgl</span>
-                              <span className="text-sm font-black">{entri.tgl}</span>
+                {/* 🪄 WIDGET PRESENSI CEPAT GURU (KOMPAK, RAPI & ERGONOMIS) */}
+                {(() => {
+                  const currentTheme = getSesiTheme(currentQuickSesi);
+                  const currentHourMin = liveTimeStr ? liveTimeStr.slice(0, 5) : '';
+                  const jamPulangTarget = currentQuickSesi.jamPulang || '14:00';
+                  const isWaktuPulangTiba = currentHourMin >= jamPulangTarget;
+
+                  return (
+                    <div className={`mb-6 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden backdrop-blur-sm transition-all duration-300 border ${currentTheme.type === 'sore'
+                        ? 'bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-violet-500/10 dark:from-indigo-950/40 dark:via-slate-800/60 dark:to-purple-950/40 border-purple-200/80 dark:border-purple-800/60'
+                        : currentTheme.type === 'rapat'
+                          ? 'bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-rose-500/10 dark:from-rose-950/40 dark:via-slate-800/60 dark:to-pink-950/40 border-rose-200/80 dark:border-rose-800/60'
+                          : 'bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-cyan-500/10 dark:from-teal-950/40 dark:via-slate-800/60 dark:to-emerald-950/40 border-teal-200/80 dark:border-teal-800/60'
+                      }`}>
+                      <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                      {/* 1. BARIS HEADER: SESI SELECTOR, TANGGAL & JAM REALTIME, CLOUD BADGE */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-200/70 dark:border-slate-700/60 relative z-10">
+                        {/* Pilihan Sesi (Pagi, Sore/Halaqoh, Rapat) */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <span className="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1 uppercase tracking-wider">
+                            <Clock3 size={13} className={currentTheme.type === 'sore' ? 'text-purple-600' : currentTheme.type === 'rapat' ? 'text-rose-600' : 'text-teal-600'} />
+                            Presensi:
+                          </span>
+                          <div className="flex items-center gap-1 bg-white/90 dark:bg-slate-900/80 p-0.5 sm:p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs overflow-x-auto hide-scrollbar max-w-full">
+                            {sesiList.map(s => {
+                              const isSel = s.id === currentQuickSesi.id;
+                              const theme = getSesiTheme(s);
+                              const sRec = (presensiGuru || []).find(r =>
+                                (r.teacherId === myData.id || (r.teacherName && myData.name && r.teacherName.trim().toLowerCase() === myData.name.trim().toLowerCase())) &&
+                                r.date === todayIsoDate &&
+                                (r.sesiId === s.id || (!r.sesiId && s.id === sesiList[0]?.id))
+                              );
+                              const isDone = !!sRec?.jamMasuk;
+                              const namaSingkat = s.nama ? s.nama.split(' ')[0] : 'Sesi';
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => setSelectedQuickSesiId(s.id)}
+                                  className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${isSel
+                                      ? `${theme.bgActive} shadow-xs scale-102`
+                                      : `${theme.bgInactive}`
+                                    }`}
+                                >
+                                  <span className="text-[11px]">{theme.iconEmoji}</span>
+                                  <span className="sm:inline hidden">{s.nama}</span>
+                                  <span className="sm:hidden inline">{namaSingkat}</span>
+                                  {isDone && <span className={`w-1.5 h-1.5 rounded-full ${sRec?.jamPulang ? 'bg-indigo-300' : theme.dotPulse}`}></span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Jam Realtime & Tanggal & Cloud Badge */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                            {liveDateStr}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div className={`font-mono text-sm sm:text-base font-black tracking-tight ${currentTheme.type === 'sore'
+                                ? 'text-purple-700 dark:text-purple-300'
+                                : currentTheme.type === 'rapat'
+                                  ? 'text-rose-700 dark:text-rose-300'
+                                  : 'text-teal-700 dark:text-teal-300'
+                              }`}>
+                              {liveTimeStr} <span className="text-[9px] font-sans font-bold text-slate-400">WIB</span>
                             </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
-                                  {entri.mapel || 'Kegiatan Umum'}
-                                </span>
-                                {entri.kelas && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                    {entri.kelas}
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-black text-[9px] border border-emerald-300/80 dark:border-emerald-800/70" title="Data presensi tersimpan permanen di Cloud Database">
+                              <Cloud size={9} className="text-emerald-600 dark:text-emerald-400" /> Cloud
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. PENGINGAT RINGKAS (SLIM INLINE BANNER - RAMPING & TIDAK MENUMPUK) */}
+                      <div className="pt-2.5 pb-1 relative z-10">
+                        {!sudahAbsenMasuk && !isIzinToday ? (
+                          <div className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-300 dark:border-amber-700/60 flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <BellRing size={15} className="text-amber-600 dark:text-amber-400 shrink-0 animate-bounce" />
+                              <p className="text-amber-900 dark:text-amber-200 font-bold truncate">
+                                Pengingat: Belum Absen Masuk Sesi <b>{currentQuickSesi.nama}</b> (Batas: {currentQuickSesi.jamMasuk || '07:00'} WIB)
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500 text-white shrink-0">Wajib Masuk</span>
+                          </div>
+                        ) : sudahAbsenMasuk && !sudahAbsenPulang ? (
+                          <div className={`px-3.5 py-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${isWaktuPulangTiba
+                              ? 'bg-blue-500/15 border-blue-400 dark:border-blue-700/70'
+                              : 'bg-teal-500/10 border-teal-200 dark:border-teal-800/40'
+                            }`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <LogOut size={15} className={`${isWaktuPulangTiba ? 'text-blue-600 dark:text-blue-400 animate-pulse' : 'text-teal-600 dark:text-teal-400'} shrink-0`} />
+                              <p className={`font-bold truncate ${isWaktuPulangTiba ? 'text-blue-900 dark:text-blue-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                                {isWaktuPulangTiba
+                                  ? `Waktunya Pulang! Sesi ${currentQuickSesi.nama} selesai pukul ${jamPulangTarget} WIB. Silakan absen pulang.`
+                                  : `Absen masuk tercatat pukul ${todayAttendance?.jamMasuk?.slice(0, 5)} WIB. Pulang pukul ${jamPulangTarget} WIB.`}
+                              </p>
+                            </div>
+                            <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shrink-0 ${isWaktuPulangTiba ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                              }`}>
+                              {isWaktuPulangTiba ? 'Waktunya Pulang' : 'Sedang KBM'}
+                            </span>
+                          </div>
+                        ) : sudahAbsenMasuk && sudahAbsenPulang ? (
+                          <div className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <p className="text-emerald-900 dark:text-emerald-200 font-bold truncate">
+                                Alhamdulillah, Presensi Sesi <b>{currentQuickSesi.nama}</b> telah LENGKAP (Masuk {todayAttendance?.jamMasuk?.slice(0, 5)} • Pulang {todayAttendance?.jamPulang?.slice(0, 5)} WIB).
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-600 text-white shrink-0">Lengkap</span>
+                          </div>
+                        ) : isIzinToday ? (
+                          <div className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between gap-2 text-xs text-blue-800 dark:text-blue-200 font-bold">
+                            <div className="flex items-center gap-2 truncate">
+                              <Info size={15} className="text-blue-600 shrink-0" />
+                              <span>Status hari ini: <b>{todayAttendance?.status}</b> {todayAttendance?.keterangan ? `("${todayAttendance.keterangan}")` : ''}</span>
+                            </div>
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-600 text-white shrink-0">Izin Resmi</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {/* 3. DUA KARTU AKSI TERPADU (SEJAJAR): KIRI = MASUK, KANAN = PULANG */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1.5 relative z-10">
+                        {/* KARTU MASUK */}
+                        <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${sudahAbsenMasuk
+                            ? 'bg-white/80 dark:bg-slate-900/60 border-emerald-200 dark:border-emerald-800/60'
+                            : 'bg-white/95 dark:bg-slate-900/80 border-slate-200/90 dark:border-slate-700/80 shadow-xs'
+                          }`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+                              <LogIn size={15} className="text-emerald-500" />
+                              Jam Masuk
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              Batas: {currentQuickSesi.jamMasuk || '07:00'} WIB
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline justify-between gap-2">
+                            <div className="font-mono text-2xl font-black text-slate-800 dark:text-white">
+                              {todayAttendance?.jamMasuk ? todayAttendance.jamMasuk.slice(0, 5) : '--:--'}
+                              <span className="text-xs font-sans text-slate-400 ml-1">WIB</span>
+                            </div>
+                            <div>
+                              {sudahAbsenMasuk ? (
+                                todayAttendance?.status === 'Terlambat' ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-extrabold text-[10px]">
+                                    <AlertCircle size={11} /> Telat {todayAttendance.terlambatMenit}m
                                   </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
-                                <span>KBM: <b>{entri.jamKbm || 0} JPL</b></span>
-                                <span>•</span>
-                                <span>Piket: <b>{entri.jamPiket || 0} JPL</b></span>
-                                <span>•</span>
-                                <span>Rapat: <b>{entri.jamRapat || 0} JPL</b></span>
-                              </div>
-                              {entri.catatan && (
-                                <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-1 line-clamp-1">
-                                  "{entri.catatan}"
-                                </p>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-extrabold text-[10px]">
+                                    <CheckCircle size={11} /> Tepat Waktu
+                                  </span>
+                                )
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-bold text-[10px]">
+                                  Belum Masuk
+                                </span>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
-                            <div className="text-right">
-                              <span className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono block">
-                                +{totalEntryHours} JPL
-                              </span>
-                              <span className="text-[9px] text-slate-400">{entri.tanggalStr || `Tanggal ${entri.tgl}`}</span>
+                          {/* Tombol Aksi Masuk */}
+                          <button
+                            type="button"
+                            onClick={handleQuickAbsenMasuk}
+                            disabled={sudahAbsenMasuk || isIzinToday}
+                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${sudahAbsenMasuk || isIzinToday
+                                ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
+                                : currentTheme.type === 'sore'
+                                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 active:scale-98'
+                                  : currentTheme.type === 'rapat'
+                                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white shadow-md shadow-rose-500/20 active:scale-98'
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/20 active:scale-98'
+                              }`}
+                          >
+                            {sudahAbsenMasuk ? (
+                              <>
+                                <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+                                <span>Tercatat Masuk</span>
+                              </>
+                            ) : (
+                              <>
+                                <LogIn size={14} />
+                                <span>Absen Masuk Sekarang</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* KARTU PULANG */}
+                        <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${sudahAbsenPulang
+                            ? 'bg-white/80 dark:bg-slate-900/60 border-indigo-200 dark:border-indigo-800/60'
+                            : isWaktuPulangTiba && sudahAbsenMasuk
+                              ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700/80 shadow-sm'
+                              : 'bg-white/95 dark:bg-slate-900/80 border-slate-200/90 dark:border-slate-700/80 shadow-xs'
+                          }`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+                              <LogOut size={15} className="text-blue-500" />
+                              Jam Pulang
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              Jadwal: {jamPulangTarget} WIB
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline justify-between gap-2">
+                            <div className="font-mono text-2xl font-black text-slate-800 dark:text-white">
+                              {todayAttendance?.jamPulang ? todayAttendance.jamPulang.slice(0, 5) : '--:--'}
+                              <span className="text-xs font-sans text-slate-400 ml-1">WIB</span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleOpenJurnalModal(entri)}
-                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
-                                title="Edit Entri Jurnal"
-                              >
-                                <Edit size={15} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteJurnalEntry(entri.id)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
-                                title="Hapus Entri Jurnal"
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                            <div>
+                              {sudahAbsenPulang ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 font-extrabold text-[10px]">
+                                  <CheckCircle size={11} /> Selesai Pulang
+                                </span>
+                              ) : sudahAbsenMasuk ? (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] ${isWaktuPulangTiba
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 animate-pulse'
+                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                  }`}>
+                                  {isWaktuPulangTiba ? 'Belum Pulang' : 'Belum Waktunya'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold text-[10px]">
+                                  --
+                                </span>
+                              )}
                             </div>
                           </div>
+
+                          {/* Tombol Aksi Pulang */}
+                          <button
+                            type="button"
+                            onClick={handleQuickAbsenPulang}
+                            disabled={!sudahAbsenMasuk || sudahAbsenPulang}
+                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${!sudahAbsenMasuk || sudahAbsenPulang
+                                ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 active:scale-98'
+                              }`}
+                          >
+                            {sudahAbsenPulang ? (
+                              <>
+                                <Check size={14} className="text-indigo-600 dark:text-indigo-400" />
+                                <span>Tercatat Pulang</span>
+                              </>
+                            ) : (
+                              <>
+                                <LogOut size={14} />
+                                <span>Absen Pulang Sekarang</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 📚 PINTASAN CEPAT JURNAL KBM & BEBAN KERJA HARIAN (Pengganti Google Form) */}
+                      <div className="mt-3 p-3 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-slate-900/50 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <BookOpen size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                              {hasFilledTodayJurnal ? 'Jurnal KBM Hari Ini Sudah Dicatat' : 'Jurnal Mengajar & Piket Hari Ini'}
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                              {hasFilledTodayJurnal
+                                ? 'Ketuk untuk memeriksa rincian atau menambah jam kegiatan'
+                                : 'Catat jam mengajar, piket, dan rapat sebelum pulang'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenJurnalModal(null, todayIsoDate)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <Plus size={13} strokeWidth={2.5} />
+                          <span>{hasFilledTodayJurnal ? 'Kelola' : 'Catat'}</span>
+                        </button>
+                      </div>
+
+                      {/* 4. FOOTER: LINK HALAMAN LENGKAP */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/50 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium">
+                          <Sparkles size={13} className="text-amber-500" />
+                          Presensi otomatis tersinkron ke cloud sekolah secara real-time.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('portal_presensi')}
+                          className={`flex items-center gap-1 hover:underline transition-colors cursor-pointer text-xs font-black uppercase tracking-wider ${currentTheme.type === 'sore'
+                              ? 'text-purple-700 dark:text-purple-400'
+                              : currentTheme.type === 'rapat'
+                                ? 'text-rose-700 dark:text-rose-400'
+                                : 'text-teal-700 dark:text-teal-400'
+                            }`}
+                        >
+                          <span>Presensi Lengkap & Ajukan Izin</span>
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 🪄 BIODATA GURU (DIKEMBALIKAN & DIRAPIKAN) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+
+                  {/* KIRI: Informasi Profil Lengkap */}
+                  <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                    <div className="p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl">
+                          <UserCircle size={20} />
+                        </div>
+                        <h3 className="font-bold text-slate-800 dark:text-white">Data Personal & Kepegawaian</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleOpenEditBiodata}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                        >
+                          <Edit size={14} /> <span className="hidden sm:inline">Edit Biodata Saya</span><span className="sm:hidden">Edit</span>
+                        </button>
+                        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-200 dark:border-emerald-800/50">
+                          <CheckCircle size={14} /> Terverifikasi
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8 flex-1">
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Building size={14} className="text-slate-300 group-hover:text-blue-500 transition-colors" /> Tempat, Tanggal Lahir</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.pob}, {formatDateId(myData.dob)}</p>
+                        <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold mt-1 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded w-fit">{!isNaN(new Date(myData.dob).getTime()) ? new Date().getFullYear() - new Date(myData.dob).getFullYear() : '?'} Tahun</p>
+                      </div>
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><GraduationCap size={14} className="text-slate-300 group-hover:text-purple-500 transition-colors" /> Pendidikan Terakhir</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.education}</p>
+                      </div>
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Briefcase size={14} className="text-slate-300 group-hover:text-emerald-500 transition-colors" /> Jabatan & Tugas Inti</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.position}</p>
+                      </div>
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar size={14} className="text-slate-300 group-hover:text-amber-500 transition-colors" /> Mulai Tugas (TMT)</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{formatDateId(myData.tmt)}</p>
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded w-fit">{!isNaN(new Date(myData.tmt).getTime()) ? new Date().getFullYear() - new Date(myData.tmt).getFullYear() : '?'} Tahun Mengabdi</p>
+                      </div>
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Users size={14} className="text-slate-300 group-hover:text-rose-500 transition-colors" /> Status Keluarga</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">
+                          {myData.family?.wife === 1 ? 'Menikah' : myData.family?.wife === 2 ? 'Menikah (Ditanggung Pasangan)' : 'Belum Menikah'}
+                        </p>
+                        {myData.family?.wife === 1 && myData.family?.children > 0 && (
+                          <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold mt-1 bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded w-fit">{myData.family.children} Anak Terdaftar</p>
+                        )}
+                      </div>
+                      <div className="group">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><MessageSquare size={14} className="text-slate-300 group-hover:text-teal-500 transition-colors" /> Kontak (WhatsApp)</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-tight">{myData.phone || 'Belum diisi'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KARTU KEAMANAN & BIOMETRIK HP */}
+                  {isBioSupported && (
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 animate-in fade-in">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-inner">
+                            <Fingerprint size={26} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                              Login Cepat Biometrik / Sidik Jari HP
+                              {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                                  Aktif di HP Ini
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-bold px-2 py-0.5 rounded-full">
+                                  Belum Terhubung
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-lg">
+                              {savedBioAccount && String(savedBioAccount.userId) === String(myData.id)
+                                ? 'Sensor biometrik HP Anda telah terhubung. Anda dapat masuk ke PayEdu cukup dengan satu sentuhan sensor tanpa perlu mengetik kata sandi.'
+                                : 'Hubungkan sensor sidik jari atau Face Unlock bawaan HP Anda agar bisa masuk ke aplikasi PayEdu secara instan tanpa ribet mengetik.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                          {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
+                            <button
+                              type="button"
+                              onClick={handleUnlinkBiometric}
+                              className="w-full sm:w-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Lepas Sidik Jari
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleRegisterBiometric}
+                              disabled={isEnrollingBio}
+                              className="w-full sm:w-auto px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70"
+                            >
+                              <Fingerprint size={16} />
+                              {isEnrollingBio ? 'Menghubungkan Sensor...' : 'Hubungkan Sidik Jari'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* KANAN: Rekening Bank */}
+                  <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-800 dark:from-emerald-700 dark:to-teal-900 p-6 md:p-8 rounded-3xl shadow-lg border border-emerald-400/30 flex flex-col justify-between min-h-[260px] transform transition-transform hover:scale-[1.02] duration-300">
+                    <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/30 rounded-full blur-2xl pointer-events-none"></div>
+
+                    <div className="relative z-10 flex justify-between items-start mb-8">
+                      <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner flex items-center justify-center text-white border border-white/30">
+                        <CreditCard size={28} />
+                      </div>
+                      <div className="flex gap-1.5">
+                        <div className="w-10 h-7 bg-white/20 rounded-md flex items-center justify-center border border-white/30 backdrop-blur-sm shadow-sm">
+                          <div className="w-5 h-3 bg-white/40 rounded-sm"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-bold text-emerald-100 uppercase tracking-widest mb-1.5 opacity-90 flex items-center gap-2">
+                        Rekening Penggajian
+                      </p>
+                      {myData.bankName ? (
+                        <>
+                          <h4 className="text-2xl font-black text-white tracking-widest font-mono drop-shadow-md mb-4">{myData.bankAccount}</h4>
+                          <div className="flex justify-between items-end border-t border-white/20 pt-3">
+                            <div>
+                              <p className="text-[9px] text-emerald-200 uppercase tracking-wider mb-0.5 opacity-80">Atas Nama</p>
+                              <p className="text-xs font-bold text-white uppercase tracking-wider truncate max-w-[150px] drop-shadow-sm">{myData.name}</p>
+                            </div>
+                            <span className="text-lg font-black text-white italic drop-shadow-md">{myData.bankName}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-start gap-2 mt-4 border-t border-white/20 pt-3">
+                          <h4 className="text-lg font-extrabold text-white opacity-95 tracking-wide">Belum Diatur</h4>
+                          <p className="text-[11px] font-medium text-emerald-100 opacity-80">Penerimaan via tunai.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🪄 TAMBALAN CERDAS: Ringkasan & Akses Cepat Menu Tambahan (Disembunyikan di Mobile, Digantikan Bottom Nav) */}
+                <div className="pt-2 hidden md:block">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <LayoutDashboard size={20} className="text-blue-500" /> Akses Cepat Menu
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                    {/* Kehadiran (3D Glassmorphism) */}
+                    <div onClick={() => setActiveTab('portal_kehadiran')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(245,158,11,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 bg-amber-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-colors duration-500"></div>
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(245,158,11,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
+                          <Clock size={24} className="text-white drop-shadow-md" />
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-amber-100 dark:group-hover:bg-amber-900/40 transition-colors">
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-amber-500 transition-all group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                      <div className="relative z-10">
+                        <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Rekap Kehadiran</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hadir: <span className="font-bold text-amber-600 dark:text-amber-400">{autoHadir} Hari</span> • Telat: <span className="font-bold text-red-500">{telatDisiplin}x</span></p>
+                      </div>
+                    </div>
+
+                    {/* Gaji (3D Glassmorphism) */}
+                    <div onClick={() => setActiveTab('portal_gaji')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(16,185,129,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 bg-emerald-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-300 to-emerald-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(16,185,129,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+                          <Wallet size={24} className="text-white drop-shadow-md" />
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 transition-colors">
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-emerald-500 transition-all group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                      <div className="relative z-10">
+                        <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Slip Gaji Bulanan</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Status: {settings?.payrollStatus === 'Approved' ? <span className="text-emerald-600 font-bold">Tersedia</span> : <span className="text-amber-500 font-bold">Terkunci</span>}</p>
+                      </div>
+                    </div>
+
+                    {/* Kasbon/Pinjaman (3D Glassmorphism) */}
+                    <div onClick={() => setActiveTab('portal_pinjaman')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(20,184,166,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 bg-teal-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-colors duration-500"></div>
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(20,184,166,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
+                          <CreditCard size={24} className="text-white drop-shadow-md" />
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-teal-100 dark:group-hover:bg-teal-900/40 transition-colors">
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-teal-500 transition-all group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                      <div className="relative z-10">
+                        <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Buku Kasbon</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{loanItems.length > 0 ? <><span className="font-bold text-teal-600 dark:text-teal-400">{loanItems.length} Tagihan</span> Aktif</> : 'Tidak ada tanggungan'}</p>
+                      </div>
+                    </div>
+
+                    {/* Riwayat (3D Glassmorphism) */}
+                    <div onClick={() => setActiveTab('portal_riwayat')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(99,102,241,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 bg-indigo-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-colors duration-500"></div>
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(99,102,241,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+                          <History size={24} className="text-white drop-shadow-md" />
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40 transition-colors">
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-indigo-500 transition-all group-hover:translate-x-0.5" />
+                        </div>
+                      </div>
+                      <div className="relative z-10">
+                        <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Riwayat Gaji</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Arsip: <span className="font-bold text-indigo-600 dark:text-indigo-400">{riwayatAsli.length} Bulan</span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* FITUR BARU: Portal Presensi Saya */}
+          {activeSection === 'portal_presensi' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <PresensiGuruView
+                teachers={teachers}
+                presensiGuru={presensiGuru}
+                setPresensiGuru={setPresensiGuru}
+                initialSesiId={selectedQuickSesiId}
+                initialAction={autoTriggerPresensiMode}
+                onActionConsumed={() => setAutoTriggerPresensiMode(null)}
+                currentUser={{ id: user.id, teacherId: user.id, name: user.name, username: user.username, role: user.role, portal: 'Teacher' }}
+                schoolProfile={{
+                  nama: settings.schoolName || 'SD IT Qurrata A\'yun',
+                  npsn: settings.schoolNpsn || '10404040',
+                  alamat: settings.schoolAddress || 'Kandis',
+                  kepsek: settings.kepsekName || 'Kepala Sekolah',
+                  presensiGuruSettings: settings.presensiGuruSettings
+                }}
+                setSchoolProfile={(updater) => {
+                  if (typeof setSettings === 'function') {
+                    const currentSettings = settings || {};
+                    const rawUpdated = typeof updater === 'function' ? updater(currentSettings?.presensiGuruSettings ? { presensiGuruSettings: currentSettings.presensiGuruSettings } : currentSettings) : updater;
+                    const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated;
+                    const newSettings = { ...currentSettings, presensiGuruSettings: newPresensiSettings, lastModified: Date.now() };
+                    setSettings(newSettings);
+                    safeStorageSet('payedu_settings', newSettings);
+                    try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch (e) { }
+                    pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e));
+                  }
+                }}
+                addAuditLog={saveAuditLog}
+                onUpdateTeacher={handleUpdateTeacherPatch}
+              />
+            </div>
+          )}
+
+          {/* FITUR BARU: Jadwal Saya (Roster Mingguan & Insidental) */}
+          {activeSection === 'portal_jadwal' && (() => {
+            const rosterDays = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const rosterObj = myData.payroll?.roster || {};
+            const totalRosterJpl = rosterDays.reduce((acc, h) => acc + (Number(rosterObj[h.toLowerCase()]) || 0), 0);
+            const activeTeachingDays = rosterDays.filter(h => (Number(rosterObj[h.toLowerCase()]) || 0) > 0).length;
+
+            return (
+              <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                {/* KARTU 0: JURNAL BEBAN KERJA & AKUMULASI JAM (PENGGANTI RESMI GOOGLE FORM) */}
+                <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl relative overflow-hidden border border-indigo-700/50">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-indigo-300 border border-white/20 shadow-inner shrink-0">
+                        <BookOpen size={24} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                            Jurnal KBM Harian
+                          </span>
+                          <span className="text-[10px] font-semibold text-indigo-200/80">Periode {bulan}</span>
+                        </div>
+                        <h3 className="text-sm sm:text-lg font-black tracking-tight mt-0.5">
+                          Akumulasi Beban Kerja &amp; Mengajar
+                        </h3>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenJurnalModal()}
+                      className="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 hover:from-blue-600 hover:via-indigo-600 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/30"
+                    >
+                      <Plus size={16} strokeWidth={3} />
+                      <span>Catat Jam Kegiatan / KBM</span>
+                    </button>
+                  </div>
+
+                  {/* 4 Pilar Jam Beban Kerja */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pt-4 relative z-10">
+                    <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                      <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                        Jam Mengajar/Halaqoh
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamKbm}</span>
+                        <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-200/70 mt-1 block">Tatap muka kelas</span>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                      <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                        Jam Piket Kantor &amp; Sholat
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamPiket}</span>
+                        <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-200/70 mt-1 block">Tugas piket dinas</span>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                      <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                        Rapat &amp; Kegiatan Sore
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamRapat}</span>
+                        <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-200/70 mt-1 block">Evaluasi &amp; rapat guru</span>
+                    </div>
+
+                    <div className="bg-emerald-500/20 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-emerald-400/30">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] sm:text-xs text-emerald-200 font-black uppercase tracking-wider">
+                          Total Akumulasi
+                        </span>
+                        {jurnalSummary.saldoAwal > 0 && (
+                          <span className="text-[9px] bg-emerald-400/30 text-emerald-100 px-1.5 py-0.5 rounded font-bold" title="Termasuk saldo awal transisi">
+                            +{jurnalSummary.saldoAwal} Awal
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black text-emerald-300">{jurnalSummary.totalAkumulasi}</span>
+                        <span className="text-xs font-semibold text-emerald-200">JPL</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-200/80 mt-1 block">Terhubung ke slip gaji</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIWAYAT ENTRI JURNAL BULAN INI */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                  <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                      <BookOpen size={16} className="text-indigo-500" />
+                      <span>Daftar Entri Jurnal Mengajar Bulan Ini</span>
+                    </h4>
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      {(jurnalSummary.entries || []).length} Catatan
+                    </span>
+                  </div>
+
+                  {(jurnalSummary.entries || []).length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {(jurnalSummary.entries || []).map((entri) => {
+                        const mk = Number(entri.jamMasukKelas);
+                        const hq = Number(entri.jamHalaqoh);
+                        const pk = Number(entri.jamPiketKantor);
+                        const ps = Number(entri.jamPiketSholat);
+                        const rp = Number(entri.jamRapat) || 0;
+
+                        const totalEntryHours = (!isNaN(mk) || !isNaN(hq) || !isNaN(pk) || !isNaN(ps))
+                          ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp)
+                          : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp);
+
+                        const mapelText = Array.isArray(entri.mapel) ? entri.mapel.join(', ') : (entri.mapel || 'Kegiatan Umum');
+                        const kelasText = Array.isArray(entri.kelas) ? entri.kelas.join(', ') : (entri.kelas || '');
+                        const jamKeList = Array.isArray(entri.jamKe) ? entri.jamKe : [];
+
+                        return (
+                          <div key={entri.id} className="p-3 sm:p-4 hover:bg-slate-50/80 dark:hover:bg-slate-750 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex flex-col items-center justify-center shrink-0 border border-indigo-200/60 dark:border-indigo-800/40">
+                                <span className="text-[9px] uppercase leading-none text-slate-400">Tgl</span>
+                                <span className="text-sm font-black">{entri.tgl}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
+                                    {mapelText}
+                                  </span>
+                                  {kelasText && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                      {kelasText}
+                                    </span>
+                                  )}
+                                  {jamKeList.length > 0 && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                      Jam {jamKeList.join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
+                                  <span>Kelas: <b>{!isNaN(mk) ? mk : (Number(entri.jamKbm) || 0)} JPL</b></span>
+                                  <span>•</span>
+                                  <span>Halaqoh: <b>{!isNaN(hq) ? hq : 0} JPL</b></span>
+                                  <span>•</span>
+                                  <span>Piket Ktr: <b>{!isNaN(pk) ? pk : (Number(entri.jamPiket) || 0)} JPL</b></span>
+                                  <span>•</span>
+                                  <span>Sholat: <b>{!isNaN(ps) ? ps : 0} JPL</b></span>
+                                  <span>•</span>
+                                  <span>Rapat: <b>{rp} JPL</b></span>
+                                </div>
+                                {entri.catatan && (
+                                  <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-1 line-clamp-1">
+                                    "{entri.catatan}"
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
+                              <div className="text-right">
+                                <span className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono block">
+                                  +{totalEntryHours} JPL
+                                </span>
+                                <span className="text-[9px] text-slate-400">{entri.tanggalStr || `Tanggal ${entri.tgl}`}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleOpenJurnalModal(entri)}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Entri Jurnal"
+                                >
+                                  <Edit size={15} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteJurnalEntry(entri.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
+                                  title="Hapus Entri Jurnal"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">Belum ada catatan jurnal mengajar di bulan ini.</p>
+                      <p className="text-[11px] text-slate-400">Klik tombol di bawah ini untuk mencatat jam mengajar, piket, atau rapat hari ini.</p>
+                      <button
+                        onClick={() => handleOpenJurnalModal()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-bold rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs hover:bg-indigo-100 transition-colors cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        <span>Catat Jurnal Pertama</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* KARTU 1: KPI RINGKASAN ROSTER MINGGUAN */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Beban Mingguan</span>
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                        <Clock size={16} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{totalRosterJpl}</span>
+                        <span className="text-xs font-bold text-slate-400">JPL / Pekan</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                        Roster terjadwal rutin
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Mengajar</span>
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <CalendarDays size={16} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">{activeTeachingDays}</span>
+                        <span className="text-xs font-bold text-slate-400">Hari / Pekan</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                        {6 - activeTeachingDays} hari bebas mengajar
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rata-Rata Harian</span>
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                        <Award size={16} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">
+                          {activeTeachingDays > 0 ? (totalRosterJpl / activeTeachingDays).toFixed(1) : 0}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400">JPL / Hari Aktif</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                        Intensitas mengajar harian
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KARTU 2: ROSTER RUTIN MINGGUAN (Senin - Sabtu) */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                  <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                      <ListPlus size={16} className="text-pink-500" />
+                      <span>Roster Rutin Mingguan</span>
+                    </h4>
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300">
+                      Senin - Sabtu
+                    </span>
+                  </div>
+
+                  {/* Grid 2 Kolom di Mobile, 3 Kolom di Tablet/Desktop */}
+                  <div className="p-2.5 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+                    {rosterDays.map((hari) => {
+                      const hariKey = hari.toLowerCase();
+                      const jpl = Number(rosterObj[hariKey]) || 0;
+                      const hasJpl = jpl > 0;
+
+                      return (
+                        <div
+                          key={hari}
+                          className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${hasJpl
+                              ? 'bg-gradient-to-br from-pink-50/50 to-rose-50/30 dark:from-pink-950/20 dark:to-slate-900/40 border-pink-200/80 dark:border-pink-800/40 shadow-xs'
+                              : 'bg-slate-50/60 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${hasJpl ? 'bg-pink-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                              <span>{hari}</span>
+                            </span>
+                            <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${hasJpl
+                                ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300'
+                                : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
+                              }`}>
+                              {jpl} JPL
+                            </span>
+                          </div>
+
+                          {hasJpl ? (
+                            <div className="mt-1 pt-2 border-t border-pink-100/80 dark:border-pink-900/30 space-y-1">
+                              <span className="text-[9px] font-bold text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-900/40 px-1.5 py-0.5 rounded inline-block">
+                                Terjadwal
+                              </span>
+                              <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 line-clamp-1">
+                                Pembelajaran Kelas
+                              </div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Users size={11} className="text-pink-500 shrink-0" />
+                                <span>{jpl} Jam Pelajaran</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 italic">
+                              Tidak ada jadwal wajib
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
-                    <p className="font-semibold text-slate-600 dark:text-slate-300">Belum ada catatan jurnal mengajar di bulan ini.</p>
-                    <p className="text-[11px] text-slate-400">Klik tombol di bawah ini untuk mencatat jam mengajar, piket, atau rapat hari ini.</p>
-                    <button
-                      onClick={() => handleOpenJurnalModal()}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-bold rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs hover:bg-indigo-100 transition-colors cursor-pointer"
-                    >
-                      <Plus size={14} />
-                      <span>Catat Jurnal Pertama</span>
-                    </button>
+                </div>
+
+                {/* KARTU 3: KALENDER PEMETAAN JAM MENGAJAR HARIAN (Bulan Ini) - Grid 7 Kolom */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                  <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                        <CalendarDays size={16} className="text-blue-500" />
+                        <span>Kalender Pemetaan Jam Mengajar Harian</span>
+                        <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">(Tgl 1 - 31)</span>
+                      </h4>
+                      <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Rincian alokasi Jam Pelajaran (JPL) hasil pemetaan roster dan kegiatan khusus per tanggal.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Mengajar</span>
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span> Libur / 0 JPL</span>
+                    </div>
                   </div>
-                )}
+
+                  {/* Grid 7 Kolom Presisi Mobile */}
+                  <div className="p-2.5 sm:p-4 grid grid-cols-7 gap-1 sm:gap-2">
+                    {Array.from({ length: 31 }, (_, idx) => {
+                      const dayNum = idx + 1;
+                      const harianArr = myData.payroll?.jamMengajar?.harian || [];
+                      const jamHarian = Number(harianArr[idx]) || 0;
+                      const hasJpl = jamHarian > 0;
+
+                      return (
+                        <div
+                          key={dayNum}
+                          className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${hasJpl
+                              ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40 text-blue-900 dark:text-blue-200 shadow-xs'
+                              : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800 text-slate-400'
+                            }`}
+                        >
+                          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+                            {dayNum}
+                          </span>
+                          {hasJpl ? (
+                            <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">
+                              {jamHarian}
+                              <span className="text-[8px] font-medium ml-0.5 text-blue-600/70 hidden sm:inline">JPL</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs sm:text-sm font-normal text-slate-300 dark:text-slate-600">-</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* KARTU 4: RIWAYAT KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Card Feed + Desktop Table) */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                  <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                      <Star size={16} className="text-amber-500" />
+                      <span>Kegiatan Insidental &amp; Tambahan Bulan Ini</span>
+                    </h4>
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {(myData.payroll?.kegiatanInsidental || []).length} Kegiatan
+                    </span>
+                  </div>
+
+                  {/* Mobile View: Clean Card Feed (md:hidden) */}
+                  <div className="p-3 space-y-2 md:hidden">
+                    {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                      myData.payroll.kegiatanInsidental.map((keg, i) => (
+                        <div key={i} className="p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 line-clamp-2">
+                              {keg.ket}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-black text-xs shadow-xs border border-amber-200/60 dark:border-amber-800/60">
+                              +{keg.jam} JPL
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-6 px-4 text-center">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                          <Star size={18} />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada penugasan kegiatan massal/insidental di bulan ini.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop View: Full Table (hidden md:block) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
+                        <tr>
+                          <th className="p-3.5 font-semibold">Keterangan / Nama Kegiatan Khusus</th>
+                          <th className="p-3.5 font-semibold text-center w-36">Tambahan Jam</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                        {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
+                          myData.payroll.kegiatanInsidental.map((keg, i) => (
+                            <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                              <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">{keg.ket}</td>
+                              <td className="p-3.5 text-center">
+                                <span className="px-3 py-1 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-bold text-xs shadow-xs border border-amber-200/50 dark:border-amber-800/50">
+                                  +{keg.jam} JPL
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="2" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
+                              Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-              {/* KARTU 1: KPI RINGKASAN ROSTER MINGGUAN */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
-                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Beban Mingguan</span>
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
-                      <Clock size={16} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{totalRosterJpl}</span>
-                      <span className="text-xs font-bold text-slate-400">JPL / Pekan</span>
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      Roster terjadwal rutin
-                    </div>
-                  </div>
-                </div>
+            );
+          })()}
 
-                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+          {/* 2. Rekap Kehadiran */}
+          {activeSection === 'portal_kehadiran' && (
+            <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              {/* KARTU 1: 4 KPI METRICS UTAMA (Responsive 2x2 di Mobile, 4 Kolom di Tablet/Desktop) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                {/* Realisasi Jam */}
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-blue-400/50 transition-colors">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Mengajar</span>
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                      <CalendarDays size={16} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400">{activeTeachingDays}</span>
-                      <span className="text-xs font-bold text-slate-400">Hari / Pekan</span>
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      {6 - activeTeachingDays} hari bebas mengajar
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rata-Rata Harian</span>
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Realisasi Jam</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                       <Award size={16} />
                     </div>
                   </div>
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">
-                        {activeTeachingDays > 0 ? (totalRosterJpl / activeTeachingDays).toFixed(1) : 0}
-                      </span>
-                      <span className="text-xs font-bold text-slate-400">JPL / Hari Aktif</span>
+                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{realJam}</span>
+                      <span className="text-xs font-bold text-slate-400">JPL</span>
                     </div>
-                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      Intensitas mengajar harian
+                    {/* Progress bar pencapaian target */}
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                        <span>Target: {wajibJam} JPL</span>
+                        <span className="text-blue-600 dark:text-blue-400 font-bold">
+                          {wajibJam > 0 ? Math.round((realJam / wajibJam) * 100) : 100}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, wajibJam > 0 ? (realJam / wajibJam) * 100 : 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Hari Hadir */}
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-emerald-400/50 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Hadir</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400">{autoHadir}</span>
+                      <span className="text-xs font-bold text-slate-400">Hari</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>Tercatat aktif mengajar</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Terlambat */}
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-red-400/50 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Terlambat</span>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${telatDisiplin > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'} flex items-center justify-center shrink-0`}>
+                      <AlertCircle size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-xl sm:text-2xl font-black ${telatDisiplin > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{telatDisiplin}</span>
+                      <span className="text-xs font-bold text-slate-400">Kali</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${telatDisiplin > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                      <span>{telatDisiplin > 0 ? 'Potongan disiplin berlaku' : 'Disiplin tepat waktu'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selisih Jam */}
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-amber-400/50 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Selisih JPL</span>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${selisihJam >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'} flex items-center justify-center shrink-0`}>
+                      <TrendingUp size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={`text-xl sm:text-2xl font-black ${selisihJam >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {selisihJam > 0 ? `+${selisihJam}` : selisihJam}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">JPL</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${selisihJam >= 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                      <span>{selisihJam >= 0 ? 'Target terpenuhi' : 'Kurang dari target'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* KARTU 2: ROSTER RUTIN MINGGUAN (Senin - Sabtu) */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
-                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                    <ListPlus size={16} className="text-pink-500" />
-                    <span>Roster Rutin Mingguan</span>
-                  </h4>
-                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300">
-                    Senin - Sabtu
-                  </span>
+              {/* KARTU 2: RINCIAN SAKIT, IZIN, ALPA (Kapsul Presisi Mobile) */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                    <span className="text-[11px] sm:text-xs font-bold text-amber-800 dark:text-amber-300">Sakit (S)</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-400">{autoSakit}</span>
+                    <span className="text-[10px] sm:text-xs font-medium text-amber-600 dark:text-amber-400">Hari</span>
+                  </div>
                 </div>
 
-                {/* Grid 2 Kolom di Mobile, 3 Kolom di Tablet/Desktop */}
-                <div className="p-2.5 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-                  {rosterDays.map((hari) => {
-                    const hariKey = hari.toLowerCase();
-                    const jpl = Number(rosterObj[hariKey]) || 0;
-                    const hasJpl = jpl > 0;
+                <div className="bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                    <span className="text-[11px] sm:text-xs font-bold text-blue-800 dark:text-blue-300">Izin (I)</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-400">{autoIzin}</span>
+                    <span className="text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400">Hari</span>
+                  </div>
+                </div>
 
-                    return (
-                      <div 
-                        key={hari} 
-                        className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
-                          hasJpl 
-                            ? 'bg-gradient-to-br from-pink-50/50 to-rose-50/30 dark:from-pink-950/20 dark:to-slate-900/40 border-pink-200/80 dark:border-pink-800/40 shadow-xs' 
-                            : 'bg-slate-50/60 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full ${hasJpl ? 'bg-pink-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-                            <span>{hari}</span>
-                          </span>
-                          <span className={`text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md ${
-                            hasJpl 
-                              ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300' 
-                              : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
-                          }`}>
-                            {jpl} JPL
-                          </span>
-                        </div>
-
-                        {hasJpl ? (
-                          <div className="mt-1 pt-2 border-t border-pink-100/80 dark:border-pink-900/30 space-y-1">
-                            <span className="text-[9px] font-bold text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-900/40 px-1.5 py-0.5 rounded inline-block">
-                              Terjadwal
-                            </span>
-                            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 line-clamp-1">
-                              Pembelajaran Kelas
-                            </div>
-                            <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                              <Users size={11} className="text-pink-500 shrink-0" />
-                              <span>{jpl} Jam Pelajaran</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 dark:text-slate-500 italic">
-                            Tidak ada jadwal wajib
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="bg-red-50/70 dark:bg-red-950/20 border border-red-200/80 dark:border-red-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+                    <span className="text-[11px] sm:text-xs font-bold text-red-800 dark:text-red-300">Alpa (A)</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-base sm:text-lg font-black text-red-700 dark:text-red-400">{autoAlpa}</span>
+                    <span className="text-[10px] sm:text-xs font-medium text-red-600 dark:text-red-400">Hari</span>
+                  </div>
                 </div>
               </div>
 
-              {/* KARTU 3: KALENDER PEMETAAN JAM MENGAJAR HARIAN (Bulan Ini) - Grid 7 Kolom */}
+              {/* KARTU 3: KALENDER / MATRIX RINCIAN JAM MENGAJAR HARIAN (TANGGAL 1 - 31) */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
                 <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                      <CalendarDays size={16} className="text-blue-500" />
-                      <span>Kalender Pemetaan Jam Mengajar Harian</span>
+                      <CalendarDays size={16} className="text-amber-500" />
+                      <span>Rincian Jam Mengajar Harian</span>
                       <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">(Tgl 1 - 31)</span>
                     </h4>
                     <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Rincian alokasi Jam Pelajaran (JPL) hasil pemetaan roster dan kegiatan khusus per tanggal.
+                      Angka menunjukkan jam tatap muka (JPL) yang diajarkan pada tanggal tersebut.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Mengajar</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span> Libur / 0 JPL</span>
+
+                  {/* Legend Ringkas */}
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Mengajar</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Sakit (S)</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Izin (I)</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Alpa (A)</span>
                   </div>
                 </div>
 
-                {/* Grid 7 Kolom Presisi Mobile */}
+                {/* Grid Kalender Presisi 7 Kolom (Format Mingguan Standar) */}
                 <div className="p-2.5 sm:p-4 grid grid-cols-7 gap-1 sm:gap-2">
-                  {Array.from({ length: 31 }, (_, idx) => {
-                    const dayNum = idx + 1;
-                    const harianArr = myData.payroll?.jamMengajar?.harian || [];
-                    const jamHarian = Number(harianArr[idx]) || 0;
-                    const hasJpl = jamHarian > 0;
+                  {dailyData.map((jam, i) => {
+                    const str = String(jam || '').trim().toUpperCase();
+                    const isSakit = str === 'S';
+                    const isIzin = str === 'I';
+                    const isAlpa = str === 'A';
+                    const numVal = !isNaN(Number(str)) && Number(str) > 0 ? Number(str) : 0;
+                    const hasHours = numVal > 0;
 
                     return (
-                      <div 
-                        key={dayNum} 
-                        className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${
-                          hasJpl 
-                            ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40 text-blue-900 dark:text-blue-200 shadow-xs' 
-                            : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800 text-slate-400'
-                        }`}
+                      <div
+                        key={i}
+                        className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${hasHours
+                            ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 shadow-xs'
+                            : isSakit
+                              ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40'
+                              : isIzin
+                                ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40'
+                                : isAlpa
+                                  ? 'bg-red-50/80 dark:bg-red-950/30 border-red-200 dark:border-red-800/40'
+                                  : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
+                          }`}
                       >
                         <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">
-                          {dayNum}
+                          {i + 1}
                         </span>
-                        {hasJpl ? (
-                          <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">
-                            {jamHarian}
-                            <span className="text-[8px] font-medium ml-0.5 text-blue-600/70 hidden sm:inline">JPL</span>
+
+                        {hasHours ? (
+                          <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400">
+                            {numVal}
+                            <span className="text-[8px] font-medium ml-0.5 text-emerald-600/70 hidden sm:inline">JPL</span>
                           </span>
+                        ) : isSakit ? (
+                          <span className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400">S</span>
+                        ) : isIzin ? (
+                          <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">I</span>
+                        ) : isAlpa ? (
+                          <span className="text-xs sm:text-sm font-black text-red-600 dark:text-red-400">A</span>
                         ) : (
                           <span className="text-xs sm:text-sm font-normal text-slate-300 dark:text-slate-600">-</span>
                         )}
@@ -2172,12 +2563,12 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 </div>
               </div>
 
-              {/* KARTU 4: RIWAYAT KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Card Feed + Desktop Table) */}
+              {/* KARTU 4: KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Cards + Desktop Table) */}
               <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
                 <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
                   <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
                     <Star size={16} className="text-amber-500" />
-                    <span>Kegiatan Insidental &amp; Tambahan Bulan Ini</span>
+                    <span>Rincian Kegiatan Insidental &amp; Tambahan</span>
                   </h4>
                   <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                     {(myData.payroll?.kegiatanInsidental || []).length} Kegiatan
@@ -2188,14 +2579,18 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 <div className="p-3 space-y-2 md:hidden">
                   {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
                     myData.payroll.kegiatanInsidental.map((keg, i) => (
-                      <div key={i} className="p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-950/20 flex items-center justify-between gap-3">
+                      <div key={i} className="p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 line-clamp-2">
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/70 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold mb-1">
+                            <Calendar size={10} />
+                            <span>Tgl {keg.tgl}</span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">
                             {keg.ket}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-black text-xs shadow-xs border border-amber-200/60 dark:border-amber-800/60">
+                          <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-black text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
                             +{keg.jam} JPL
                           </span>
                         </div>
@@ -2206,7 +2601,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mx-auto mb-2 text-slate-400">
                         <Star size={18} />
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada penugasan kegiatan massal/insidental di bulan ini.</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada kegiatan insidental/massal yang tercatat di bulan ini.</p>
                     </div>
                   )}
                 </div>
@@ -2216,6 +2611,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
                       <tr>
+                        <th className="p-3.5 font-semibold w-28 text-center">Tanggal</th>
                         <th className="p-3.5 font-semibold">Keterangan / Nama Kegiatan Khusus</th>
                         <th className="p-3.5 font-semibold text-center w-36">Tambahan Jam</th>
                       </tr>
@@ -2224,9 +2620,14 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
                         myData.payroll.kegiatanInsidental.map((keg, i) => (
                           <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-3.5 text-center font-bold text-slate-600 dark:text-slate-300">
+                              <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+                                Tgl {keg.tgl}
+                              </span>
+                            </td>
                             <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">{keg.ket}</td>
                             <td className="p-3.5 text-center">
-                              <span className="px-3 py-1 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 font-bold text-xs shadow-xs border border-amber-200/50 dark:border-amber-800/50">
+                              <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
                                 +{keg.jam} JPL
                               </span>
                             </td>
@@ -2234,7 +2635,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="2" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
+                          <td colSpan="3" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
                             Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.
                           </td>
                         </tr>
@@ -2243,1385 +2644,1330 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   </table>
                 </div>
               </div>
-            </div>
-          );
-        })()}
 
-        {/* 2. Rekap Kehadiran */}
-        {activeSection === 'portal_kehadiran' && (
-        <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
-          {/* KARTU 1: 4 KPI METRICS UTAMA (Responsive 2x2 di Mobile, 4 Kolom di Tablet/Desktop) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-            {/* Realisasi Jam */}
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-blue-400/50 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Realisasi Jam</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                  <Award size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{realJam}</span>
-                  <span className="text-xs font-bold text-slate-400">JPL</span>
-                </div>
-                {/* Progress bar pencapaian target */}
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                    <span>Target: {wajibJam} JPL</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold">
-                      {wajibJam > 0 ? Math.round((realJam / wajibJam) * 100) : 100}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500" 
-                      style={{ width: `${Math.min(100, wajibJam > 0 ? (realJam / wajibJam) * 100 : 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
+              {/* Catatan Sinkronisasi */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
+                <Info size={13} className="shrink-0" />
+                <span>Data disinkronisasi secara otomatis dari pembukuan sekolah. Hubungi admin jika terdapat selisih jam.</span>
               </div>
             </div>
+          )}
 
-            {/* Total Hari Hadir */}
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-emerald-400/50 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hari Hadir</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-400">{autoHadir}</span>
-                  <span className="text-xs font-bold text-slate-400">Hari</span>
-                </div>
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Tercatat aktif mengajar</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Terlambat */}
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-red-400/50 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Terlambat</span>
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${telatDisiplin > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'} flex items-center justify-center shrink-0`}>
-                  <AlertCircle size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-xl sm:text-2xl font-black ${telatDisiplin > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'}`}>{telatDisiplin}</span>
-                  <span className="text-xs font-bold text-slate-400">Kali</span>
-                </div>
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${telatDisiplin > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
-                  <span>{telatDisiplin > 0 ? 'Potongan disiplin berlaku' : 'Disiplin tepat waktu'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Selisih Jam */}
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between hover:border-amber-400/50 transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Selisih JPL</span>
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl ${selisihJam >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'} flex items-center justify-center shrink-0`}>
-                  <TrendingUp size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-xl sm:text-2xl font-black ${selisihJam >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                    {selisihJam > 0 ? `+${selisihJam}` : selisihJam}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400">JPL</span>
-                </div>
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50 flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${selisihJam >= 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                  <span>{selisihJam >= 0 ? 'Target terpenuhi' : 'Kurang dari target'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* KARTU 2: RINCIAN SAKIT, IZIN, ALPA (Kapsul Presisi Mobile) */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
-                <span className="text-[11px] sm:text-xs font-bold text-amber-800 dark:text-amber-300">Sakit (S)</span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-400">{autoSakit}</span>
-                <span className="text-[10px] sm:text-xs font-medium text-amber-600 dark:text-amber-400">Hari</span>
-              </div>
-            </div>
-
-            <div className="bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
-                <span className="text-[11px] sm:text-xs font-bold text-blue-800 dark:text-blue-300">Izin (I)</span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-base sm:text-lg font-black text-blue-700 dark:text-blue-400">{autoIzin}</span>
-                <span className="text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400">Hari</span>
-              </div>
-            </div>
-
-            <div className="bg-red-50/70 dark:bg-red-950/20 border border-red-200/80 dark:border-red-800/40 p-2.5 sm:p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-1 shadow-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
-                <span className="text-[11px] sm:text-xs font-bold text-red-800 dark:text-red-300">Alpa (A)</span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-base sm:text-lg font-black text-red-700 dark:text-red-400">{autoAlpa}</span>
-                <span className="text-[10px] sm:text-xs font-medium text-red-600 dark:text-red-400">Hari</span>
-              </div>
-            </div>
-          </div>
-
-          {/* KARTU 3: KALENDER / MATRIX RINCIAN JAM MENGAJAR HARIAN (TANGGAL 1 - 31) */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
-            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                  <CalendarDays size={16} className="text-amber-500" />
-                  <span>Rincian Jam Mengajar Harian</span>
-                  <span className="text-[11px] font-normal text-slate-400 hidden sm:inline">(Tgl 1 - 31)</span>
-                </h4>
-                <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Angka menunjukkan jam tatap muka (JPL) yang diajarkan pada tanggal tersebut.
-                </p>
-              </div>
-
-              {/* Legend Ringkas */}
-              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Mengajar</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Sakit (S)</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Izin (I)</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Alpa (A)</span>
-              </div>
-            </div>
-
-            {/* Grid Kalender Presisi 7 Kolom (Format Mingguan Standar) */}
-            <div className="p-2.5 sm:p-4 grid grid-cols-7 gap-1 sm:gap-2">
-              {dailyData.map((jam, i) => {
-                const str = String(jam || '').trim().toUpperCase();
-                const isSakit = str === 'S';
-                const isIzin = str === 'I';
-                const isAlpa = str === 'A';
-                const numVal = !isNaN(Number(str)) && Number(str) > 0 ? Number(str) : 0;
-                const hasHours = numVal > 0;
-
-                return (
-                  <div 
-                    key={i} 
-                    className={`flex flex-col items-center justify-center p-1 sm:p-2 rounded-xl border text-center transition-all ${
-                      hasHours 
-                        ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 shadow-xs' 
-                        : isSakit 
-                        ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40' 
-                        : isIzin 
-                        ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40' 
-                        : isAlpa 
-                        ? 'bg-red-50/80 dark:bg-red-950/30 border-red-200 dark:border-red-800/40' 
-                        : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800'
-                    }`}
-                  >
-                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">
-                      {i + 1}
-                    </span>
-                    
-                    {hasHours ? (
-                      <span className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-400">
-                        {numVal}
-                        <span className="text-[8px] font-medium ml-0.5 text-emerald-600/70 hidden sm:inline">JPL</span>
-                      </span>
-                    ) : isSakit ? (
-                      <span className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400">S</span>
-                    ) : isIzin ? (
-                      <span className="text-xs sm:text-sm font-black text-blue-600 dark:text-blue-400">I</span>
-                    ) : isAlpa ? (
-                      <span className="text-xs sm:text-sm font-black text-red-600 dark:text-red-400">A</span>
-                    ) : (
-                      <span className="text-xs sm:text-sm font-normal text-slate-300 dark:text-slate-600">-</span>
-                    )}
+          {/* 3. Rekap & Slip Gaji */}
+          {activeSection === 'portal_gaji' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {settings?.payrollStatus !== 'Approved' ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
+                  <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-700/60">
+                    <Lock size={32} className="text-amber-500" />
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* KARTU 4: KEGIATAN INSIDENTAL & TAMBAHAN (Dual-Mode: Mobile Cards + Desktop Table) */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
-            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                <Star size={16} className="text-amber-500" />
-                <span>Rincian Kegiatan Insidental &amp; Tambahan</span>
-              </h4>
-              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                {(myData.payroll?.kegiatanInsidental || []).length} Kegiatan
-              </span>
-            </div>
-
-            {/* Mobile View: Clean Card Feed (md:hidden) */}
-            <div className="p-3 space-y-2 md:hidden">
-              {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
-                myData.payroll.kegiatanInsidental.map((keg, i) => (
-                  <div key={i} className="p-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/70 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold mb-1">
-                        <Calendar size={10} />
-                        <span>Tgl {keg.tgl}</span>
-                      </div>
-                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">
-                        {keg.ket}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-black text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
-                        +{keg.jam} JPL
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-6 px-4 text-center">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mx-auto mb-2 text-slate-400">
-                    <Star size={18} />
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Belum ada kegiatan insidental/massal yang tercatat di bulan ini.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Desktop View: Full Table (hidden md:block) */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
-                  <tr>
-                    <th className="p-3.5 font-semibold w-28 text-center">Tanggal</th>
-                    <th className="p-3.5 font-semibold">Keterangan / Nama Kegiatan Khusus</th>
-                    <th className="p-3.5 font-semibold text-center w-36">Tambahan Jam</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                  {(myData.payroll?.kegiatanInsidental || []).length > 0 ? (
-                    myData.payroll.kegiatanInsidental.map((keg, i) => (
-                      <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-3.5 text-center font-bold text-slate-600 dark:text-slate-300">
-                          <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold">
-                            Tgl {keg.tgl}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-medium text-slate-700 dark:text-slate-200">{keg.ket}</td>
-                        <td className="p-3.5 text-center">
-                          <span className="px-3 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-xs shadow-xs border border-blue-200/50 dark:border-blue-800/50">
-                            +{keg.jam} JPL
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="3" className="p-8 text-center text-slate-400 dark:text-slate-500 italic">
-                        Belum ada penugasan kegiatan massal/insidental yang tercatat di bulan ini.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Catatan Sinkronisasi */}
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
-            <Info size={13} className="shrink-0" />
-            <span>Data disinkronisasi secara otomatis dari pembukuan sekolah. Hubungi admin jika terdapat selisih jam.</span>
-          </div>
-        </div>
-        )}
-
-        {/* 3. Rekap & Slip Gaji */}
-        {activeSection === 'portal_gaji' && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {settings?.payrollStatus !== 'Approved' ? (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
-              <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-700/60">
-                <Lock size={32} className="text-amber-500" />
-              </div>
-              <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Informasi Gaji Masih Terkunci</h4>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                Rincian slip gaji untuk periode <b className="text-slate-700 dark:text-slate-200">{bulan}</b> saat ini sedang dalam proses verifikasi &amp; rekapitulasi oleh Bendahara dan menunggu persetujuan resmi (Approval) dari Kepala Sekolah.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* KARTU 1: HERO TAKE HOME PAY (THP) - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
-              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
-                {/* Latar Belakang Dekoratif Watermark Halus */}
-                <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
-                  <Wallet size={160} strokeWidth={1} />
-                </div>
-
-                <div className="relative z-10 flex flex-col items-center text-center">
-                  {/* Badge Header Periode & Status Resmi */}
-                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                      <Calendar size={13} className="text-slate-500 dark:text-slate-400" />
-                      <span>Periode: {bulan}</span>
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1.5 shadow-xs">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
-                      <span>Disahkan &amp; Resmi</span>
-                    </span>
-                  </div>
-
-                  {/* Label THP dengan Tombol Privasi Mata (Show/Hide) */}
-                  <div className="flex items-center justify-center gap-2 mt-2">
-                    <span className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-slate-400 uppercase">
-                      Total Gaji Bersih (Take Home Pay)
-                    </span>
-                    <button 
-                      type="button"
-                      onClick={() => setShowNominalGaji(!showNominalGaji)} 
-                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                      title={showNominalGaji ? "Sembunyikan Nominal" : "Tampilkan Nominal"}
-                    >
-                      {showNominalGaji ? <Eye size={15} /> : <EyeOff size={15} />}
-                    </button>
-                  </div>
-
-                  {/* Nominal Utama THP */}
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-3 select-none">
-                    {showNominalGaji ? formatRp(slip.totalBersih) : 'Rp ••••••••'}
-                  </div>
-
-                  {/* Dua Kapsul Fintech: Penerimaan Kotor vs Total Potongan */}
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-3 sm:p-3.5 border border-emerald-200/80 dark:border-emerald-800/50 text-left shadow-xs relative overflow-hidden group">
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-700 dark:text-emerald-300 font-bold mb-1">
-                        <TrendingUp size={14} className="text-emerald-600 dark:text-emerald-400" />
-                        <span>Penerimaan Kotor</span>
-                      </div>
-                      <span className="font-mono text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-100">
-                        {showNominalGaji ? formatRp(slip.totalKotor) : 'Rp ••••••'}
-                      </span>
-                    </div>
-                    <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs relative overflow-hidden group">
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-1">
-                        <CreditCard size={14} className="text-rose-600 dark:text-rose-400" />
-                        <span>Total Potongan</span>
-                      </div>
-                      <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">
-                        {showNominalGaji ? `-${formatRp(slip.totalPotongan)}` : '-Rp ••••'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Tombol Aksi Utama: Cetak Lembar A4 & Unduh PDF Resmi */}
-                  <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-md">
-                    <button 
-                      type="button"
-                      onClick={() => setIsSlipModalOpen(true)}
-                      className="flex-1 min-w-[140px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-transparent"
-                    >
-                      <Printer size={16} />
-                      <span>Cetak Slip (A4)</span>
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={async () => {
-                        setIsExportingPDF(true);
-                        try {
-                          await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${bulan.replace(/\s+/g, '_')}.pdf`);
-                        } finally {
-                          setIsExportingPDF(false);
-                        }
-                      }}
-                      disabled={isExportingPDF}
-                      className="flex-1 min-w-[140px] bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xs hover:shadow-sm hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <Download size={16} className="text-slate-500 dark:text-slate-400" />}
-                      <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* KARTU 2: RINCIAN PENGHASILAN & TUNJANGAN */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                      <Wallet size={15} />
-                    </div>
-                    <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
-                      Rincian Penerimaan (Pendapatan)
-                    </h3>
-                  </div>
-                  <span className="font-mono text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {formatRp(slip.totalKotor)}
-                  </span>
-                </div>
-
-                <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
-                  {/* Tunjangan Masa Kerja */}
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                    <div>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Masa Kerja</span>
-                      <p className="text-[10px] text-slate-400">Status {myData.status} • TMT {formatDateId(myData.tmt)}</p>
-                    </div>
-                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMasaKerja)}</span>
-                  </div>
-
-                  {/* Tunjangan Jabatan */}
-                  {slip.tJabatan > 0 && (
-                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Jabatan</span>
-                        <p className="text-[10px] text-slate-400">{myData.position}</p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tJabatan)}</span>
-                    </div>
-                  )}
-
-                  {/* Tunjangan Pendidikan */}
-                  {slip.tPendidikan > 0 && (
-                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Pendidikan</span>
-                        <p className="text-[10px] text-slate-400">Kualifikasi {myData.education}</p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tPendidikan)}</span>
-                    </div>
-                  )}
-
-                  {/* Tunjangan Keluarga */}
-                  {slip.tKeluarga > 0 && (
-                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Keluarga</span>
-                        <p className="text-[10px] text-slate-400">
-                          {myData.family?.wife === 1 ? 'Suami/Istri' : ''} {myData.family?.children > 0 ? `• ${myData.family.children} Anak` : ''}
-                        </p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tKeluarga)}</span>
-                    </div>
-                  )}
-
-                  {/* Insentif Kehadiran (Tepat Waktu) */}
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                    <div>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Kehadiran Tepat Waktu</span>
-                      <p className="text-[10px] text-slate-400">Total kehadiran tepat waktu bulan ini</p>
-                    </div>
-                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.bonusHadir)}</span>
-                  </div>
-
-                  {/* Tunjangan Jam Mengajar / Kelebihan Jam */}
-                  {slip.tMengajar > 0 && (
-                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Honor Jam Mengajar</span>
-                        <p className="text-[10px] text-slate-400">Realisasi jam mengajar &amp; kelebihan jam</p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMengajar)}</span>
-                    </div>
-                  )}
-
-                  {/* Insentif Tugas Tambahan */}
-                  {slip.tTambahan > 0 && (
-                    <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Tugas Tambahan</span>
-                        <p className="text-[10px] text-slate-400">Penugasan khusus / kepanitiaan</p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tTambahan)}</span>
-                    </div>
-                  )}
-
-                  {/* Total Penerimaan Kotor Footer */}
-                  <div className="flex items-center justify-between pt-2 text-emerald-700 dark:text-emerald-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
-                    <span>Subtotal Penerimaan Kotor</span>
-                    <span className="font-mono text-sm sm:text-base">{formatRp(slip.totalKotor)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* KARTU 3: RINCIAN PEMOTONGAN GAJI */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
-                      <CreditCard size={15} />
-                    </div>
-                    <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
-                      Rincian Pemotongan
-                    </h3>
-                  </div>
-                  <span className="font-mono text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-400">
-                    -{formatRp(slip.totalPotongan)}
-                  </span>
-                </div>
-
-                <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
-                  {/* Potongan Keterlambatan */}
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                    <div>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">Pemotongan Kedisiplinan (Telat)</span>
-                      <p className="text-[10px] text-slate-400">{myData.payroll?.disiplin?.telat || 0} kali keterlambatan</p>
-                    </div>
-                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                      {slip.potongTelat > 0 ? `-${formatRp(slip.potongTelat)}` : 'Rp 0'}
-                    </span>
-                  </div>
-
-                  {/* Potongan Lainnya / Kasbon */}
-                  {(myData.payroll?.potonganLainnya || []).map((pot, pIdx) => (
-                    <div key={pIdx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
-                      <div>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">{pot.ket || 'Potongan Lainnya'}</span>
-                        <p className="text-[10px] text-slate-400">Angsuran / iuran otomatis</p>
-                      </div>
-                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                        -{formatRp(Number(pot.nominal) || 0)}
-                      </span>
-                    </div>
-                  ))}
-
-                  {/* Total Potongan Footer */}
-                  <div className="flex items-center justify-between pt-2 text-rose-600 dark:text-rose-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
-                    <span>Subtotal Pemotongan</span>
-                    <span className="font-mono text-sm sm:text-base">-{formatRp(slip.totalPotongan)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* KARTU 4: INFORMASI REKENING PENERIMA */}
-              <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs sm:text-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                    <Building size={20} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Rekening Tujuan Transfer</p>
-                    <p className="font-black text-slate-800 dark:text-slate-200 font-mono truncate">
-                      {myData.bankName ? `${myData.bankName} • ${myData.bankAccount}` : 'Penerimaan via Tunai'}
-                    </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">a.n. {myData.name}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* KARTU 5: KONFIRMASI GAJI */}
-              {!myData.payroll?.isConfirmed ? (
-                <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700/60 rounded-2xl text-center space-y-3 shadow-sm">
-                  <div className="flex items-center justify-center gap-2">
-                    <BellRing className="text-amber-600 dark:text-amber-400 animate-bounce" size={18} />
-                    <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
-                      Konfirmasi Penerimaan Gaji
-                    </span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 font-bold">
-                    Silakan periksa rincian di atas. Jika sudah sesuai, klik tombol konfirmasi di bawah ini.
+                  <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Informasi Gaji Masih Terkunci</h4>
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                    Rincian slip gaji untuk periode <b className="text-slate-700 dark:text-slate-200">{bulan}</b> saat ini sedang dalam proses verifikasi &amp; rekapitulasi oleh Bendahara dan menunggu persetujuan resmi (Approval) dari Kepala Sekolah.
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-2.5 max-w-md mx-auto">
-                    <button 
-                      type="button"
-                      onClick={handleKonfirmasi} 
-                      disabled={isConfirming} 
-                      className="flex-1 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold shadow-md shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckCircle size={16} />}
-                      {isConfirming ? 'Menyimpan...' : 'Ya, Nominal Sesuai'}
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={handleKomplain} 
-                      className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-2 cursor-pointer hover:scale-[1.02]" 
-                      title="Akan dialihkan ke WhatsApp Bendahara"
-                    >
-                      <MessageSquare size={16} /> WA Bendahara
-                    </button>
-                  </div>
                 </div>
               ) : (
-                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-bold rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-center flex justify-center items-center gap-2 shadow-xs">
-                  <CheckCircle2 size={18} className="text-emerald-500" />
-                  <span>Alhamdulillah, Penerimaan Gaji Periode Ini Telah Dikonfirmasi Resmi.</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        )}
-
-        {/* 4. Dashboard Pemantauan Pinjaman / Buku Kasbon */}
-        {activeSection === 'portal_pinjaman' && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {loanItems.length === 0 ? (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
-               <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
-                 <CheckCircle size={32} />
-               </div>
-               <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Alhamdulillah, Tidak Ada Pinjaman Aktif</h4>
-               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                 Saat ini Anda tidak memiliki tanggungan kasbon, cicilan koperasi, atau kewajiban pinjaman lain yang terdaftar pada sistem pemotongan otomatis.
-               </p>
-            </div>
-          ) : (
-            <>
-              {/* HERO KARTU BUKU PINJAMAN PEGAWAI - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
-              <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
-                <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
-                  <CreditCard size={150} strokeWidth={1} />
-                </div>
-
-                <div className="relative z-10 flex flex-col items-center text-center">
-                  <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                      <CreditCard size={13} className="text-slate-500 dark:text-slate-400" />
-                      <span>Buku Kasbon &amp; Pinjaman</span>
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800/60 flex items-center gap-1.5 shadow-xs">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                      <span>{loanItems.length} Tagihan Aktif</span>
-                    </span>
-                  </div>
-
-                  <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mt-1">
-                    Total Sisa Saldo Pinjaman Anda
-                  </p>
-
-                  <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-2.5 select-none">
-                    {formatRp(totalSisaHutang)}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                    <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs">
-                      <span className="block text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
-                      <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
+                <>
+                  {/* KARTU 1: HERO TAKE HOME PAY (THP) - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
+                  <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
+                    {/* Latar Belakang Dekoratif Watermark Halus */}
+                    <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
+                      <Wallet size={160} strokeWidth={1} />
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-700/80 text-left shadow-xs">
-                      <span className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold mb-0.5">Metode Pelunasan</span>
-                      <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">Potong Slip Gaji</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* DAFTAR RINCIAN PINJAMAN */}
-              <div className="space-y-4">
-                {loanItems.map((loan, idx) => {
-                  const cicilanBulanan = loan.nominal;
-                  const totalPinjamanAwal = loan.totalPinjaman !== undefined ? loan.totalPinjaman : (loan.nominal * 10);
-                  const sisaSaldo = loan.sisaHutang !== undefined ? loan.sisaHutang : (loan.nominal * 4); 
-                  const totalTerbayar = Math.max(0, totalPinjamanAwal - sisaSaldo);
-                  const persentase = totalPinjamanAwal > 0 ? ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0) : 0;
-
-                  return (
-                    <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
-                      <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex justify-between items-center bg-slate-50/70 dark:bg-slate-900/30">
-                         <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                           <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
-                             <CreditCard size={15} />
-                           </div>
-                           <span>{loan.ket}</span>
-                         </h3>
-                         <span className="text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
-                           Status: Aktif
-                         </span>
-                      </div>
-                      
-                      <div className="p-4 sm:p-6 space-y-4">
-                        {/* 4 Kotak Metrik yang Nyaman di HP */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                          <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-left">
-                            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">Plafon Pinjaman</p>
-                            <p className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 font-mono">{formatRp(totalPinjamanAwal)}</p>
-                          </div>
-                          <div className="bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 text-left">
-                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold mb-0.5">Telah Dicicil</p>
-                            <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 font-mono">{formatRp(totalTerbayar)}</p>
-                          </div>
-                          <div className="bg-rose-50 dark:bg-rose-950/20 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/40 text-left">
-                            <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase tracking-wider font-bold mb-0.5">Potongan / Bulan</p>
-                            <p className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300 font-mono">{formatRp(cicilanBulanan)}</p>
-                          </div>
-                          <div className="bg-teal-50 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-200/80 dark:border-teal-700/60 text-left shadow-xs">
-                            <p className="text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-wider font-bold mb-0.5">Sisa Hutang</p>
-                            <p className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 font-mono">{formatRp(sisaSaldo)}</p>
-                          </div>
-                        </div>
-
-                        {/* Progres Pelunasan */}
-                        <div className="bg-slate-50/70 dark:bg-slate-900/30 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
-                            <span className="text-xs font-black font-mono text-teal-600 dark:text-teal-400">{persentase}%</span>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, persentase))}%` }}>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Riwayat Pemotongan: Mobile-Friendly Cards + Desktop Table */}
-                        <div>
-                          <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                            Simulasi Pemotongan Terbaru
-                          </h4>
-                          
-                          {/* Tampilan Ponsel (Card Feed - No Scroll Horisontal) */}
-                          <div className="sm:hidden space-y-2">
-                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
-                              <div>
-                                <p className="font-bold text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</p>
-                                <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
-                              </div>
-                              <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
-                            </div>
-                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
-                              <div>
-                                <p className="font-bold text-slate-800 dark:text-slate-200">Bulan Sebelumnya</p>
-                                <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
-                              </div>
-                              <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
-                            </div>
-                          </div>
-
-                          {/* Tampilan Tablet / Laptop (Table View) */}
-                          <div className="hidden sm:block overflow-hidden border border-slate-200 dark:border-slate-700 rounded-xl">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                                <tr>
-                                  <th className="p-3 font-semibold">Periode Gaji</th>
-                                  <th className="p-3 font-semibold">Keterangan Transfer</th>
-                                  <th className="p-3 font-semibold text-right">Potongan Masuk</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                                  <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</td>
-                                  <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
-                                  <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
-                                </tr>
-                                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                                  <td className="p-3 font-medium text-slate-800 dark:text-slate-200">Bulan Sebelumnya</td>
-                                  <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
-                                  <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2 leading-relaxed">
-                   <Info size={15} className="shrink-0 text-teal-500 mt-0.5" />
-                   <span>Catatan: Rincian ini adalah proyeksi berdasarkan data bendahara. Sisa hutang berkurang setiap kali slip gaji bulanan disahkan. Apabila melakukan pelunasan tunai di luar slip gaji, harap konfirmasi ke Bendahara Sekolah.</span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-
-        {/* 5. Riwayat Gaji */}
-        {activeSection === 'portal_riwayat' && (
-        <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
-          {/* KARTU 1: KPI RINGKASAN ARSIP GAJI */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Arsip</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                  <Archive size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{riwayatAsli.length}</span>
-                  <span className="text-xs font-bold text-slate-400">Bulan</span>
-                </div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                  Dokumen slip tersimpan
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Arsip Terakhir</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                  <Calendar size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 truncate">
-                  {riwayatAsli[0]?.periode || 'Belum Ada'}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                  {riwayatAsli[0]?.tanggal || '-'}
-                </div>
-              </div>
-            </div>
-
-            <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status Dokumen</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                  <ShieldCheck size={16} />
-                </div>
-              </div>
-              <div>
-                <div className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <span>Resmi &amp; Sah</span>
-                </div>
-                <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                  Disetujui Kepala Sekolah
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* KARTU 2: DAFTAR DOKUMEN ARSIP (Dual-Mode: Mobile Card Feed + Desktop Table) */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
-            <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                <History size={16} className="text-indigo-500" />
-                <span>Daftar Slip Gaji Diarsipkan</span>
-              </h4>
-              <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
-                {riwayatAsli.length} Dokumen
-              </span>
-            </div>
-
-            {/* Tabel Riwayat Gaji Resmi (Bisa Digeser ke Samping di Layar HP) */}
-            <div className="overflow-x-auto hide-scrollbar touch-pan-x">
-              <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap min-w-max">
-                <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
-                  <tr>
-                    <th className="p-3.5 sm:p-4 font-semibold">Periode Bulan</th>
-                    <th className="p-3.5 sm:p-4 font-semibold text-right">Total Bersih (THP)</th>
-                    <th className="p-3.5 sm:p-4 font-semibold text-center sm:text-left">Tanggal Pengesahan</th>
-                    <th className="p-3.5 sm:p-4 font-semibold text-center">Status</th>
-                    <th className="p-3.5 sm:p-4 font-semibold text-center">Aksi Dokumen</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                  {riwayatAsli.map((item) => (
-                    <tr key={item.idArsip} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors group">
-                      <td className="p-3.5 sm:p-4 font-medium text-slate-800 dark:text-slate-200">
-                        <div className="flex items-center gap-2.5">
-                          <Calendar size={16} className="text-indigo-400 shrink-0" />
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{item.periode}</span>
-                        </div>
-                      </td>
-                      <td className="p-3.5 sm:p-4 font-black text-emerald-600 dark:text-emerald-400 text-right font-mono text-sm sm:text-base">
-                        {formatRp(item.nominal)}
-                      </td>
-                      <td className="p-3.5 sm:p-4 text-xs text-slate-600 dark:text-slate-300">
-                        <div className="flex items-center justify-center sm:justify-start gap-1.5 font-medium">
-                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                          <span>{item.tanggal}</span>
-                        </div>
-                      </td>
-                      <td className="p-3.5 sm:p-4 text-center">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-bold border border-emerald-200/60 dark:border-emerald-800/40">
-                          Disahkan
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      {/* Badge Header Periode & Status Resmi */}
+                      <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                          <Calendar size={13} className="text-slate-500 dark:text-slate-400" />
+                          <span>Periode: {bulan}</span>
                         </span>
-                      </td>
-                      <td className="p-3.5 sm:p-4 text-center">
-                        <button 
-                          onClick={() => {
-                            setSelectedHistorySlip(item);
-                            setIsSlipModalOpen(true);
-                          }} 
-                          className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-400 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-xl font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs hover:shadow cursor-pointer"
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1.5 shadow-xs">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <ShieldCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>Disahkan &amp; Resmi</span>
+                        </span>
+                      </div>
+
+                      {/* Label THP dengan Tombol Privasi Mata (Show/Hide) */}
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <span className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-slate-400 uppercase">
+                          Total Gaji Bersih (Take Home Pay)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowNominalGaji(!showNominalGaji)}
+                          className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                          title={showNominalGaji ? "Sembunyikan Nominal" : "Tampilkan Nominal"}
                         >
-                          <FileText size={14} className="text-slate-500 dark:text-slate-400" /> 
-                          <span>Lihat Rincian</span>
+                          {showNominalGaji ? <Eye size={15} /> : <EyeOff size={15} />}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {riwayatAsli.length === 0 && (
-                    <tr>
-                      <td colSpan="5" className="p-10 text-center text-slate-400">
-                        <Archive size={36} className="mb-2 opacity-30 text-indigo-500 mx-auto" />
-                        <p className="font-bold text-sm text-slate-600 dark:text-slate-300">Belum ada riwayat gaji yang tersimpan.</p>
-                        <p className="text-xs mt-0.5 text-slate-400">Data akan muncul di sini setelah Admin melakukan "Tutup Buku" pada akhir bulan.</p>
-                      </td>
-                    </tr>
+                      </div>
+
+                      {/* Nominal Utama THP */}
+                      <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-3 select-none">
+                        {showNominalGaji ? formatRp(slip.totalBersih) : 'Rp ••••••••'}
+                      </div>
+
+                      {/* Dua Kapsul Fintech: Penerimaan Kotor vs Total Potongan */}
+                      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
+                        <div className="bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl p-3 sm:p-3.5 border border-emerald-200/80 dark:border-emerald-800/50 text-left shadow-xs relative overflow-hidden group">
+                          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-700 dark:text-emerald-300 font-bold mb-1">
+                            <TrendingUp size={14} className="text-emerald-600 dark:text-emerald-400" />
+                            <span>Penerimaan Kotor</span>
+                          </div>
+                          <span className="font-mono text-xs sm:text-sm font-black text-emerald-900 dark:text-emerald-100">
+                            {showNominalGaji ? formatRp(slip.totalKotor) : 'Rp ••••••'}
+                          </span>
+                        </div>
+                        <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs relative overflow-hidden group">
+                          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-1">
+                            <CreditCard size={14} className="text-rose-600 dark:text-rose-400" />
+                            <span>Total Potongan</span>
+                          </div>
+                          <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">
+                            {showNominalGaji ? `-${formatRp(slip.totalPotongan)}` : '-Rp ••••'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tombol Aksi Utama: Cetak Lembar A4 & Unduh PDF Resmi */}
+                      <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5 w-full max-w-md">
+                        <button
+                          type="button"
+                          onClick={() => setIsSlipModalOpen(true)}
+                          className="flex-1 min-w-[140px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-transparent"
+                        >
+                          <Printer size={16} />
+                          <span>Cetak Slip (A4)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setIsExportingPDF(true);
+                            try {
+                              await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${bulan.replace(/\s+/g, '_')}.pdf`);
+                            } finally {
+                              setIsExportingPDF(false);
+                            }
+                          }}
+                          disabled={isExportingPDF}
+                          className="flex-1 min-w-[140px] bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xs hover:shadow-sm hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <Download size={16} className="text-slate-500 dark:text-slate-400" />}
+                          <span>{isExportingPDF ? 'Memproses...' : 'Unduh PDF'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KARTU 2: RINCIAN PENGHASILAN & TUNJANGAN */}
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                          <Wallet size={15} />
+                        </div>
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
+                          Rincian Penerimaan (Pendapatan)
+                        </h3>
+                      </div>
+                      <span className="font-mono text-xs sm:text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {formatRp(slip.totalKotor)}
+                      </span>
+                    </div>
+
+                    <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
+                      {/* Tunjangan Masa Kerja */}
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                        <div>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Masa Kerja</span>
+                          <p className="text-[10px] text-slate-400">Status {myData.status} • TMT {formatDateId(myData.tmt)}</p>
+                        </div>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMasaKerja)}</span>
+                      </div>
+
+                      {/* Tunjangan Jabatan */}
+                      {slip.tJabatan > 0 && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Jabatan</span>
+                            <p className="text-[10px] text-slate-400">{myData.position}</p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tJabatan)}</span>
+                        </div>
+                      )}
+
+                      {/* Tunjangan Pendidikan */}
+                      {slip.tPendidikan > 0 && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Pendidikan</span>
+                            <p className="text-[10px] text-slate-400">Kualifikasi {myData.education}</p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tPendidikan)}</span>
+                        </div>
+                      )}
+
+                      {/* Tunjangan Keluarga */}
+                      {slip.tKeluarga > 0 && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Tunjangan Keluarga</span>
+                            <p className="text-[10px] text-slate-400">
+                              {myData.family?.wife === 1 ? 'Suami/Istri' : ''} {myData.family?.children > 0 ? `• ${myData.family.children} Anak` : ''}
+                            </p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tKeluarga)}</span>
+                        </div>
+                      )}
+
+                      {/* Insentif Kehadiran (Tepat Waktu) */}
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                        <div>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Kehadiran Tepat Waktu</span>
+                          <p className="text-[10px] text-slate-400">Total kehadiran tepat waktu bulan ini</p>
+                        </div>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.bonusHadir)}</span>
+                      </div>
+
+                      {/* Tunjangan Jam Mengajar / Kelebihan Jam */}
+                      {slip.tMengajar > 0 && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Honor Jam Mengajar</span>
+                            <p className="text-[10px] text-slate-400">Realisasi jam mengajar &amp; kelebihan jam</p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tMengajar)}</span>
+                        </div>
+                      )}
+
+                      {/* Insentif Tugas Tambahan */}
+                      {slip.tTambahan > 0 && (
+                        <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Insentif Tugas Tambahan</span>
+                            <p className="text-[10px] text-slate-400">Penugasan khusus / kepanitiaan</p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatRp(slip.tTambahan)}</span>
+                        </div>
+                      )}
+
+                      {/* Total Penerimaan Kotor Footer */}
+                      <div className="flex items-center justify-between pt-2 text-emerald-700 dark:text-emerald-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
+                        <span>Subtotal Penerimaan Kotor</span>
+                        <span className="font-mono text-sm sm:text-base">{formatRp(slip.totalKotor)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KARTU 3: RINCIAN PEMOTONGAN GAJI */}
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="p-3.5 sm:p-4 bg-slate-50/70 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+                          <CreditCard size={15} />
+                        </div>
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white uppercase tracking-wider">
+                          Rincian Pemotongan
+                        </h3>
+                      </div>
+                      <span className="font-mono text-xs sm:text-sm font-extrabold text-rose-600 dark:text-rose-400">
+                        -{formatRp(slip.totalPotongan)}
+                      </span>
+                    </div>
+
+                    <div className="p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
+                      {/* Potongan Keterlambatan */}
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                        <div>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">Pemotongan Kedisiplinan (Telat)</span>
+                          <p className="text-[10px] text-slate-400">{myData.payroll?.disiplin?.telat || 0} kali keterlambatan</p>
+                        </div>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {slip.potongTelat > 0 ? `-${formatRp(slip.potongTelat)}` : 'Rp 0'}
+                        </span>
+                      </div>
+
+                      {/* Potongan Lainnya / Kasbon */}
+                      {(myData.payroll?.potonganLainnya || []).map((pot, pIdx) => (
+                        <div key={pIdx} className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
+                          <div>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">{pot.ket || 'Potongan Lainnya'}</span>
+                            <p className="text-[10px] text-slate-400">Angsuran / iuran otomatis</p>
+                          </div>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                            -{formatRp(Number(pot.nominal) || 0)}
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Total Potongan Footer */}
+                      <div className="flex items-center justify-between pt-2 text-rose-600 dark:text-rose-400 font-extrabold border-t border-slate-200 dark:border-slate-700">
+                        <span>Subtotal Pemotongan</span>
+                        <span className="font-mono text-sm sm:text-base">-{formatRp(slip.totalPotongan)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KARTU 4: INFORMASI REKENING PENERIMA */}
+                  <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs sm:text-sm">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                        <Building size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Rekening Tujuan Transfer</p>
+                        <p className="font-black text-slate-800 dark:text-slate-200 font-mono truncate">
+                          {myData.bankName ? `${myData.bankName} • ${myData.bankAccount}` : 'Penerimaan via Tunai'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">a.n. {myData.name}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KARTU 5: KONFIRMASI GAJI */}
+                  {!myData.payroll?.isConfirmed ? (
+                    <div className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700/60 rounded-2xl text-center space-y-3 shadow-sm">
+                      <div className="flex items-center justify-center gap-2">
+                        <BellRing className="text-amber-600 dark:text-amber-400 animate-bounce" size={18} />
+                        <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                          Konfirmasi Penerimaan Gaji
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 font-bold">
+                        Silakan periksa rincian di atas. Jika sudah sesuai, klik tombol konfirmasi di bawah ini.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2.5 max-w-md mx-auto">
+                        <button
+                          type="button"
+                          onClick={handleKonfirmasi}
+                          disabled={isConfirming}
+                          className="flex-1 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold shadow-md shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isConfirming ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckCircle size={16} />}
+                          {isConfirming ? 'Menyimpan...' : 'Ya, Nominal Sesuai'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleKomplain}
+                          className="flex-1 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-all border border-rose-200 dark:border-rose-800 flex justify-center items-center gap-2 cursor-pointer hover:scale-[1.02]"
+                          title="Akan dialihkan ke WhatsApp Bendahara"
+                        >
+                          <MessageSquare size={16} /> WA Bendahara
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-bold rounded-2xl border border-emerald-200 dark:border-emerald-800/60 text-center flex justify-center items-center gap-2 shadow-xs">
+                      <CheckCircle2 size={18} className="text-emerald-500" />
+                      <span>Alhamdulillah, Penerimaan Gaji Periode Ini Telah Dikonfirmasi Resmi.</span>
+                    </div>
                   )}
-                </tbody>
-              </table>
+                </>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* Catatan Privasi Dokumen */}
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
-            <ShieldCheck size={13} className="shrink-0 text-indigo-500" />
-            <span>Dokumen slip gaji merupakan dokumen rahasia. Jaga kerahasiaan berkas yang Anda unduh.</span>
-          </div>
+          {/* 4. Dashboard Pemantauan Pinjaman / Buku Kasbon */}
+          {activeSection === 'portal_pinjaman' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {loanItems.length === 0 ? (
+                <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
+                  <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                    <CheckCircle size={32} />
+                  </div>
+                  <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Alhamdulillah, Tidak Ada Pinjaman Aktif</h4>
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                    Saat ini Anda tidak memiliki tanggungan kasbon, cicilan koperasi, atau kewajiban pinjaman lain yang terdaftar pada sistem pemotongan otomatis.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* HERO KARTU BUKU PINJAMAN PEGAWAI - EDISI BERSIH PUTIH (CLEAN WHITE CARD) */}
+                  <div className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-3xl p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden border border-slate-200/90 dark:border-slate-700/80">
+                    <div className="absolute right-4 bottom-4 text-slate-100 dark:text-slate-700/20 pointer-events-none select-none">
+                      <CreditCard size={150} strokeWidth={1} />
+                    </div>
+
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700/70 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 shadow-xs flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                          <CreditCard size={13} className="text-slate-500 dark:text-slate-400" />
+                          <span>Buku Kasbon &amp; Pinjaman</span>
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800/60 flex items-center gap-1.5 shadow-xs">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                          <span>{loanItems.length} Tagihan Aktif</span>
+                        </span>
+                      </div>
+
+                      <p className="text-xs font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider mt-1">
+                        Total Sisa Saldo Pinjaman Anda
+                      </p>
+
+                      <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-tight text-slate-900 dark:text-white my-2.5 select-none">
+                        {formatRp(totalSisaHutang)}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
+                        <div className="bg-rose-50/70 dark:bg-rose-950/30 rounded-2xl p-3 sm:p-3.5 border border-rose-200/80 dark:border-rose-800/50 text-left shadow-xs">
+                          <span className="block text-[10px] sm:text-xs text-rose-700 dark:text-rose-300 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
+                          <span className="font-mono text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/40 rounded-2xl p-3 sm:p-3.5 border border-slate-200/80 dark:border-slate-700/80 text-left shadow-xs">
+                          <span className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold mb-0.5">Metode Pelunasan</span>
+                          <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">Potong Slip Gaji</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DAFTAR RINCIAN PINJAMAN */}
+                  <div className="space-y-4">
+                    {loanItems.map((loan, idx) => {
+                      const cicilanBulanan = loan.nominal;
+                      const totalPinjamanAwal = loan.totalPinjaman !== undefined ? loan.totalPinjaman : (loan.nominal * 10);
+                      const sisaSaldo = loan.sisaHutang !== undefined ? loan.sisaHutang : (loan.nominal * 4);
+                      const totalTerbayar = Math.max(0, totalPinjamanAwal - sisaSaldo);
+                      const persentase = totalPinjamanAwal > 0 ? ((totalTerbayar / totalPinjamanAwal) * 100).toFixed(0) : 0;
+
+                      return (
+                        <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
+                          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex justify-between items-center bg-slate-50/70 dark:bg-slate-900/30">
+                            <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                                <CreditCard size={15} />
+                              </div>
+                              <span>{loan.ket}</span>
+                            </h3>
+                            <span className="text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
+                              Status: Aktif
+                            </span>
+                          </div>
+
+                          <div className="p-4 sm:p-6 space-y-4">
+                            {/* 4 Kotak Metrik yang Nyaman di HP */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                              <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-left">
+                                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">Plafon Pinjaman</p>
+                                <p className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200 font-mono">{formatRp(totalPinjamanAwal)}</p>
+                              </div>
+                              <div className="bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 text-left">
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold mb-0.5">Telah Dicicil</p>
+                                <p className="text-xs sm:text-sm font-black text-emerald-700 dark:text-emerald-300 font-mono">{formatRp(totalTerbayar)}</p>
+                              </div>
+                              <div className="bg-rose-50 dark:bg-rose-950/20 p-3 rounded-xl border border-rose-200/60 dark:border-rose-800/40 text-left">
+                                <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase tracking-wider font-bold mb-0.5">Potongan / Bulan</p>
+                                <p className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300 font-mono">{formatRp(cicilanBulanan)}</p>
+                              </div>
+                              <div className="bg-teal-50 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-200/80 dark:border-teal-700/60 text-left shadow-xs">
+                                <p className="text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-wider font-bold mb-0.5">Sisa Hutang</p>
+                                <p className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 font-mono">{formatRp(sisaSaldo)}</p>
+                              </div>
+                            </div>
+
+                            {/* Progres Pelunasan */}
+                            <div className="bg-slate-50/70 dark:bg-slate-900/30 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
+                                <span className="text-xs font-black font-mono text-teal-600 dark:text-teal-400">{persentase}%</span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                                <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, persentase))}%` }}>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Riwayat Pemotongan: Mobile-Friendly Cards + Desktop Table */}
+                            <div>
+                              <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                Simulasi Pemotongan Terbaru
+                              </h4>
+
+                              {/* Tampilan Ponsel (Card Feed - No Scroll Horisontal) */}
+                              <div className="sm:hidden space-y-2">
+                                <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
+                                  <div>
+                                    <p className="font-bold text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</p>
+                                    <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
+                                  </div>
+                                  <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
+                                </div>
+                                <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/70 dark:border-slate-700/70 flex items-center justify-between text-xs">
+                                  <div>
+                                    <p className="font-bold text-slate-800 dark:text-slate-200">Bulan Sebelumnya</p>
+                                    <p className="text-[10px] text-slate-400">Potongan otomatis slip gaji</p>
+                                  </div>
+                                  <span className="font-mono font-black text-rose-500">-{formatRp(cicilanBulanan)}</span>
+                                </div>
+                              </div>
+
+                              {/* Tampilan Tablet / Laptop (Table View) */}
+                              <div className="hidden sm:block overflow-hidden border border-slate-200 dark:border-slate-700 rounded-xl">
+                                <table className="w-full text-left text-xs">
+                                  <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                      <th className="p-3 font-semibold">Periode Gaji</th>
+                                      <th className="p-3 font-semibold">Keterangan Transfer</th>
+                                      <th className="p-3 font-semibold text-right">Potongan Masuk</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{bulan} (Bulan Ini)</td>
+                                      <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
+                                      <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
+                                    </tr>
+                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200">Bulan Sebelumnya</td>
+                                      <td className="p-3 text-slate-600 dark:text-slate-400">Angsuran otomatis via pemotongan gaji</td>
+                                      <td className="p-3 text-right font-bold text-rose-500">-{formatRp(cicilanBulanan)}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2 leading-relaxed">
+                      <Info size={15} className="shrink-0 text-teal-500 mt-0.5" />
+                      <span>Catatan: Rincian ini adalah proyeksi berdasarkan data bendahara. Sisa hutang berkurang setiap kali slip gaji bulanan disahkan. Apabila melakukan pelunasan tunai di luar slip gaji, harap konfirmasi ke Bendahara Sekolah.</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 5. Riwayat Gaji */}
+          {activeSection === 'portal_riwayat' && (
+            <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              {/* KARTU 1: KPI RINGKASAN ARSIP GAJI */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Arsip</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <Archive size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">{riwayatAsli.length}</span>
+                      <span className="text-xs font-bold text-slate-400">Bulan</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      Dokumen slip tersimpan
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Arsip Terakhir</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <Calendar size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 truncate">
+                      {riwayatAsli[0]?.periode || 'Belum Ada'}
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                      {riwayatAsli[0]?.tanggal || '-'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1 bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status Dokumen</span>
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <ShieldCheck size={16} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span>Resmi &amp; Sah</span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      Disetujui Kepala Sekolah
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* KARTU 2: DAFTAR DOKUMEN ARSIP (Dual-Mode: Mobile Card Feed + Desktop Table) */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                    <History size={16} className="text-indigo-500" />
+                    <span>Daftar Slip Gaji Diarsipkan</span>
+                  </h4>
+                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    {riwayatAsli.length} Dokumen
+                  </span>
+                </div>
+
+                {/* Tabel Riwayat Gaji Resmi (Bisa Digeser ke Samping di Layar HP) */}
+                <div className="overflow-x-auto hide-scrollbar touch-pan-x">
+                  <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap min-w-max">
+                    <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
+                      <tr>
+                        <th className="p-3.5 sm:p-4 font-semibold">Periode Bulan</th>
+                        <th className="p-3.5 sm:p-4 font-semibold text-right">Total Bersih (THP)</th>
+                        <th className="p-3.5 sm:p-4 font-semibold text-center sm:text-left">Tanggal Pengesahan</th>
+                        <th className="p-3.5 sm:p-4 font-semibold text-center">Status</th>
+                        <th className="p-3.5 sm:p-4 font-semibold text-center">Aksi Dokumen</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                      {riwayatAsli.map((item) => (
+                        <tr key={item.idArsip} className="hover:bg-indigo-50/30 dark:hover:bg-slate-800/40 transition-colors group">
+                          <td className="p-3.5 sm:p-4 font-medium text-slate-800 dark:text-slate-200">
+                            <div className="flex items-center gap-2.5">
+                              <Calendar size={16} className="text-indigo-400 shrink-0" />
+                              <span className="font-bold text-slate-800 dark:text-slate-100">{item.periode}</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5 sm:p-4 font-black text-emerald-600 dark:text-emerald-400 text-right font-mono text-sm sm:text-base">
+                            {formatRp(item.nominal)}
+                          </td>
+                          <td className="p-3.5 sm:p-4 text-xs text-slate-600 dark:text-slate-300">
+                            <div className="flex items-center justify-center sm:justify-start gap-1.5 font-medium">
+                              <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                              <span>{item.tanggal}</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5 sm:p-4 text-center">
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-bold border border-emerald-200/60 dark:border-emerald-800/40">
+                              Disahkan
+                            </span>
+                          </td>
+                          <td className="p-3.5 sm:p-4 text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedHistorySlip(item);
+                                setIsSlipModalOpen(true);
+                              }}
+                              className="text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-400 text-slate-700 dark:text-slate-200 px-3.5 py-1.5 rounded-xl font-bold transition-all inline-flex items-center justify-center gap-1.5 shadow-xs hover:shadow cursor-pointer"
+                            >
+                              <FileText size={14} className="text-slate-500 dark:text-slate-400" />
+                              <span>Lihat Rincian</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {riwayatAsli.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="p-10 text-center text-slate-400">
+                            <Archive size={36} className="mb-2 opacity-30 text-indigo-500 mx-auto" />
+                            <p className="font-bold text-sm text-slate-600 dark:text-slate-300">Belum ada riwayat gaji yang tersimpan.</p>
+                            <p className="text-xs mt-0.5 text-slate-400">Data akan muncul di sini setelah Admin melakukan "Tutup Buku" pada akhir bulan.</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Catatan Privasi Dokumen */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 pt-1 pb-2">
+                <ShieldCheck size={13} className="shrink-0 text-indigo-500" />
+                <span>Dokumen slip gaji merupakan dokumen rahasia. Jaga kerahasiaan berkas yang Anda unduh.</span>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Informasi Sistem */}
+          {activeSection === 'portal_info' && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-slate-100 dark:border-slate-700/50 p-2 sm:p-4">
+                {renderElegantInfo(settings?.payrollInfoText)}
+              </div>
+            </div>
+          )}
+
+          {/* 7. Kritik & Saran */}
+          {activeSection === 'portal_saran' && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <form onSubmit={handleSendFeedback} className="space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Kami sangat menghargai masukan Anda untuk pengembangan sekolah dan kesejahteraan bersama. Kritik dan saran akan dikirim secara aman kepada manajemen.
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Topik / Subjek Masukan</label>
+                  <select
+                    value={feedbackSubject}
+                    onChange={(e) => setFeedbackSubject(e.target.value)}
+                    className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm font-semibold focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all cursor-pointer shadow-sm"
+                  >
+                    <option value="Saran & Masukan Umum">Saran & Masukan Umum</option>
+                    <option value="Koreksi Data / Profil Pegawai">Koreksi Data / Profil Pegawai</option>
+                    <option value="Pertanyaan Gaji & Potongan">Pertanyaan Seputar Gaji / Potongan</option>
+                    <option value="Laporan Kendala Sistem">Laporan Kendala Sistem</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detail Pesan / Keterangan</label>
+                  <textarea
+                    rows="5"
+                    value={feedbackMsg}
+                    onChange={(e) => setFeedbackMsg(e.target.value)}
+                    placeholder="Tuliskan masukan, kendala, atau rincian permohonan koreksi data Anda di sini..."
+                    className="w-full p-4 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 text-sm focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all shadow-inner resize-y min-h-[120px]"
+                    required
+                  ></textarea>
+                </div>
+
+                <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/50">
+                  <button
+                    type="submit"
+                    disabled={isSendingFeedback}
+                    className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={18} />}
+                    {isSendingFeedback ? 'Mengirim...' : 'Kirim Masukan Sekarang'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
         </div>
-        )}
+      </div>
 
-        {/* 6. Informasi Sistem */}
-        {activeSection === 'portal_info' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-slate-100 dark:border-slate-700/50 p-2 sm:p-4">
-            {renderElegantInfo(settings?.payrollInfoText)}
-          </div>
-        </div>
-        )}
-
-        {/* 7. Kritik & Saran */}
-      {activeSection === 'portal_saran' && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <form onSubmit={handleSendFeedback} className="space-y-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Kami sangat menghargai masukan Anda untuk pengembangan sekolah dan kesejahteraan bersama. Kritik dan saran akan dikirim secara aman kepada manajemen.
-            </p>
-            
-            <div className="space-y-1.5">
-               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Topik / Subjek Masukan</label>
-               <select 
-                 value={feedbackSubject}
-                 onChange={(e) => setFeedbackSubject(e.target.value)}
-                 className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm font-semibold focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all cursor-pointer shadow-sm"
-               >
-                 <option value="Saran & Masukan Umum">Saran & Masukan Umum</option>
-                 <option value="Koreksi Data / Profil Pegawai">Koreksi Data / Profil Pegawai</option>
-                 <option value="Pertanyaan Gaji & Potongan">Pertanyaan Seputar Gaji / Potongan</option>
-                 <option value="Laporan Kendala Sistem">Laporan Kendala Sistem</option>
-               </select>
-            </div>
-
-            <div className="space-y-1.5">
-               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detail Pesan / Keterangan</label>
-               <textarea 
-                 rows="5" 
-                 value={feedbackMsg}
-                 onChange={(e) => setFeedbackMsg(e.target.value)}
-                 placeholder="Tuliskan masukan, kendala, atau rincian permohonan koreksi data Anda di sini..."
-                 className="w-full p-4 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 text-sm focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all shadow-inner resize-y min-h-[120px]"
-                 required
-               ></textarea>
-            </div>
-            
-            <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/50">
-              <button 
-                type="submit"
-                disabled={isSendingFeedback}
-                className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+      {/* Modal Slip Gaji (Diisolasi di luar kontainer utama agar tidak terdeteksi ganda saat window.print) */}
+      {isSlipModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
+          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
+            <div className="no-print p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
+              <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
+                <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
+              </h3>
+              <button
+                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                title="Tutup (Esc / Back)"
               >
-                {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={18} />}
-                {isSendingFeedback ? 'Mengirim...' : 'Kirim Masukan Sekarang'}
+                <X size={18} />
               </button>
             </div>
-          </form>
+
+            <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain print:bg-transparent print:p-0 print:m-0 print:overflow-visible" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {/* Petunjuk khusus pengguna ponsel */}
+              <div className="no-print md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
+                <span className="text-base">💡</span>
+                <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
+              </div>
+              <div className="min-w-fit flex justify-center pb-10 print:pb-0 print:p-0 print:w-full">
+                {selectedHistorySlip ? (
+                  <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
+                ) : (
+                  <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
+                )}
+              </div>
+            </div>
+
+            <div className="no-print p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  document.body.classList.add('printing-slip');
+                  window.print();
+                  setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
+                }}
+                className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              >
+                <Printer size={16} /> Print
+              </button>
+              <button
+                onClick={async () => {
+                  setIsExportingPDF(true);
+                  try {
+                    await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${selectedHistorySlip ? selectedHistorySlip.periode.replace(/\s+/g, '_') : bulan}.pdf`);
+                  } finally {
+                    setIsExportingPDF(false);
+                  }
+                }}
+                disabled={isExportingPDF}
+                className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16} />}
+                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
+              </button>
+              <button
+                onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }}
+                className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      </div>
-    </div>
-
-    {/* Modal Slip Gaji (Diisolasi di luar kontainer utama agar tidak terdeteksi ganda saat window.print) */}
-    {isSlipModalOpen && (
-      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 print:p-0 print:m-0 print:bg-transparent print:static print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:block">
-        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-700 print:bg-transparent print:p-0 print:m-0 print:h-auto print:max-h-none print:w-full print:border-0 print:shadow-none print:overflow-visible">
-          <div className="no-print p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
-            <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
-              <FileText className="text-blue-500" size={18} /> Pratinjau Lembar Slip Gaji Resmi
-            </h3>
-            <button 
-              onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
-              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Tutup (Esc / Back)"
-            >
-              <X size={18}/>
-            </button>
-          </div>
-          
-          <div className="overflow-y-auto overflow-x-auto p-2 sm:p-4 md:p-6 bg-slate-200 dark:bg-slate-700/50 flex-1 overscroll-contain print:bg-transparent print:p-0 print:m-0 print:overflow-visible" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {/* Petunjuk khusus pengguna ponsel */}
-            <div className="no-print md:hidden mb-2.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-2 shadow-xs">
-              <span className="text-base">💡</span>
-              <span>Lembar cetak resmi A4: Anda dapat menggeser ke bawah &amp; ke samping, atau klik <b>Unduh PDF</b>.</span>
-            </div>
-            <div className="min-w-fit flex justify-center pb-10 print:pb-0 print:p-0 print:w-full">
-              {selectedHistorySlip ? (
-                 <SlipDocument teacher={selectedHistorySlip.dataHistoris} bulan={selectedHistorySlip.periode} settings={settings} />
-              ) : (
-                 <SlipDocument teacher={myData} bulan={bulan} settings={settings} />
-              )}
-            </div>
-          </div>
-
-          <div className="no-print p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap sm:flex-nowrap justify-between sm:justify-end gap-2 shrink-0">
-            <button 
-              onClick={() => {
-                document.body.classList.add('printing-slip');
-                window.print();
-                setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
-              }} 
-              className="flex-1 sm:flex-initial bg-slate-700 hover:bg-slate-800 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-            >
-              <Printer size={16}/> Print
-            </button>
-            <button 
-              onClick={async () => {
-                setIsExportingPDF(true);
-                try {
-                  await exportToPDF('printable-area', `Slip_Gaji_${myData.name.replace(/\s+/g, '_')}_${selectedHistorySlip ? selectedHistorySlip.periode.replace(/\s+/g, '_') : bulan}.pdf`);
-                } finally {
-                  setIsExportingPDF(false);
-                }
-              }} 
-              disabled={isExportingPDF}
-              className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-700 text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isExportingPDF ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
-              {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
-            </button>
-            <button 
-              onClick={() => { setIsSlipModalOpen(false); setSelectedHistorySlip(null); }} 
-              className="w-full sm:w-auto px-4 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* MODAL INPUT JURNAL KBM & BEBAN KERJA (PENGGANTI RESMI GOOGLE FORM) */}
-    {isJurnalModalOpen && (
-      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700 max-h-[92vh] animate-in zoom-in-95 duration-200">
-          {/* Header */}
-          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50/80 dark:bg-slate-900/50 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <BookOpen size={20} />
-              </div>
-              <div>
-                <h3 className="font-black text-sm sm:text-base text-slate-800 dark:text-white">
-                  {jurnalForm.id ? 'Edit Jurnal Mengajar & Piket' : 'Catat Jam Mengajar & Beban Kerja'}
-                </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  SD IT Qurrata A'yun • Catatan Otomatis Masuk ke Gaji
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsJurnalModalOpen(false)}
-              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Form Body */}
-          <form onSubmit={handleSaveJurnalEntry} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
-            {/* 1. Guru & Tanggal */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-200/70 dark:border-slate-700/60">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Nama Guru (Otomatis)
-                </label>
-                <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 truncate">
-                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span className="truncate">{myData.name}</span>
+      {/* MODAL INPUT JURNAL KBM & BEBAN KERJA (PENGGANTI RESMI GOOGLE FORM) */}
+      {isJurnalModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-2.5 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700 max-h-[94vh] animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md text-indigo-300 flex items-center justify-center shrink-0 border border-white/20">
+                  <BookOpen size={20} />
                 </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Tanggal Pelaksanaan
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={jurnalForm.tanggalStr}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const d = Number(val.split('-')[2]) || new Date().getDate();
-                    setJurnalForm(prev => ({ ...prev, tanggalStr: val, tgl: d }));
-                  }}
-                  className="w-full p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                />
-              </div>
-            </div>
-
-            {/* 2. Stepper Jam */}
-            <div className="space-y-3">
-              <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                Alokasi Jam Kegiatan Hari Ini
-              </span>
-
-              {/* A. Jam Mengajar / Halaqoh */}
-              <div className="p-3 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
-                    1. Jam Masuk Kelas / Halaqoh (KBM)
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Tatap muka mengajar di kelas</span>
-                </div>
-                <div className="flex items-center gap-1.5 self-end sm:self-center">
-                  {[0, 1, 2, 3, 4, 5, 6].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setJurnalForm(prev => ({ ...prev, jamKbm: n }))}
-                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        jurnalForm.jamKbm === n
-                          ? 'bg-indigo-600 text-white shadow-xs scale-105'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 ml-1">JPL</span>
+                  <h3 className="font-black text-sm sm:text-base leading-tight">
+                    {jurnalForm.id ? 'Edit Jurnal Beban Kerja Guru' : 'Catat Jam Mengajar & Beban Kerja'}
+                  </h3>
+                  <p className="text-[11px] text-indigo-200/80">
+                    SD IT Qurrata A'yun • Catatan Otomatis Masuk ke Slip Gaji
+                  </p>
                 </div>
               </div>
-
-              {/* B. Jam Piket Kantor & Sholat */}
-              <div className="p-3 bg-teal-50/40 dark:bg-teal-950/20 rounded-2xl border border-teal-200/60 dark:border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
-                    2. Jam Piket Kantor / Sholat
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Piket gerbang, kantor, atau sholat</span>
-                </div>
-                <div className="flex items-center gap-1.5 self-end sm:self-center">
-                  {[0, 1, 2, 3].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setJurnalForm(prev => ({ ...prev, jamPiket: n }))}
-                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        jurnalForm.jamPiket === n
-                          ? 'bg-teal-600 text-white shadow-xs scale-105'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <span className="text-xs font-bold text-teal-600 dark:text-teal-400 ml-1">JPL</span>
-                </div>
-              </div>
-
-              {/* C. Jam Rapat & Kegiatan Guru */}
-              <div className="p-3 bg-purple-50/40 dark:bg-purple-950/20 rounded-2xl border border-purple-200/60 dark:border-purple-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
-                    3. Jam Rapat &amp; Kegiatan Sore
-                  </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat dinas, kajian, halaqoh sore</span>
-                </div>
-                <div className="flex items-center gap-1.5 self-end sm:self-center">
-                  {[0, 1, 2, 3].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setJurnalForm(prev => ({ ...prev, jamRapat: n }))}
-                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        jurnalForm.jamRapat === n
-                          ? 'bg-purple-600 text-white shadow-xs scale-105'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 ml-1">JPL</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Dropdown Mapel & Kelas */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Mata Pelajaran (Opsional)
-                </label>
-                <select
-                  value={jurnalForm.mapel}
-                  onChange={(e) => setJurnalForm(prev => ({ ...prev, mapel: e.target.value }))}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                >
-                  {DEFAULT_MAPEL_KBM.map(m => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Kelas yang Diajar (Opsional)
-                </label>
-                <select
-                  value={jurnalForm.kelas}
-                  onChange={(e) => setJurnalForm(prev => ({ ...prev, kelas: e.target.value }))}
-                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-                >
-                  {DEFAULT_KELAS_KBM.map(k => (
-                    <option key={k} value={k}>{k}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* 4. Catatan Singkat */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                Catatan / Materi Pembelajaran (Opsional)
-              </label>
-              <input
-                type="text"
-                placeholder="Cth: Latihan Soal Bab 2, Evaluasi Tahfidz Juz 30"
-                value={jurnalForm.catatan}
-                onChange={(e) => setJurnalForm(prev => ({ ...prev, catatan: e.target.value }))}
-                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
-              />
-            </div>
-
-            {/* 5. Live Total Preview */}
-            <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 block">
-                  Total Jam Entri Ini
-                </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Otomatis terakumulasi ke jam mengajar slip gaji
-                </span>
-              </div>
-              <span className="font-mono text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                +{Number(jurnalForm.jamKbm) + Number(jurnalForm.jamPiket) + Number(jurnalForm.jamRapat)} JPL
-              </span>
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="pt-2 flex items-center justify-end gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsJurnalModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-xs cursor-pointer"
+                className="p-1.5 hover:bg-white/20 rounded-full text-indigo-200 hover:text-white transition-colors cursor-pointer"
               >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={isSavingJurnal}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-70 cursor-pointer"
-              >
-                {isSavingJurnal ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={15} />}
-                <span>Simpan Jurnal Sekarang</span>
+                <X size={18} />
               </button>
             </div>
-          </form>
+
+            {/* Form Body */}
+            <form onSubmit={handleSaveJurnalEntry} className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4 text-xs sm:text-sm">
+              {/* 1. Guru & Tanggal */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Nama Guru (Otomatis)
+                  </label>
+                  <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                    <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                    <span className="truncate">{myData.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">NIPY: {myData.nipy || '-'}</span>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Tanggal Pelaksanaan
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={jurnalForm.tanggalStr}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const d = Number(val.split('-')[2]) || new Date().getDate();
+                      setJurnalForm(prev => ({ ...prev, tanggalStr: val, tgl: d }));
+                    }}
+                    className="w-full p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                  />
+                  <span className="text-[9px] text-slate-400 block mt-0.5">*Bisa pilih hari ini atau kemarin</span>
+                </div>
+              </div>
+
+              {/* 2. ALOKASI 5 PILAR JAM BEBAN KERJA (DIPISAH SESUAI GOOGLE FORM ASLI) */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    Alokasi Jam Kegiatan Hari Ini
+                  </span>
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                    Satuan Jam Pembelajaran (JPL)
+                  </span>
+                </div>
+
+                {/* Pilar A: Jam Masuk Kelas / Mapel */}
+                <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-2xl border border-blue-200/70 dark:border-blue-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
+                      1. Jam Masuk Kelas / Mapel
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Tatap muka mata pelajaran kelas</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center flex-wrap">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamMasukKelas: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamMasukKelas === n
+                            ? 'bg-blue-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 ml-1">JPL</span>
+                  </div>
+                </div>
+
+                {/* Pilar B: Jam Halaqoh */}
+                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200/70 dark:border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
+                      2. Jam Halaqoh
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Bimbingan tahfidz / halaqoh Al-Qur'an</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center">
+                    {[0, 1, 2, 3, 4].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamHalaqoh: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamHalaqoh === n
+                            ? 'bg-indigo-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 ml-1">JPL</span>
+                  </div>
+                </div>
+
+                {/* Pilar C: Jam Piket Kantor */}
+                <div className="p-3 bg-teal-50/50 dark:bg-teal-950/20 rounded-2xl border border-teal-200/70 dark:border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
+                      3. Jam Piket Kantor
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Piket administrasi dinas kantor / gerbang</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center">
+                    {[0, 1, 2].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamPiketKantor: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamPiketKantor === n
+                            ? 'bg-teal-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-teal-600 dark:text-teal-400 ml-1">JPL</span>
+                  </div>
+                </div>
+
+                {/* Pilar D: Jam Piket Sholat (Dzuhur & Ashar) */}
+                <div className="p-3 bg-cyan-50/50 dark:bg-cyan-950/20 rounded-2xl border border-cyan-200/70 dark:border-cyan-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
+                      4. Jam Piket Sholat (Dzuhur &amp; Ashar)
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Pendampingan ibadah sholat berjamaah</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center">
+                    {[0, 1, 2].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamPiketSholat: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamPiketSholat === n
+                            ? 'bg-cyan-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 ml-1">JPL</span>
+                  </div>
+                </div>
+
+                {/* Pilar E: Jam Rapat & Kegiatan Sore */}
+                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-200/70 dark:border-purple-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
+                      5. Jam Rapat &amp; Kegiatan Sore
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat guru, muhadatsah, evaluasi dinas</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center">
+                    {[0, 1, 2, 3].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamRapat: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamRapat === n
+                            ? 'bg-purple-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400 ml-1">JPL</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. PILIHAN JAM PEMBELAJARAN KE- (CHECKLIST MULTI-SELECT) */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Jam Pembelajaran Ke- (Bisa Pilih Lebih Dari 1)
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      {(jurnalForm.jamKe || []).length > 0
+                        ? `${(jurnalForm.jamKe || []).length} Jam Terpilih: Jam ${(jurnalForm.jamKe || []).join(', ')}`
+                        : 'Belum ada jam yang dipilih'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsJamKeExpanded(!isJamKeExpanded)}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    {isJamKeExpanded ? 'Tutup ▲' : 'Buka Pilihan ▼'}
+                  </button>
+                </div>
+
+                {isJamKeExpanded && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                    {DEFAULT_JAM_KBM.map((j) => {
+                      const isSelected = (jurnalForm.jamKe || []).includes(j.id);
+                      return (
+                        <button
+                          key={j.id}
+                          type="button"
+                          onClick={() => handleToggleJamKe(j.id)}
+                          className={`p-2 rounded-xl text-left transition-all border text-xs flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-bold block leading-none">{j.label}</span>
+                            <span className={`text-[10px] ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
+                              {j.time}
+                            </span>
+                          </div>
+                          {isSelected && <Check size={14} className="shrink-0 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. MATA PELAJARAN YANG DIAJAR (CHECKLIST MULTI-SELECT) */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Mata Pelajaran (Bisa Checklist Lebih Dari 1)
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      {(jurnalForm.mapel || []).length} Mapel Terpilih
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMapelExpanded(!isMapelExpanded)}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    {isMapelExpanded ? 'Tutup Pilihan ▲' : 'Ubah / Pilih Mapel ▼'}
+                  </button>
+                </div>
+
+                {/* Badges of selected subjects */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {(jurnalForm.mapel || []).map((m) => (
+                    <span
+                      key={m}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-200 font-bold text-xs border border-indigo-200 dark:border-indigo-800"
+                    >
+                      <span>{m}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMapel(m)}
+                        className="hover:text-red-500 text-indigo-400 cursor-pointer ml-0.5"
+                        title="Hapus"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Expanded Checklist */}
+                {isMapelExpanded && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 block mb-1.5">*Klik nama mapel untuk mencentang / membatalkan</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {DEFAULT_MAPEL_KBM.map((m) => {
+                        const isChecked = (jurnalForm.mapel || []).includes(m);
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => handleToggleMapel(m)}
+                            className={`p-2 rounded-xl text-left text-xs font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                              isChecked
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="truncate">{m}</span>
+                            {isChecked && <Check size={13} className="shrink-0 ml-1 text-white" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 5. KELAS YANG DIAJAR (CHECKLIST MULTI-SELECT) */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Kelas yang Diajar (Bisa Checklist Lebih Dari 1)
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      {(jurnalForm.kelas || []).length} Kelas Terpilih
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsKelasExpanded(!isKelasExpanded)}
+                    className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                  >
+                    {isKelasExpanded ? 'Tutup Pilihan ▲' : 'Ubah / Pilih Kelas ▼'}
+                  </button>
+                </div>
+
+                {/* Badges of selected classes */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {(jurnalForm.kelas || []).map((k) => (
+                    <span
+                      key={k}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-100/80 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200 font-bold text-xs border border-teal-200 dark:border-teal-800"
+                    >
+                      <span>{k}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleKelas(k)}
+                        className="hover:text-red-500 text-teal-400 cursor-pointer ml-0.5"
+                        title="Hapus"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Expanded Checklist */}
+                {isKelasExpanded && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] text-slate-400 block mb-1.5">*Klik nama kelas untuk mencentang / membatalkan</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {DEFAULT_KELAS_KBM.map((k) => {
+                        const isChecked = (jurnalForm.kelas || []).includes(k);
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => handleToggleKelas(k)}
+                            className={`p-2 rounded-xl text-left text-xs font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                              isChecked
+                                ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="truncate">{k}</span>
+                            {isChecked && <Check size={13} className="shrink-0 ml-1 text-white" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 6. Catatan Singkat */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Catatan / Materi Pembelajaran (Opsional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Cth: Mengajar Tahfidz Juz 30 / Piket Kantor & Sholat Dzuhur"
+                  value={jurnalForm.catatan}
+                  onChange={(e) => setJurnalForm(prev => ({ ...prev, catatan: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                />
+              </div>
+
+              {/* 7. LIVE TOTAL PREVIEW */}
+              {(() => {
+                const mk = Number(jurnalForm.jamMasukKelas) || 0;
+                const hq = Number(jurnalForm.jamHalaqoh) || 0;
+                const pk = Number(jurnalForm.jamPiketKantor) || 0;
+                const ps = Number(jurnalForm.jamPiketSholat) || 0;
+                const rp = Number(jurnalForm.jamRapat) || 0;
+                const grandTotal = mk + hq + pk + ps + rp;
+
+                return (
+                  <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5 font-black text-xs text-emerald-800 dark:text-emerald-200">
+                        <CheckCircle size={15} className="text-emerald-600" />
+                        <span>Ringkasan Akumulasi Entri Ini:</span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 flex flex-wrap gap-2">
+                        <span>Kelas: <b>{mk} JPL</b></span>
+                        <span>•</span>
+                        <span>Halaqoh: <b>{hq} JPL</b></span>
+                        <span>•</span>
+                        <span>Piket Ktr: <b>{pk} JPL</b></span>
+                        <span>•</span>
+                        <span>Sholat: <b>{ps} JPL</b></span>
+                        <span>•</span>
+                        <span>Rapat: <b>{rp} JPL</b></span>
+                      </div>
+                    </div>
+                    <div className="text-right sm:text-right shrink-0">
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block uppercase">
+                        Total Realisasi
+                      </span>
+                      <span className="font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                        +{grandTotal} JPL
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Footer Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 shrink-0 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsJurnalModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingJurnal}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-70 cursor-pointer"
+                >
+                  {isSavingJurnal ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Save size={15} />
+                  )}
+                  <span>Simpan Jurnal Sekarang</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
-    {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
-    <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
-      
-      {/* Background Dasar Nav Bar */}
-      <div className="absolute bottom-0 w-full h-[62px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-200/80 dark:border-slate-700/80"></div>
-      
-      {/* Scrollable Container dengan Tinggi Ergonomis */}
-      <div className="relative flex items-center justify-between px-1.5 h-[62px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto gap-0.5">
-        {bottomNavItems.map(item => {
-           const isActive = activeSection === item.id;
+      {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
+      <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
 
-           // Helper penentuan warna dinamis
-           const getGradient = (id) => {
-             switch(id) {
-               case 'portal_dashboard': return 'from-blue-500 to-indigo-600';
-               case 'portal_jadwal': return 'from-pink-500 to-rose-600';
-               case 'portal_kehadiran': return 'from-amber-500 to-orange-600';
-               case 'portal_gaji': return 'from-emerald-500 to-teal-600';
-               case 'portal_pinjaman': return 'from-teal-500 to-cyan-600';
-               case 'portal_riwayat': return 'from-indigo-500 to-blue-600';
-               case 'portal_info': return 'from-purple-500 to-pink-600';
-               case 'portal_saran': return 'from-rose-500 to-red-600';
-               default: return 'from-slate-500 to-slate-700';
-             }
-           };
+        {/* Background Dasar Nav Bar */}
+        <div className="absolute bottom-0 w-full h-[62px] bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-[0_-8px_25px_rgba(0,0,0,0.08)] pointer-events-auto border-t border-slate-200/80 dark:border-slate-700/80"></div>
 
-           const getTextColor = (id) => {
-             switch(id) {
-               case 'portal_dashboard': return 'text-blue-600 dark:text-blue-400';
-               case 'portal_jadwal': return 'text-pink-600 dark:text-pink-400';
-               case 'portal_kehadiran': return 'text-amber-600 dark:text-amber-400';
-               case 'portal_gaji': return 'text-emerald-600 dark:text-emerald-400';
-               case 'portal_pinjaman': return 'text-teal-600 dark:text-teal-400';
-               case 'portal_riwayat': return 'text-indigo-600 dark:text-indigo-400';
-               case 'portal_info': return 'text-purple-600 dark:text-purple-400';
-               case 'portal_saran': return 'text-rose-600 dark:text-rose-400';
-               default: return 'text-slate-600 dark:text-slate-400';
-             }
-           };
+        {/* Scrollable Container dengan Tinggi Ergonomis */}
+        <div className="relative flex items-center justify-between px-1.5 h-[62px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto gap-0.5">
+          {bottomNavItems.map(item => {
+            const isActive = activeSection === item.id;
 
-           return (
-             <button 
-               key={item.id} 
-               onClick={() => setActiveTab(item.id)}
-               className="snap-center relative flex flex-col items-center justify-center shrink-0 min-w-[58px] sm:min-w-[66px] h-full outline-none group py-1"
-             >
-               {/* Icon Container */}
-               <div className={`flex items-center justify-center transition-all duration-200 relative ${
-                 isActive 
-                   ? `w-9 h-9 rounded-xl bg-gradient-to-br ${getGradient(item.id)} text-white shadow-md shadow-blue-500/20 scale-105` 
-                   : 'w-8 h-8 rounded-lg bg-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-               }`}>
-                 <item.icon 
-                   size={isActive ? 19 : 18} 
-                   strokeWidth={isActive ? 2.5 : 2} 
-                   className="transition-transform duration-200" 
-                 />
-                 
-                 {/* Red Dot Notifikasi */}
-                 {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
+            // Helper penentuan warna dinamis
+            const getGradient = (id) => {
+              switch (id) {
+                case 'portal_dashboard': return 'from-blue-500 to-indigo-600';
+                case 'portal_jadwal': return 'from-pink-500 to-rose-600';
+                case 'portal_kehadiran': return 'from-amber-500 to-orange-600';
+                case 'portal_gaji': return 'from-emerald-500 to-teal-600';
+                case 'portal_pinjaman': return 'from-teal-500 to-cyan-600';
+                case 'portal_riwayat': return 'from-indigo-500 to-blue-600';
+                case 'portal_info': return 'from-purple-500 to-pink-600';
+                case 'portal_saran': return 'from-rose-500 to-red-600';
+                default: return 'from-slate-500 to-slate-700';
+              }
+            };
+
+            const getTextColor = (id) => {
+              switch (id) {
+                case 'portal_dashboard': return 'text-blue-600 dark:text-blue-400';
+                case 'portal_jadwal': return 'text-pink-600 dark:text-pink-400';
+                case 'portal_kehadiran': return 'text-amber-600 dark:text-amber-400';
+                case 'portal_gaji': return 'text-emerald-600 dark:text-emerald-400';
+                case 'portal_pinjaman': return 'text-teal-600 dark:text-teal-400';
+                case 'portal_riwayat': return 'text-indigo-600 dark:text-indigo-400';
+                case 'portal_info': return 'text-purple-600 dark:text-purple-400';
+                case 'portal_saran': return 'text-rose-600 dark:text-rose-400';
+                default: return 'text-slate-600 dark:text-slate-400';
+              }
+            };
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className="snap-center relative flex flex-col items-center justify-center shrink-0 min-w-[58px] sm:min-w-[66px] h-full outline-none group py-1"
+              >
+                {/* Icon Container */}
+                <div className={`flex items-center justify-center transition-all duration-200 relative ${isActive
+                    ? `w-9 h-9 rounded-xl bg-gradient-to-br ${getGradient(item.id)} text-white shadow-md shadow-blue-500/20 scale-105`
+                    : 'w-8 h-8 rounded-lg bg-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}>
+                  <item.icon
+                    size={isActive ? 19 : 18}
+                    strokeWidth={isActive ? 2.5 : 2}
+                    className="transition-transform duration-200"
+                  />
+
+                  {/* Red Dot Notifikasi */}
+                  {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs"></span>
-                 )}
+                  )}
 
                   {/* Amber Dot Pengingat Jurnal KBM */}
                   {(item.id === 'portal_jadwal' && !hasFilledTodayJurnal && liveNow.getHours() >= 12) && (
-                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs" title="Jangan lupa isi Jurnal KBM hari ini"></span>
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs" title="Jangan lupa isi Jurnal KBM hari ini"></span>
                   )}
-               </div>
+                </div>
 
-               {/* Teks Label (Selalu terbaca, rapi & presisi) */}
-               <span className={`text-[10px] tracking-tight mt-0.5 transition-colors duration-200 truncate max-w-[56px] text-center ${
-                 isActive 
-                   ? `font-black ${getTextColor(item.id)}` 
-                   : 'font-semibold text-slate-400 dark:text-slate-500'
-               }`}>
-                 {item.label}
-               </span>
-               
-               {/* Indikator Titik Aktif */}
-               <div className={`w-1 h-1 rounded-full mt-0.5 transition-all duration-200 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
-             </button>
-           );
-        })}
+                {/* Teks Label (Selalu terbaca, rapi & presisi) */}
+                <span className={`text-[10px] tracking-tight mt-0.5 transition-colors duration-200 truncate max-w-[56px] text-center ${isActive
+                    ? `font-black ${getTextColor(item.id)}`
+                    : 'font-semibold text-slate-400 dark:text-slate-500'
+                  }`}>
+                  {item.label}
+                </span>
+
+                {/* Indikator Titik Aktif */}
+                <div className={`w-1 h-1 rounded-full mt-0.5 transition-all duration-200 ${isActive ? `bg-current ${getTextColor(item.id)} opacity-100 scale-100` : 'opacity-0 scale-0'}`}></div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
     </>
   );
 }
