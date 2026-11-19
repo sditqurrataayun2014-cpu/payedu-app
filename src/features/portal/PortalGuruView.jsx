@@ -35,12 +35,6 @@ import {
   pushCloudData as pushToSupabase
 } from '../../services/dbService';
 
-import {
-  isBiometricSupported,
-  getSavedBiometricAccount,
-  registerBiometricLogin,
-  removeBiometricAccount
-} from '../../services/biometricService';
 
 import { verifyTeacherDevice } from '../../services/deviceService';
 import { registerBackModal } from '../../services/navigationService';
@@ -377,6 +371,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     tgl: new Date().getDate(),
     jamMasukKelas: 2,
     jamHalaqoh: 0,
+    hasMuhadatsah: false,
     jamPiketKantor: 0,
     jamPiketSholat: 0,
     jamRapat: 0,
@@ -425,6 +420,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         tgl: entryToEdit.tgl || Number(entryToEdit.tanggalStr?.split('-')[2]) || new Date().getDate(),
         jamMasukKelas: !isNaN(mk) ? mk : (Number(entryToEdit.jamKbm) || 0),
         jamHalaqoh: !isNaN(hq) ? hq : 0,
+        hasMuhadatsah: Boolean(entryToEdit.hasMuhadatsah || entryToEdit.muhadatsah),
         jamPiketKantor: !isNaN(pk) ? pk : (Number(entryToEdit.jamPiket) || 0),
         jamPiketSholat: !isNaN(ps) ? ps : 0,
         jamRapat: Number(entryToEdit.jamRapat) || 0,
@@ -442,6 +438,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         tgl: day,
         jamMasukKelas: 2,
         jamHalaqoh: 0,
+        hasMuhadatsah: false,
         jamPiketKantor: 0,
         jamPiketSholat: 0,
         jamRapat: 0,
@@ -527,6 +524,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             tgl: dayNum,
             jamMasukKelas: mk,
             jamHalaqoh: hq,
+            hasMuhadatsah: Boolean(jurnalForm.hasMuhadatsah),
             jamPiketKantor: pk,
             jamPiketSholat: ps,
             jamRapat: rp,
@@ -548,6 +546,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         tgl: dayNum,
         jamMasukKelas: mk,
         jamHalaqoh: hq,
+        hasMuhadatsah: Boolean(jurnalForm.hasMuhadatsah),
         jamPiketKantor: pk,
         jamPiketSholat: ps,
         jamRapat: rp,
@@ -603,46 +602,6 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   // 🪄 FITUR BARU: State & Handler Mandiri Edit Biodata Guru
   const [isEditBiodataOpen, setIsEditBiodataOpen] = useState(false);
-  const [savedBioAccount, setSavedBioAccount] = useState(() => getSavedBiometricAccount());
-  const [isBioSupported, setIsBioSupported] = useState(false);
-  const [isEnrollingBio, setIsEnrollingBio] = useState(false);
-
-  useEffect(() => {
-    isBiometricSupported().then(supported => {
-      setIsBioSupported(supported);
-      if (supported) {
-        setSavedBioAccount(getSavedBiometricAccount());
-      }
-    });
-  }, []);
-
-  const handleRegisterBiometric = async () => {
-    setIsEnrollingBio(true);
-    try {
-      const bioData = await registerBiometricLogin({
-        id: myData.id,
-        name: myData.name,
-        username: myData.linkedUsername || myData.id,
-        role: 'guru',
-        nipy: myData.nipy
-      });
-      setSavedBioAccount(bioData);
-      alert('Alhamdulillah! Sidik Jari Anda berhasil terdaftar di HP ini.\n\nMulai sekarang Anda bisa masuk ke PayEdu tanpa perlu mengetik kata sandi.');
-    } catch (err) {
-      console.warn("Gagal daftarkan biometrik:", err);
-      alert(err.message || 'Pendaftaran sidik jari dibatalkan.');
-    } finally {
-      setIsEnrollingBio(false);
-    }
-  };
-
-  const handleUnlinkBiometric = () => {
-    if (confirm('Lepaskan hubungan sidik jari dari HP ini?')) {
-      removeBiometricAccount();
-      setSavedBioAccount(null);
-      alert('Kredensial sidik jari berhasil dilepas dari perangkat ini.');
-    }
-  };
   useEffect(() => {
     if (!isEditBiodataOpen) return;
     return registerBackModal(() => setIsEditBiodataOpen(false));
@@ -1686,60 +1645,6 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       </div>
                     </div>
                   </div>
-
-                  {/* KARTU KEAMANAN & BIOMETRIK HP */}
-                  {isBioSupported && (
-                    <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 animate-in fade-in">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-2xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 shadow-inner">
-                            <Fingerprint size={26} />
-                          </div>
-                          <div>
-                            <h4 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                              Login Cepat Biometrik / Sidik Jari HP
-                              {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
-                                <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
-                                  Aktif di HP Ini
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-bold px-2 py-0.5 rounded-full">
-                                  Belum Terhubung
-                                </span>
-                              )}
-                            </h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-lg">
-                              {savedBioAccount && String(savedBioAccount.userId) === String(myData.id)
-                                ? 'Sensor biometrik HP Anda telah terhubung. Anda dapat masuk ke PayEdu cukup dengan satu sentuhan sensor tanpa perlu mengetik kata sandi.'
-                                : 'Hubungkan sensor sidik jari atau Face Unlock bawaan HP Anda agar bisa masuk ke aplikasi PayEdu secara instan tanpa ribet mengetik.'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                          {savedBioAccount && String(savedBioAccount.userId) === String(myData.id) ? (
-                            <button
-                              type="button"
-                              onClick={handleUnlinkBiometric}
-                              className="w-full sm:w-auto px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                            >
-                              Lepas Sidik Jari
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={handleRegisterBiometric}
-                              disabled={isEnrollingBio}
-                              className="w-full sm:w-auto px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-70"
-                            >
-                              <Fingerprint size={16} />
-                              {isEnrollingBio ? 'Menghubungkan Sensor...' : 'Hubungkan Sidik Jari'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* KANAN: Rekening Bank */}
                   <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-800 dark:from-emerald-700 dark:to-teal-900 p-6 md:p-8 rounded-3xl shadow-lg border border-emerald-400/30 flex flex-col justify-between min-h-[260px] transform transition-transform hover:scale-[1.02] duration-300">
@@ -3539,6 +3444,30 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                     ))}
                     <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 ml-1">JPL</span>
                   </div>
+                </div>
+
+                {/* Sub-Pilar Bahasa: Pendampingan Muhadatsah Pagi (15 Menit) */}
+                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/20 rounded-2xl border border-amber-200/80 dark:border-amber-800/40 flex items-center justify-between gap-2.5 shadow-2xs">
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 text-xs truncate">
+                      <span>🗣️</span>
+                      <span>Pendampingan Muhadatsah Pagi</span>
+                    </span>
+                    <span className="text-[10px] text-amber-800/80 dark:text-amber-300/80 block mt-0.5 truncate">
+                      Alokasi 15 menit pagi • Akumulasi otomatis ke jam mengajar
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setJurnalForm(prev => ({ ...prev, hasMuhadatsah: !prev.hasMuhadatsah }))}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                      jurnalForm.hasMuhadatsah
+                        ? 'bg-amber-600 text-white shadow-xs scale-105'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    {jurnalForm.hasMuhadatsah ? '✓ Hadir (15 Mnt)' : '+ Ikut Serta'}
+                  </button>
                 </div>
 
                 {/* Pilar C: Jam Piket Kantor */}

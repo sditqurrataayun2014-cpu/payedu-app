@@ -947,7 +947,8 @@ export const exportJurnalKbmToExcel = ({
       'Status Kepegawaian',
       'Jam Masuk Kelas (JPL)',
       'Jam Halaqoh (JPL)',
-      'Total KBM (JPL)',
+      'Muhadatsah Pagi (Sesi / JPL)',
+      'Total KBM & Bahasa (JPL)',
       'Piket Kantor (JPL)',
       'Piket Sholat (JPL)',
       'Total Piket (JPL)',
@@ -978,11 +979,13 @@ export const exportJurnalKbmToExcel = ({
 
     let masukKelas = 0;
     let halaqoh = 0;
+    let muhadatsahCount = 0;
     let piketKantor = 0;
     let piketSholat = 0;
     let rapat = 0;
 
     jList.forEach(j => {
+      if (j.hasMuhadatsah || j.muhadatsah) muhadatsahCount++;
       const mk = Number(j.jamMasukKelas);
       const hq = Number(j.jamHalaqoh);
       const pk = Number(j.jamPiketKantor);
@@ -1004,7 +1007,8 @@ export const exportJurnalKbmToExcel = ({
       rapat += rp;
     });
 
-    const kbm = masukKelas + halaqoh;
+    const jamMuhadatsah = Math.round((muhadatsahCount * 15) / 35);
+    const kbm = masukKelas + halaqoh + jamMuhadatsah;
     const piket = piketKantor + piketSholat;
     const saldo = Number(p.jamMengajar?.saldoAwalJam) || 0;
     const totalRealisasi = Number(p.jamMengajar?.realisasi) || (kbm + piket + rapat + saldo);
@@ -1030,6 +1034,7 @@ export const exportJurnalKbmToExcel = ({
       t.status || 'Tetap',
       masukKelas,
       halaqoh,
+      muhadatsahCount > 0 ? `${muhadatsahCount}x (${jamMuhadatsah} JPL)` : '-',
       kbm,
       piketKantor,
       piketSholat,

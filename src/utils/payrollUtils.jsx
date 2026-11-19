@@ -753,6 +753,7 @@ export const calculateJurnalSummary = (teacher) => {
   let jamPiketSholat = 0;
   let jamPiket = 0;
   let jamRapat = 0;
+  let muhadatsahCount = 0;
 
   entries.forEach(e => {
     const mk = Number(e.jamMasukKelas);
@@ -781,16 +782,31 @@ export const calculateJurnalSummary = (teacher) => {
     jamPiket += actualPiket;
 
     jamRapat += rp;
+
+    if (e.hasMuhadatsah || e.muhadatsah) {
+      muhadatsahCount += 1;
+    }
   });
 
+  // 🗣️ Konversi otomatis Muhadatsah: 15 menit per sesi, 1 JPL = 35 menit
+  const totalMenitMuhadatsah = muhadatsahCount * 15;
+  const jamMuhadatsah = Math.round(totalMenitMuhadatsah / 35);
+
+  // Total jam KBM (meleburkan Masuk Kelas + Halaqoh + Konversi Muhadatsah ke Card 1)
+  const totalJamKbm = jamKbm + jamMuhadatsah;
+
   const saldoAwal = Number(p.jamMengajar?.saldoAwalJam) || 0;
-  const totalAkumulasi = jamKbm + jamPiket + jamRapat + saldoAwal;
+  const totalAkumulasi = totalJamKbm + jamPiket + jamRapat + saldoAwal;
   
   return {
     entries,
     jamMasukKelas,
     jamHalaqoh,
-    jamKbm,
+    muhadatsahCount,
+    totalMenitMuhadatsah,
+    jamMuhadatsah,
+    jamKbm: totalJamKbm,
+    rawJamKbm: jamKbm,
     jamPiketKantor,
     jamPiketSholat,
     jamPiket,
@@ -878,7 +894,11 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     }
   }
 
-  // Hitung total realisasi jam keseluruhan (Jurnal + Saldo Awal Transisi)
+  // Hitung total sesi muhadatsah dan konversi ke JPL (15 mnt / 35 mnt)
+  const totalMuhadatsahCount = entries.filter(e => e.hasMuhadatsah || e.muhadatsah).length;
+  const totalMuhadatsahJam = Math.round((totalMuhadatsahCount * 15) / 35);
+
+  // Hitung total realisasi jam keseluruhan (Jurnal + Konversi Muhadatsah + Saldo Awal Transisi)
   const totalJurnal = entries.reduce((s, e) => {
     const mk = Number(e.jamMasukKelas);
     const hq = Number(e.jamHalaqoh);
@@ -893,19 +913,19 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     const entryPiket = hasDetailedPiket ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
 
     return s + entryKbm + entryPiket + rp;
-  }, 0);
+  }, 0) + totalMuhadatsahJam;
 
   // Kalkulasi Total Realisasi Cerdas:
   // 1. Jika ada Saldo Awal (> 0), gunakan akumulasi resmi: totalJurnal + saldoAwal
   // 2. Jika tanpa Saldo Awal (0):
-  //    - Hitung total dari seluruh jam di currentHarian (hari jurnal + baseline hari lain)
+  //    - Hitung total dari seluruh jam di currentHarian (hari jurnal + baseline hari lain) + totalMuhadatsahJam
   //    - Jika currentHarian kosong, gunakan totalJurnal atau pertahankan baseRealisasi!
   let newRealisasi;
   if (saldoAwal > 0) {
     newRealisasi = totalJurnal + saldoAwal;
   } else {
     const sumHarian = currentHarian.reduce((sum, val) => sum + (Number(val) || 0), 0);
-    newRealisasi = sumHarian > 0 ? sumHarian : (totalJurnal > 0 ? totalJurnal : baseRealisasi);
+    newRealisasi = sumHarian > 0 ? (sumHarian + totalMuhadatsahJam) : (totalJurnal > 0 ? totalJurnal : baseRealisasi);
   }
 
   return {

@@ -52,6 +52,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     tgl: new Date().getDate(),
     jamMasukKelas: 2,
     jamHalaqoh: 0,
+    hasMuhadatsah: false,
     jamPiketKantor: 0,
     jamPiketSholat: 0,
     jamRapat: 0,
@@ -253,6 +254,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       tgl: new Date().getDate(),
       jamMasukKelas: 2,
       jamHalaqoh: 0,
+      hasMuhadatsah: false,
       jamPiketKantor: 0,
       jamPiketSholat: 0,
       jamRapat: 0,
@@ -289,6 +291,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       tgl: entry.tgl || 1,
       jamMasukKelas: !isNaN(mk) ? mk : (Number(entry.jamKbm) || 0),
       jamHalaqoh: !isNaN(hq) ? hq : 0,
+      hasMuhadatsah: Boolean(entry.hasMuhadatsah || entry.muhadatsah),
       jamPiketKantor: !isNaN(pk) ? pk : (Number(entry.jamPiket) || 0),
       jamPiketSholat: !isNaN(ps) ? ps : 0,
       jamRapat: Number(entry.jamRapat) || 0,
@@ -333,6 +336,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       tgl: tglNum,
       jamMasukKelas: mk,
       jamHalaqoh: hq,
+      hasMuhadatsah: Boolean(adminEntryForm.hasMuhadatsah),
       jamPiketKantor: pk,
       jamPiketSholat: ps,
       jamRapat: rp,
@@ -1128,6 +1132,29 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                     </div>
                   </div>
 
+                  {/* Toggle Muhadatsah */}
+                  <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/20 rounded-xl border border-amber-200/80 dark:border-amber-800/40 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                        <span>🗣️</span> Pendampingan Muhadatsah (15 Menit)
+                      </span>
+                      <span className="text-[10px] text-amber-800/80 dark:text-amber-300/80 block mt-0.5">
+                        Alokasi pagi 15 mnt • Terakumulasi otomatis ke JPL mengajar
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdminEntryForm({ ...adminEntryForm, hasMuhadatsah: !adminEntryForm.hasMuhadatsah })}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                        adminEntryForm.hasMuhadatsah
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {adminEntryForm.hasMuhadatsah ? '✓ Aktif (15 Mnt)' : '+ Ikut Serta'}
+                    </button>
+                  </div>
+
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Catatan / Materi (Opsional):</label>
                     <input
@@ -1231,6 +1258,14 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                               <span>Kelas: <b>{!isNaN(mk) ? mk : (Number(entri.jamKbm) || 0)} JPL</b></span>
                               <span>•</span>
                               <span>Halaqoh: <b>{!isNaN(hq) ? hq : 0} JPL</b></span>
+                              {(entri.hasMuhadatsah || entri.muhadatsah) && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-amber-700 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-300/60 dark:border-amber-800/60 text-[10px]">
+                                    🗣️ Muhadatsah (15m)
+                                  </span>
+                                </>
+                              )}
                               <span>•</span>
                               <span>Piket Ktr: <b>{!isNaN(pk) ? pk : (Number(entri.jamPiket) || 0)} JPL</b></span>
                               <span>•</span>
@@ -1835,7 +1870,12 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                     {item.summary.jamMasukKelas || 0} JPL
                                  </td>
                                  <td className="p-3 text-center font-bold text-indigo-600 dark:text-indigo-400">
-                                    {item.summary.jamHalaqoh || 0} JPL
+                                    <div>{item.summary.jamHalaqoh || 0} JPL</div>
+                                    {item.summary.muhadatsahCount > 0 && (
+                                       <div className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800/60 inline-block mt-0.5">
+                                          +{item.summary.jamMuhadatsah} JPL ({item.summary.muhadatsahCount}x Muhadatsah)
+                                       </div>
+                                    )}
                                  </td>
                                  <td className="p-3 text-center font-bold text-teal-600 dark:text-teal-400">
                                     {item.summary.jamPiketKantor || 0} JPL
