@@ -3214,8 +3214,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   </span>
                 </div>
 
-                {/* Tabel Riwayat Gaji Resmi (Bisa Digeser ke Samping di Layar HP) */}
-                <div className="overflow-x-auto hide-scrollbar touch-pan-x">
+                {/* Tabel Riwayat Gaji Resmi (Bisa Digeser ke Samping di Layar HP tanpa Menghambat Scroll Vertikal) */}
+                <div 
+                  className="overflow-x-auto hide-scrollbar overscroll-x-contain"
+                  style={{ WebkitOverflowScrolling: 'touch', touchAction: 'auto' }}
+                >
                   <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap min-w-max">
                     <thead className="bg-slate-50/80 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-700/80">
                       <tr>

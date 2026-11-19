@@ -814,12 +814,41 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
 
   const entries = Array.isArray(newJurnalList) ? newJurnalList : [];
 
-  // Salin array harian (Tgl 1 - 31) yang sudah ada agar data impor lama tidak tertimpa
-  const currentHarian = Array.isArray(jamMengajar.harian) && jamMengajar.harian.length === 31
-    ? [...jamMengajar.harian]
-    : Array(31).fill('');
+  // Snapshot Baseline Jam Mengajar: simpan jam asli pra-jurnal agar tidak pernah hilang
+  const baseRealisasi = jamMengajar.baseRealisasi !== undefined 
+    ? Number(jamMengajar.baseRealisasi) 
+    : (Number(jamMengajar.realisasi) || 0);
 
-  // Hitung akumulasi jam per tanggal khusus yang tercatat dalam jurnal
+  const baseHarian = Array.isArray(jamMengajar.baseHarian) && jamMengajar.baseHarian.length === 31
+    ? [...jamMengajar.baseHarian]
+    : (Array.isArray(jamMengajar.harian) && jamMengajar.harian.length === 31
+        ? [...jamMengajar.harian]
+        : Array(31).fill(''));
+
+  // JIKA JURNAL KOSONG (misal entri uji coba dihapus semua) & TIDAK ADA SALDO AWAL:
+  // Kembalikan ke baseline asli yang aman, jangan sampai menjadi 0 / kosong!
+  if (entries.length === 0 && saldoAwal === 0) {
+    return {
+      ...teacher,
+      payroll: {
+        ...p,
+        jurnalKbm: [],
+        jamMengajar: {
+          ...jamMengajar,
+          baseRealisasi,
+          baseHarian,
+          harian: [...baseHarian],
+          saldoAwalJam: 0,
+          realisasi: baseRealisasi
+        }
+      }
+    };
+  }
+
+  // Mulai dari baseHarian yang sudah ada agar hari-hari lain sebelum jurnal tetap terjaga
+  const currentHarian = [...baseHarian];
+
+  // Hitung akumulasi jam per tanggal khusus yang tercatat dalam jurnal aktif
   const dailyMap = {};
   entries.forEach(e => {
     const day = Number(e.tgl);
@@ -842,11 +871,12 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
   });
 
   // Terapkan jam jurnal ke hari yang bersangkutan
-  Object.keys(dailyMap).forEach(dStr => {
-    const d = Number(dStr);
+  for (let d = 1; d <= 31; d++) {
     const dayIdx = d - 1;
-    currentHarian[dayIdx] = dailyMap[d] > 0 ? dailyMap[d] : '';
-  });
+    if (dailyMap[d] !== undefined) {
+      currentHarian[dayIdx] = dailyMap[d] > 0 ? dailyMap[d] : '';
+    }
+  }
 
   // Hitung total realisasi jam keseluruhan (Jurnal + Saldo Awal Transisi)
   const totalJurnal = entries.reduce((s, e) => {
@@ -865,7 +895,18 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     return s + entryKbm + entryPiket + rp;
   }, 0);
 
-  const newRealisasi = totalJurnal + saldoAwal;
+  // Kalkulasi Total Realisasi Cerdas:
+  // 1. Jika ada Saldo Awal (> 0), gunakan akumulasi resmi: totalJurnal + saldoAwal
+  // 2. Jika tanpa Saldo Awal (0):
+  //    - Hitung total dari seluruh jam di currentHarian (hari jurnal + baseline hari lain)
+  //    - Jika currentHarian kosong, gunakan totalJurnal atau pertahankan baseRealisasi!
+  let newRealisasi;
+  if (saldoAwal > 0) {
+    newRealisasi = totalJurnal + saldoAwal;
+  } else {
+    const sumHarian = currentHarian.reduce((sum, val) => sum + (Number(val) || 0), 0);
+    newRealisasi = sumHarian > 0 ? sumHarian : (totalJurnal > 0 ? totalJurnal : baseRealisasi);
+  }
 
   return {
     ...teacher,
@@ -874,6 +915,8 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
       jurnalKbm: entries,
       jamMengajar: {
         ...jamMengajar,
+        baseRealisasi,
+        baseHarian,
         harian: currentHarian,
         saldoAwalJam: saldoAwal,
         realisasi: newRealisasi

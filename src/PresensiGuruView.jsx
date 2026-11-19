@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
+  ChevronDown, Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   Calendar, CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone, MessageCircle, BellRing, Cloud
@@ -748,6 +748,7 @@ function TeacherSelfService({
   const [izinKeterangan, setIzinKeterangan] = useState('');
   const [verifikasiMode, setVerifikasiMode] = useState(null); // null | 'masuk' | 'pulang'
   const [verifikasiTargetSesi, setVerifikasiTargetSesi] = useState(null);
+  const [historyMonthFilter, setHistoryMonthFilter] = useState(() => todayStr().slice(0, 7));
 
   const sesiSemua = getSesiList(settings);
   const sesiUtamaId = sesiSemua[0]?.id;
@@ -989,11 +990,44 @@ function TeacherSelfService({
     setIzinKeterangan('');
   };
 
-  // Rekap ringkas 30 hari terakhir milik guru ybs (sesi yang sedang dipilih)
-  const myHistory = (presensiGuru || [])
-    .filter(r => isTeacherRecordMatch(r, null, sesiAktif.id))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-    .slice(0, 30);
+  // Data riwayat presensi guru untuk sesi yang sedang dipilih
+  const allTeacherRecords = useMemo(() => {
+    return (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, sesiAktif.id));
+  }, [presensiGuru, isTeacherRecordMatch, sesiAktif.id]);
+
+  const availableHistoryMonths = useMemo(() => {
+    const set = new Set();
+    const curMonth = today.slice(0, 7);
+    set.add(curMonth); // Pastikan bulan berjalan selalu tersedia
+    allTeacherRecords.forEach(r => {
+      if (r.date && r.date.length >= 7) {
+        set.add(r.date.slice(0, 7));
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [allTeacherRecords, today]);
+
+  const formatMonthOption = useCallback((mKey) => {
+    if (!mKey || mKey === 'all') return 'Semua Riwayat';
+    try {
+      const [y, m] = mKey.split('-');
+      const date = new Date(Number(y), Number(m) - 1, 1);
+      const name = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+      return mKey === today.slice(0, 7) ? `${name} (Bulan Ini)` : name;
+    } catch {
+      return mKey;
+    }
+  }, [today]);
+
+  // Riwayat terfilter berdasarkan bulan yang dipilih guru (default: bulan ini)
+  const myHistory = useMemo(() => {
+    return allTeacherRecords
+      .filter(r => {
+        if (!historyMonthFilter || historyMonthFilter === 'all') return true;
+        return r.date?.startsWith(historyMonthFilter);
+      })
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [allTeacherRecords, historyMonthFilter]);
 
   const thisMonthKey = today.slice(0, 7);
   const monthRecords = (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, sesiAktif.id) && r.date?.startsWith(thisMonthKey));
@@ -1197,19 +1231,47 @@ function TeacherSelfService({
 
       {/* RIWAYAT */}
       <div className={cx.card3xl}>
-        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-black text-sm sm:text-base text-slate-800 dark:text-white">Riwayat Presensi Saya</h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 font-bold mt-0.5">30 catatan terakhir</p>
+            <h3 className="font-black text-sm sm:text-base text-slate-800 dark:text-white flex items-center gap-2">
+              Riwayat Presensi Saya
+            </h3>
+            <p className="text-[11px] sm:text-xs text-slate-400 font-bold mt-0.5">
+              {historyMonthFilter === 'all' 
+                ? 'Menampilkan seluruh riwayat presensi' 
+                : `Periode ${formatMonthOption(historyMonthFilter)}`}
+            </p>
           </div>
-          <span className="text-[10px] sm:text-xs font-black uppercase px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-            {myHistory.length} Catatan
-          </span>
+          
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {/* Filter Dropdown Bulan */}
+            <div className="relative">
+              <select
+                value={historyMonthFilter}
+                onChange={(e) => setHistoryMonthFilter(e.target.value)}
+                className="text-xs font-bold pl-3 pr-8 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none transition-all shadow-2xs"
+              >
+                {availableHistoryMonths.map(mKey => (
+                  <option key={mKey} value={mKey}>
+                    {formatMonthOption(mKey)}
+                  </option>
+                ))}
+                <option value="all">Semua Riwayat</option>
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <ChevronDown size={14} />
+              </div>
+            </div>
+
+            <span className="text-[10px] sm:text-xs font-black uppercase px-2.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/40 shrink-0">
+              {myHistory.length} Catatan
+            </span>
+          </div>
         </div>
 
         {myHistory.length === 0 ? (
           <div className="p-8 sm:p-10 text-center text-slate-400 italic text-xs sm:text-sm">
-            Belum ada riwayat presensi.
+            Tidak ada riwayat presensi untuk periode {formatMonthOption(historyMonthFilter)}.
           </div>
         ) : (
           <>
