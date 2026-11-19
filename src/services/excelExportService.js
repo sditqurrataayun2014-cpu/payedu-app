@@ -920,4 +920,156 @@ export const exportArchiveComparisonToExcel = ({
   return defaultFilename;
 };
 
+/**
+ * 📊 EKSPOR REKAP JURNAL KBM & MONITORING BEBAN KERJA GURU KE EXCEL (.XLSX)
+ * Memuat rekapitulasi jam KBM, jam piket, jam rapat, saldo awal transisi, total akumulasi, dan status kepatuhan.
+ */
+export const exportJurnalKbmToExcel = ({
+  teachers = [],
+  settings = {},
+  bulan = '',
+  filename = ''
+}) => {
+  const schoolName = settings?.schoolName || 'SD IT Qurrata A\'yun Kandis';
+  const formattedPeriode = bulan || getFormattedPeriod(settings?.payrollPeriod);
+  const defaultFilename = filename || `Rekap_Jurnal_KBM_${schoolName.replace(/[^a-zA-Z0-9]/g, '_')}_${String(formattedPeriode).replace(/\s+/g, '_')}.xlsx`;
+
+  const aoa = [
+    [schoolName.toUpperCase()],
+    ['REKAPITULASI JURNAL BEBAN KERJA & MONITORING KBM DEWAN GURU'],
+    [`Periode: ${formattedPeriode}`],
+    [`Dicetak pada: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB`],
+    [],
+    [
+      'No',
+      'NIPY',
+      'Nama Lengkap Guru',
+      'Status Kepegawaian',
+      'Jam Mengajar/Halaqoh (JPL)',
+      'Jam Piket Kantor & Sholat (JPL)',
+      'Jam Rapat & Kegiatan Guru (JPL)',
+      'Saldo Awal Transisi (JPL)',
+      'Total Akumulasi Realisasi (JPL)',
+      'Target Wajib (JPL)',
+      'Selisih Jam (+/-)',
+      'Status Kepatuhan Bulan Ini'
+    ]
+  ];
+
+  let totalKbmAll = 0;
+  let totalPiketAll = 0;
+  let totalRapatAll = 0;
+  let totalSaldoAll = 0;
+  let grandTotalAll = 0;
+
+  const activeTeachers = teachers.filter(isTeacherActive);
+
+  activeTeachers.forEach((t, idx) => {
+    const p = t.payroll || {};
+    const jList = p.jurnalKbm || [];
+    const kbm = jList.reduce((s, j) => s + (Number(j.jamKbm) || 0), 0);
+    const piket = jList.reduce((s, j) => s + (Number(j.jamPiket) || 0), 0);
+    const rapat = jList.reduce((s, j) => s + (Number(j.jamRapat) || 0), 0);
+    const saldo = Number(p.jamMengajar?.saldoAwalJam) || 0;
+    const totalRealisasi = Number(p.jamMengajar?.realisasi) || (kbm + piket + rapat + saldo);
+    const wajib = p.jamMengajar?.wajib !== undefined && p.jamMengajar?.wajib !== '' ? Number(p.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
+    const selisih = totalRealisasi - wajib;
+
+    totalKbmAll += kbm;
+    totalPiketAll += piket;
+    totalRapatAll += rapat;
+    totalSaldoAll += saldo;
+    grandTotalAll += totalRealisasi;
+
+    const statusKepatuhan = jList.length > 0 ? `${jList.length} entri tercatat` : (saldo > 0 ? 'Saldo Awal Tersedia' : 'Belum Ada Jurnal');
+
+    aoa.push([
+      idx + 1,
+      t.nipy || t.id || '-',
+      t.name || '-',
+      t.status || 'Tetap',
+      kbm,
+      piket,
+      rapat,
+      saldo,
+      totalRealisasi,
+      wajib,
+      selisih,
+      statusKepatuhan
+    ]);
+  });
+
+  // Baris Total
+  aoa.push([
+    'TOTAL KESELURUHAN',
+    '',
+    '',
+    '',
+    totalKbmAll,
+    totalPiketAll,
+    totalRapatAll,
+    totalSaldoAll,
+    grandTotalAll,
+    '',
+    '',
+    ''
+  ]);
+
+  aoa.push([]);
+  aoa.push([
+    '',
+    '',
+    `Mengetahui, Kepala Sekolah`,
+    '',
+    '',
+    '',
+    '',
+    `Kuala Pembuang, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    '',
+    'Bendahara Sekolah',
+    '',
+    ''
+  ]);
+  aoa.push([]);
+  aoa.push([]);
+  aoa.push([
+    '',
+    '',
+    settings?.principalName || 'Kepala Sekolah',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    'Bendahara',
+    '',
+    ''
+  ]);
+
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+  worksheet['!cols'] = [
+    { wch: 5 },  // No
+    { wch: 16 }, // NIPY
+    { wch: 32 }, // Nama
+    { wch: 16 }, // Status
+    { wch: 22 }, // KBM
+    { wch: 22 }, // Piket
+    { wch: 22 }, // Rapat
+    { wch: 18 }, // Saldo Awal
+    { wch: 22 }, // Total Akumulasi
+    { wch: 15 }, // Wajib
+    { wch: 15 }, // Selisih
+    { wch: 25 }, // Status Kepatuhan
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Jurnal KBM');
+
+  downloadExcelFile(workbook, defaultFilename);
+  return defaultFilename;
+};
+
+
 

@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  CalendarDays, CheckCircle, CheckSquare, Download, Edit,
-  Eye, History, ListPlus, Save, Search, Send, Trash2,
+  AlertCircle, BookOpen, CalendarDays, Check, CheckCircle, CheckSquare, Download, Edit,
+  Eye, FileSpreadsheet, Filter, History, ListPlus, Minus, Plus, Save, Search, Send, Trash2,
   Upload, Users, X
 } from 'lucide-react';
 
 import {
-  generateUniqueId, getFormattedPeriod, isTeacherActive, safeStorageSet
+  generateUniqueId, getFormattedPeriod, isTeacherActive, safeStorageSet,
+  DEFAULT_MAPEL_KBM, DEFAULT_KELAS_KBM, calculateJurnalSummary,
+  syncTeacherJurnalKbm, formatDateId, formatRp, getLocalIsoDate
 } from '../../utils/payrollUtils';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
+import { exportJurnalKbmToExcel } from '../../services/excelExportService';
 
 export default function JadwalMengajarView({ teachers, setTeachers, settings }) {
   const [activeTab, setActiveTab] = useState('roster');
@@ -28,6 +31,28 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // 🪄 TAMBALAN CERDAS: Ref untuk Input File Excel Roster
   const rosterFileInputRef = useRef(null);
+
+  // --- STATE & DATA TAB 4: MONITORING JURNAL KBM & BEBAN KERJA (PENGGANTI RESMI GOOGLE FORM) ---
+  const [jurnalSearch, setJurnalSearch] = useState('');
+  const [jurnalFilterKepatuhan, setJurnalFilterKepatuhan] = useState('all'); // 'all' | 'sudah' | 'belum'
+  const [selectedTeacherForLog, setSelectedTeacherForLog] = useState(null);
+  const [saldoAwalModalTeacher, setSaldoAwalModalTeacher] = useState(null);
+  const [saldoAwalInput, setSaldoAwalInput] = useState(0);
+  const [saldoAwalKet, setSaldoAwalKet] = useState('Rekap Google Form s/d 17 Nov');
+  const [isSavingSaldo, setIsSavingSaldo] = useState(false);
+
+  // State untuk Tambah / Edit Entri Jurnal oleh Admin
+  const [isAdminAddingEntry, setIsAdminAddingEntry] = useState(false);
+  const [editingAdminEntry, setEditingAdminEntry] = useState(null);
+  const [adminEntryForm, setAdminEntryForm] = useState({
+    tgl: new Date().getDate(),
+    mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
+    kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
+    jamKbm: 2,
+    jamPiket: 0,
+    jamRapat: 0,
+    catatan: ''
+  });
 
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
   const [y, m] = (settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-');
@@ -54,6 +79,252 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       });
       return Array.from(map.values()).reverse();
   }, [teachers]);
+
+  // --- LOGIKA MONITORING JURNAL KBM ---
+  const todayIso = getLocalIsoDate();
+  const todayDay = new Date().getDate();
+
+  // Data komprehensif seluruh guru aktif beserta rincian jurnalnya
+  const jurnalTeacherData = useMemo(() => {
+    return teachers
+      .filter(t => isTeacherActive(t))
+      .map(t => {
+        const summary = calculateJurnalSummary(t);
+        const entries = t.payroll?.jurnalKbm || [];
+        const hasToday = entries.some(e => e.tanggal === todayIso || Number(e.tgl) === todayDay);
+        const todayHours = entries
+          .filter(e => e.tanggal === todayIso || Number(e.tgl) === todayDay)
+          .reduce((sum, e) => sum + (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0), 0);
+
+        return {
+          teacher: t,
+          id: t.id,
+          name: t.name,
+          nipy: t.nipy || '-',
+          role: t.role || 'Guru',
+          summary,
+          hasToday,
+          todayHours,
+          entriesCount: entries.length
+        };
+      });
+  }, [teachers, todayIso, todayDay]);
+
+  // Filter daftar guru di tabel monitoring jurnal
+  const filteredJurnalList = useMemo(() => {
+    return jurnalTeacherData.filter(item => {
+      const matchSearch = item.name.toLowerCase().includes(jurnalSearch.toLowerCase()) || 
+                          item.nipy.toLowerCase().includes(jurnalSearch.toLowerCase());
+      if (!matchSearch) return false;
+      if (jurnalFilterKepatuhan === 'sudah') return item.hasToday;
+      if (jurnalFilterKepatuhan === 'belum') return !item.hasToday;
+      return true;
+    });
+  }, [jurnalTeacherData, jurnalSearch, jurnalFilterKepatuhan]);
+
+  // Indikator Kinerja Utama (KPI) Jurnal KBM
+  const aggregateKpis = useMemo(() => {
+    let totalKbm = 0;
+    let totalPiket = 0;
+    let totalRapat = 0;
+    let totalSaldoAwal = 0;
+    let totalAkumulasi = 0;
+    let sudahIsiCount = 0;
+
+    jurnalTeacherData.forEach(item => {
+      totalKbm += item.summary.jamKbm;
+      totalPiket += item.summary.jamPiket;
+      totalRapat += item.summary.jamRapat;
+      totalSaldoAwal += item.summary.saldoAwal;
+      totalAkumulasi += item.summary.totalAkumulasi;
+      if (item.hasToday) sudahIsiCount++;
+    });
+
+    const totalGuru = jurnalTeacherData.length;
+    const persentaseKepatuhan = totalGuru > 0 ? Math.round((sudahIsiCount / totalGuru) * 100) : 0;
+
+    return {
+      totalKbm,
+      totalPiket,
+      totalRapat,
+      totalSaldoAwal,
+      totalAkumulasi,
+      sudahIsiCount,
+      totalGuru,
+      persentaseKepatuhan
+    };
+  }, [jurnalTeacherData]);
+
+  // Handler Saldo Awal (Transisi Google Form s/d 17 Nov)
+  const handleOpenSaldoAwalModal = (teacher) => {
+    setSaldoAwalModalTeacher(teacher);
+    const currentSaldo = teacher.payroll?.jamMengajar?.saldoAwalJam || 0;
+    const currentKet = teacher.payroll?.jamMengajar?.saldoAwalKet || 'Rekap Google Form s/d 17 Nov';
+    setSaldoAwalInput(currentSaldo);
+    setSaldoAwalKet(currentKet);
+  };
+
+  const handleSaveSaldoAwal = async () => {
+    if (!saldoAwalModalTeacher) return;
+    setIsSavingSaldo(true);
+    try {
+      const saldoVal = Math.max(0, Number(saldoAwalInput) || 0);
+      const updatedTeachers = teachers.map(t => {
+        if (t.id === saldoAwalModalTeacher.id) {
+          const currentJurnal = t.payroll?.jurnalKbm || [];
+          const updated = syncTeacherJurnalKbm(t, currentJurnal, saldoVal);
+          if (!updated.payroll) updated.payroll = {};
+          if (!updated.payroll.jamMengajar) updated.payroll.jamMengajar = {};
+          updated.payroll.jamMengajar.saldoAwalKet = saldoAwalKet;
+          return updated;
+        }
+        return t;
+      });
+
+      setTeachers(updatedTeachers);
+      safeStorageSet('payedu_teachers', updatedTeachers);
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+
+      setSaldoAwalModalTeacher(null);
+      alert(`✅ Saldo Awal Google Form untuk ${saldoAwalModalTeacher.name} berhasil disimpan sebesar ${saldoVal} JPL dan otomatis terhubung ke slip gaji!`);
+    } catch (err) {
+      console.error("Gagal simpan saldo awal:", err);
+      alert("⚠️ Terjadi kendala saat menyimpan ke cloud. Periksa koneksi internet Anda.");
+    } finally {
+      setIsSavingSaldo(false);
+    }
+  };
+
+  // Handler Log Detail Guru & Entri Admin
+  const handleOpenLogModal = (teacher) => {
+    const latest = teachers.find(t => t.id === teacher.id) || teacher;
+    setSelectedTeacherForLog(latest);
+    setIsAdminAddingEntry(false);
+    setEditingAdminEntry(null);
+    setAdminEntryForm({
+      tgl: new Date().getDate(),
+      mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
+      kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
+      jamKbm: 2,
+      jamPiket: 0,
+      jamRapat: 0,
+      catatan: ''
+    });
+  };
+
+  const handleStartEditAdminEntry = (entry) => {
+    setEditingAdminEntry(entry);
+    setAdminEntryForm({
+      tgl: entry.tgl || 1,
+      mapel: entry.mapel || DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
+      kelas: entry.kelas || DEFAULT_KELAS_KBM[0] || 'I A Putra',
+      jamKbm: entry.jamKbm || 0,
+      jamPiket: entry.jamPiket || 0,
+      jamRapat: entry.jamRapat || 0,
+      catatan: entry.catatan || ''
+    });
+    setIsAdminAddingEntry(true);
+  };
+
+  const handleAdminSaveJournalEntry = async () => {
+    if (!selectedTeacherForLog) return;
+    const tglNum = Number(adminEntryForm.tgl);
+    if (!tglNum || tglNum < 1 || tglNum > 31) {
+      alert("Mohon masukkan tanggal yang valid (1-31).");
+      return;
+    }
+
+    const currentEntries = [...(selectedTeacherForLog.payroll?.jurnalKbm || [])];
+    const [curY, curM] = (settings?.payrollPeriod || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-');
+    const formattedIso = `${curY}-${String(curM).padStart(2, '0')}-${String(tglNum).padStart(2, '0')}`;
+    const tanggalStr = formatDateId(formattedIso);
+
+    const entryData = {
+      id: editingAdminEntry ? editingAdminEntry.id : generateUniqueId('jrn_adm_'),
+      tanggal: formattedIso,
+      tanggalStr: tanggalStr,
+      tgl: tglNum,
+      mapel: adminEntryForm.mapel || '',
+      kelas: adminEntryForm.kelas || '',
+      jamKbm: Math.max(0, Number(adminEntryForm.jamKbm) || 0),
+      jamPiket: Math.max(0, Number(adminEntryForm.jamPiket) || 0),
+      jamRapat: Math.max(0, Number(adminEntryForm.jamRapat) || 0),
+      catatan: adminEntryForm.catatan || '',
+      inputBy: 'admin',
+      updatedAt: new Date().toISOString()
+    };
+
+    let updatedEntries;
+    if (editingAdminEntry) {
+      updatedEntries = currentEntries.map(e => e.id === editingAdminEntry.id ? entryData : e);
+    } else {
+      updatedEntries = [entryData, ...currentEntries];
+    }
+
+    updatedEntries.sort((a, b) => (Number(b.tgl) || 0) - (Number(a.tgl) || 0));
+
+    const updatedTeachers = teachers.map(t => {
+      if (t.id === selectedTeacherForLog.id) {
+        return syncTeacherJurnalKbm(t, updatedEntries);
+      }
+      return t;
+    });
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+
+    const updatedSelected = updatedTeachers.find(t => t.id === selectedTeacherForLog.id);
+    setSelectedTeacherForLog(updatedSelected);
+    setIsAdminAddingEntry(false);
+    setEditingAdminEntry(null);
+
+    try {
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+    } catch (err) {
+      console.warn("Gagal simpan entri admin:", err);
+    }
+  };
+
+  const handleAdminDeleteJournalEntry = async (entryId) => {
+    if (!selectedTeacherForLog) return;
+    if (!window.confirm("Apakah Anda yakin ingin menghapus catatan jurnal ini? Jam mengajar guru akan dihitung ulang secara otomatis.")) {
+      return;
+    }
+
+    const currentEntries = (selectedTeacherForLog.payroll?.jurnalKbm || []).filter(e => e.id !== entryId);
+    const updatedTeachers = teachers.map(t => {
+      if (t.id === selectedTeacherForLog.id) {
+        return syncTeacherJurnalKbm(t, currentEntries);
+      }
+      return t;
+    });
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+
+    const updatedSelected = updatedTeachers.find(t => t.id === selectedTeacherForLog.id);
+    setSelectedTeacherForLog(updatedSelected);
+
+    try {
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+    } catch (err) {
+      console.warn("Gagal hapus entri admin:", err);
+    }
+  };
+
+  // Handler Ekspor Excel Jurnal KBM
+  const handleExportJurnalExcel = () => {
+    try {
+      exportJurnalKbmToExcel({
+        teachers,
+        settings,
+        bulan
+      });
+    } catch (err) {
+      console.error("Gagal ekspor excel jurnal:", err);
+      alert("⚠️ Gagal mengekspor laporan excel jurnal KBM. Periksa konsol untuk rincian error.");
+    }
+  };
 
   // Handler Roster (Jadwal Rutin)
   const handleInlineRosterChange = (id, day, val) => {
@@ -527,6 +798,386 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
         </div>
       )}
 
+      {/* MODAL 1: INPUT SALDO AWAL TRANSISI GOOGLE FORM */}
+      {saldoAwalModalTeacher && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">Saldo Awal Google Form</h3>
+                  <p className="text-[11px] text-emerald-100">Transisi Masa Peralihan s/d 17 Nov</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSaldoAwalModalTeacher(null)} 
+                className="p-1.5 hover:bg-white/20 rounded-lg transition-colors cursor-pointer text-white"
+              >
+                <X size={18}/>
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs">
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Pegawai / Guru:</span>
+                <p className="font-bold text-sm text-slate-800 dark:text-slate-100 mt-0.5">{saldoAwalModalTeacher.name}</p>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">NIPY: {saldoAwalModalTeacher.nipy || '-'}</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Jumlah Jam Akumulasi dari Google Form (JPL):
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={saldoAwalInput}
+                    onChange={(e) => setSaldoAwalInput(e.target.value)}
+                    placeholder="Contoh: 24"
+                    className="w-full p-2.5 pl-3 pr-12 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-sm font-black text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+                    autoFocus
+                  />
+                  <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">JPL</span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                  *Masukkan total jam yang telah diisi guru pada Google Form lama sebelum aplikasi ini aktif.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  Keterangan Catatan Transisi:
+                </label>
+                <input
+                  type="text"
+                  value={saldoAwalKet}
+                  onChange={(e) => setSaldoAwalKet(e.target.value)}
+                  placeholder="Keterangan (opsional)"
+                  className="w-full p-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle size={14} /> Otomatis Terhubung ke Slip Gaji
+                </div>
+                <p>
+                  Total Realisasi = <b>Entri Jurnal Mandiri ({calculateJurnalSummary(saldoAwalModalTeacher).jamKbm + calculateJurnalSummary(saldoAwalModalTeacher).jamPiket + calculateJurnalSummary(saldoAwalModalTeacher).jamRapat} JPL)</b> + <b>Saldo Awal ({Number(saldoAwalInput) || 0} JPL)</b>.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700 flex gap-2">
+              <button
+                onClick={() => setSaldoAwalModalTeacher(null)}
+                disabled={isSavingSaldo}
+                className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSaveSaldoAwal}
+                disabled={isSavingSaldo}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSavingSaldo ? 'Menyimpan...' : 'Simpan Saldo Awal'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: LOG DETAIL JURNAL GURU & ENTRI ADMIN */}
+      {selectedTeacherForLog && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-3 sm:p-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
+            {/* Header Modal */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-800">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white leading-tight">
+                    Log Jurnal Mengajar: {selectedTeacherForLog.name}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">NIPY: {selectedTeacherForLog.nipy || '-'}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      Periode {bulan}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedTeacherForLog(null)} 
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors cursor-pointer"
+              >
+                <X size={20}/>
+              </button>
+            </div>
+
+            {/* Quick KPI Strip */}
+            {(() => {
+              const summary = calculateJurnalSummary(selectedTeacherForLog);
+              return (
+                <div className="bg-slate-100/70 dark:bg-slate-850 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span>KBM: <b className="text-blue-600">{summary.jamKbm} JPL</b></span>
+                    <span>•</span>
+                    <span>Piket: <b className="text-indigo-600">{summary.jamPiket} JPL</b></span>
+                    <span>•</span>
+                    <span>Rapat: <b className="text-purple-600">{summary.jamRapat} JPL</b></span>
+                    {summary.saldoAwal > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>Saldo Awal: <b className="text-emerald-600">+{summary.saldoAwal} JPL</b></span>
+                      </>
+                    )}
+                  </div>
+                  <div className="font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    Total: {summary.totalAkumulasi} JPL
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Body: Form Entri Admin atau List */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {isAdminAddingEntry ? (
+                /* Form Tambah / Edit Entri Jurnal oleh Admin */
+                <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-indigo-200/60 dark:border-indigo-800/40">
+                    <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                      <Edit size={14} />
+                      <span>{editingAdminEntry ? 'Edit Catatan Jurnal' : 'Tambah Entri Jurnal Manual (Bantuan Admin)'}</span>
+                    </h4>
+                    <button
+                      onClick={() => { setIsAdminAddingEntry(false); setEditingAdminEntry(null); }}
+                      className="text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400 cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Tanggal (1-31):</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={adminEntryForm.tgl}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, tgl: Number(e.target.value) })}
+                        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Mata Pelajaran:</label>
+                      <select
+                        value={adminEntryForm.mapel}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, mapel: e.target.value })}
+                        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        {DEFAULT_MAPEL_KBM.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Kelas:</label>
+                      <select
+                        value={adminEntryForm.kelas}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, kelas: e.target.value })}
+                        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        {DEFAULT_KELAS_KBM.map((k) => (
+                          <option key={k} value={k}>{k}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-blue-700 dark:text-blue-300 mb-1">Jam KBM (JPL):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={adminEntryForm.jamKbm}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, jamKbm: Number(e.target.value) })}
+                        className="w-full p-2 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-black text-blue-600 bg-white dark:bg-slate-900 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300 mb-1">Jam Piket (JPL):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={adminEntryForm.jamPiket}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, jamPiket: Number(e.target.value) })}
+                        className="w-full p-2 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-black text-indigo-600 bg-white dark:bg-slate-900 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-purple-700 dark:text-purple-300 mb-1">Jam Rapat (JPL):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={adminEntryForm.jamRapat}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, jamRapat: Number(e.target.value) })}
+                        className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-lg text-xs font-black text-purple-600 bg-white dark:bg-slate-900 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">Catatan / Materi (Opsional):</label>
+                    <input
+                      type="text"
+                      value={adminEntryForm.catatan}
+                      onChange={(e) => setAdminEntryForm({ ...adminEntryForm, catatan: e.target.value })}
+                      placeholder="Contoh: Mengajar Tahfidz Juz 30 / Piket Musholla"
+                      className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-900 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => { setIsAdminAddingEntry(false); setEditingAdminEntry(null); }}
+                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleAdminSaveJournalEntry}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {editingAdminEntry ? 'Perbarui Catatan' : 'Simpan Catatan'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Riwayat Entri Bulan Ini ({(selectedTeacherForLog.payroll?.jurnalKbm || []).length} entri):
+                  </span>
+                  <button
+                    onClick={() => {
+                      setEditingAdminEntry(null);
+                      setAdminEntryForm({
+                        tgl: new Date().getDate(),
+                        mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
+                        kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
+                        jamKbm: 2,
+                        jamPiket: 0,
+                        jamRapat: 0,
+                        catatan: ''
+                      });
+                      setIsAdminAddingEntry(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl text-xs hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Tambah Entri Manual</span>
+                  </button>
+                </div>
+              )}
+
+              {/* List of Entries */}
+              <div className="divide-y divide-slate-100 dark:divide-slate-700/60 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                {(selectedTeacherForLog.payroll?.jurnalKbm || []).length > 0 ? (
+                  (selectedTeacherForLog.payroll?.jurnalKbm || []).map((entri) => {
+                    const totalHours = (Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + (Number(entri.jamRapat) || 0);
+                    return (
+                      <div key={entri.id} className="p-3 sm:p-3.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex flex-col items-center justify-center shrink-0 border border-indigo-200/60 dark:border-indigo-800/40">
+                            <span className="text-[9px] uppercase leading-none text-slate-400">Tgl</span>
+                            <span className="text-sm font-black">{entri.tgl}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
+                                {entri.mapel || 'Kegiatan Umum'}
+                              </span>
+                              {entri.kelas && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                  {entri.kelas}
+                                </span>
+                              )}
+                              {entri.inputBy === 'admin' && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                  Admin
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
+                              <span>KBM: <b>{entri.jamKbm || 0} JPL</b></span>
+                              <span>•</span>
+                              <span>Piket: <b>{entri.jamPiket || 0} JPL</b></span>
+                              <span>•</span>
+                              <span>Rapat: <b>{entri.jamRapat || 0} JPL</b></span>
+                            </div>
+                            {entri.catatan && (
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-0.5 line-clamp-1">
+                                "{entri.catatan}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            <span className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono block">
+                              +{totalHours} JPL
+                            </span>
+                            <span className="text-[9px] text-slate-400">{entri.tanggalStr || `Tgl ${entri.tgl}`}</span>
+                          </div>
+                          <button
+                            onClick={() => handleStartEditAdminEntry(entri)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Catatan"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleAdminDeleteJournalEntry(entri.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
+                            title="Hapus Catatan"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-xs italic">
+                    Belum ada riwayat entri jurnal mengajar untuk guru ini di bulan {bulan}.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button
+                onClick={() => setSelectedTeacherForLog(null)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL PRATINJAU PESERTA MASSAL */}
       {previewActivity && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
@@ -643,6 +1294,13 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
             >
                <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><ListPlus size={16}/> Input Massal</div>
                <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Tambahkan jam kegiatan non-rutin ke banyak guru sekaligus.</p>
+            </button>
+            <button 
+               onClick={() => setActiveTab('monitoring_jurnal')}
+               className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'monitoring_jurnal' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-500 xl:border-l-emerald-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+            >
+               <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><BookOpen size={16}/> Monitoring Jurnal KBM</div>
+               <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Pantau kepatuhan jurnal, saldo transisi, & ekspor Excel.</p>
             </button>
             <button 
                onClick={() => setActiveTab('riwayat_massal')}

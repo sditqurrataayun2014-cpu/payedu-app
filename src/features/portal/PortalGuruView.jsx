@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  AlertCircle, Archive, Award, BellRing, Briefcase, Building, Calendar, CalendarDays,
+  AlertCircle, Archive, Award, BellRing, BookOpen, Briefcase, Building, Calendar, CalendarDays,
   Check, CheckCircle, CheckCircle2, ChevronRight, Clock, Clock3, Cloud, CreditCard,
   Download, Edit, Eye, EyeOff, FileText, Fingerprint, GraduationCap, History,
-  Info, LayoutDashboard, ListPlus, Lock, LogIn, LogOut, MessageSquare, Printer,
-  Save, Send, ShieldCheck, Sparkles, Star, TrendingUp, UserCircle, Users, Wallet, X
+  Info, LayoutDashboard, ListPlus, Lock, LogIn, LogOut, MessageSquare, Minus, Plus, Printer,
+  Save, Send, ShieldCheck, Sparkles, Star, Trash2, TrendingUp, UserCircle, Users, Wallet, X
 } from 'lucide-react';
 
 import PresensiGuruView from '../../PresensiGuruView';
@@ -19,7 +19,11 @@ import {
   generateUniqueId, 
   getFormattedPeriod, 
   getLocalIsoDate, 
-  safeStorageSet 
+  safeStorageSet,
+  DEFAULT_MAPEL_KBM,
+  DEFAULT_KELAS_KBM,
+  calculateJurnalSummary,
+  syncTeacherJurnalKbm
 } from '../../utils/payrollUtils';
 
 import { getSesiTheme } from '../../utils/sesiTheme';
@@ -358,6 +362,142 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   // 🪄 TAMBALAN CERDAS MUTLAK: State Loading Konfirmasi & Kirim Pesan
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+
+  // 📚 FITUR BARU: Jurnal KBM & Beban Kerja Harian Guru (Pengganti Google Form)
+  const [isJurnalModalOpen, setIsJurnalModalOpen] = useState(false);
+  const [isSavingJurnal, setIsSavingJurnal] = useState(false);
+  const [jurnalForm, setJurnalForm] = useState({
+    id: null,
+    tanggalStr: todayIsoDate,
+    tgl: new Date().getDate(),
+    jamKbm: 2,
+    jamPiket: 0,
+    jamRapat: 0,
+    mapel: 'TAHSIN',
+    kelas: 'I A Putra',
+    catatan: ''
+  });
+
+  const jurnalSummary = useMemo(() => calculateJurnalSummary(myData), [myData]);
+
+  const hasFilledTodayJurnal = useMemo(() => {
+    return (jurnalSummary.entries || []).some(j => j.tanggalStr === todayIsoDate || Number(j.tgl) === Number(todayIsoDate.split('-')[2]));
+  }, [jurnalSummary, todayIsoDate]);
+
+  useEffect(() => {
+    if (!isJurnalModalOpen) return;
+    return registerBackModal(() => setIsJurnalModalOpen(false));
+  }, [isJurnalModalOpen]);
+
+  const handleOpenJurnalModal = (entryToEdit = null, defaultDateStr = null) => {
+    if (entryToEdit) {
+      setJurnalForm({
+        id: entryToEdit.id,
+        tanggalStr: entryToEdit.tanggalStr || todayIsoDate,
+        tgl: entryToEdit.tgl || Number(entryToEdit.tanggalStr?.split('-')[2]) || new Date().getDate(),
+        jamKbm: Number(entryToEdit.jamKbm) || 0,
+        jamPiket: Number(entryToEdit.jamPiket) || 0,
+        jamRapat: Number(entryToEdit.jamRapat) || 0,
+        mapel: entryToEdit.mapel || 'TAHSIN',
+        kelas: entryToEdit.kelas || 'I A Putra',
+        catatan: entryToEdit.catatan || ''
+      });
+    } else {
+      const targetDate = defaultDateStr || todayIsoDate;
+      const day = Number(targetDate.split('-')[2]) || new Date().getDate();
+      setJurnalForm({
+        id: null,
+        tanggalStr: targetDate,
+        tgl: day,
+        jamKbm: 2,
+        jamPiket: 0,
+        jamRapat: 0,
+        mapel: 'TAHSIN',
+        kelas: 'I A Putra',
+        catatan: ''
+      });
+    }
+    setIsJurnalModalOpen(true);
+  };
+
+  const handleSaveJurnalEntry = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setIsSavingJurnal(true);
+
+    const dayNum = Number(jurnalForm.tanggalStr?.split('-')[2]) || jurnalForm.tgl || new Date().getDate();
+    const existingEntries = Array.isArray(myData.payroll?.jurnalKbm) ? [...myData.payroll.jurnalKbm] : [];
+
+    let updatedEntries;
+    if (jurnalForm.id) {
+      updatedEntries = existingEntries.map(item => {
+        if (item.id === jurnalForm.id) {
+          return {
+            ...item,
+            tanggalStr: jurnalForm.tanggalStr,
+            tgl: dayNum,
+            jamKbm: Number(jurnalForm.jamKbm) || 0,
+            jamPiket: Number(jurnalForm.jamPiket) || 0,
+            jamRapat: Number(jurnalForm.jamRapat) || 0,
+            mapel: jurnalForm.mapel,
+            kelas: jurnalForm.kelas,
+            catatan: jurnalForm.catatan,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return item;
+      });
+    } else {
+      const newEntry = {
+        id: generateUniqueId(),
+        tanggalStr: jurnalForm.tanggalStr,
+        tgl: dayNum,
+        jamKbm: Number(jurnalForm.jamKbm) || 0,
+        jamPiket: Number(jurnalForm.jamPiket) || 0,
+        jamRapat: Number(jurnalForm.jamRapat) || 0,
+        mapel: jurnalForm.mapel,
+        kelas: jurnalForm.kelas,
+        catatan: jurnalForm.catatan,
+        createdAt: new Date().toISOString()
+      };
+      updatedEntries = [newEntry, ...existingEntries];
+    }
+
+    const updatedTeacher = syncTeacherJurnalKbm(myData, updatedEntries);
+    const updatedTeachers = teachers.map(t => t.id === myData.id ? updatedTeacher : t);
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+
+    try {
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+      const totalHours = Number(jurnalForm.jamKbm) + Number(jurnalForm.jamPiket) + Number(jurnalForm.jamRapat);
+      saveAuditLog?.(myData.name, 'Catat Jurnal KBM', `Tgl ${dayNum}`, `${totalHours} JPL`);
+    } catch (err) {
+      console.warn('[Jurnal KBM] Cloud sync warning:', err);
+    } finally {
+      setIsSavingJurnal(false);
+      setIsJurnalModalOpen(false);
+    }
+  };
+
+  const handleDeleteJurnalEntry = async (entryId) => {
+    if (!window.confirm('Hapus entri jurnal mengajar ini? Akumulasi jam akan otomatis dikurangi.')) return;
+    const existingEntries = Array.isArray(myData.payroll?.jurnalKbm) ? myData.payroll.jurnalKbm : [];
+    const updatedEntries = existingEntries.filter(e => e.id !== entryId);
+
+    const updatedTeacher = syncTeacherJurnalKbm(myData, updatedEntries);
+    const updatedTeachers = teachers.map(t => t.id === myData.id ? updatedTeacher : t);
+
+    setTeachers(updatedTeachers);
+    safeStorageSet('payedu_teachers', updatedTeachers);
+
+    try {
+      await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
+      saveAuditLog?.(myData.name, 'Hapus Jurnal KBM', `ID ${entryId}`, 'Dihapus');
+    } catch (err) {
+      console.warn('[Jurnal KBM] Delete sync warning:', err);
+    }
+  };
 
   // 🪄 FITUR BARU: State & Handler Mandiri Edit Biodata Guru
   const [isEditBiodataOpen, setIsEditBiodataOpen] = useState(false);
@@ -1345,6 +1485,33 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                               </div>
                            </div>
 
+                            {/* 📚 PINTASAN CEPAT JURNAL KBM & BEBAN KERJA HARIAN (Pengganti Google Form) */}
+                            <div className="mt-3 p-3 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-slate-900/50 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 flex items-center justify-between gap-3 shadow-xs">
+                               <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                     <BookOpen size={16} />
+                                  </div>
+                                  <div className="min-w-0">
+                                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                                        {hasFilledTodayJurnal ? 'Jurnal KBM Hari Ini Sudah Dicatat' : 'Jurnal Mengajar & Piket Hari Ini'}
+                                     </p>
+                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                        {hasFilledTodayJurnal 
+                                           ? 'Ketuk untuk memeriksa rincian atau menambah jam kegiatan' 
+                                           : 'Catat jam mengajar, piket, dan rapat sebelum pulang'}
+                                     </p>
+                                  </div>
+                               </div>
+                               <button
+                                  type="button"
+                                  onClick={() => handleOpenJurnalModal(null, todayIsoDate)}
+                                  className="px-3 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all shrink-0 flex items-center gap-1 cursor-pointer active:scale-95"
+                               >
+                                  <Plus size={13} strokeWidth={2.5} />
+                                  <span>{hasFilledTodayJurnal ? 'Kelola' : 'Catat'}</span>
+                               </button>
+                            </div>
+
                            {/* 4. FOOTER: LINK HALAMAN LENGKAP */}
                            <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/50 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
                               <span className="flex items-center gap-1.5 text-[11px] font-medium">
@@ -1650,6 +1817,183 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
           return (
             <div className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-300">
+              {/* KARTU 0: JURNAL BEBAN KERJA & AKUMULASI JAM (PENGGANTI RESMI GOOGLE FORM) */}
+              <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl relative overflow-hidden border border-indigo-700/50">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-indigo-300 border border-white/20 shadow-inner shrink-0">
+                      <BookOpen size={24} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                          Jurnal KBM Harian
+                        </span>
+                        <span className="text-[10px] font-semibold text-indigo-200/80">Periode {bulan}</span>
+                      </div>
+                      <h3 className="text-sm sm:text-lg font-black tracking-tight mt-0.5">
+                        Akumulasi Beban Kerja &amp; Mengajar
+                      </h3>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenJurnalModal()}
+                    className="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 hover:from-blue-600 hover:via-indigo-600 hover:to-violet-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-indigo-500/30 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/30"
+                  >
+                    <Plus size={16} strokeWidth={3} />
+                    <span>Catat Jam Kegiatan / KBM</span>
+                  </button>
+                </div>
+
+                {/* 4 Pilar Jam Beban Kerja */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pt-4 relative z-10">
+                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                      Jam Mengajar/Halaqoh
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamKbm}</span>
+                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Tatap muka kelas</span>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                      Jam Piket Kantor &amp; Sholat
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamPiket}</span>
+                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Tugas piket dinas</span>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
+                    <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
+                      Rapat &amp; Kegiatan Sore
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamRapat}</span>
+                      <span className="text-xs font-semibold text-indigo-300">JPL</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-200/70 mt-1 block">Evaluasi &amp; rapat guru</span>
+                  </div>
+
+                  <div className="bg-emerald-500/20 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-emerald-400/30">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] sm:text-xs text-emerald-200 font-black uppercase tracking-wider">
+                        Total Akumulasi
+                      </span>
+                      {jurnalSummary.saldoAwal > 0 && (
+                        <span className="text-[9px] bg-emerald-400/30 text-emerald-100 px-1.5 py-0.5 rounded font-bold" title="Termasuk saldo awal transisi">
+                          +{jurnalSummary.saldoAwal} Awal
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl sm:text-2xl font-black text-emerald-300">{jurnalSummary.totalAkumulasi}</span>
+                      <span className="text-xs font-semibold text-emerald-200">JPL</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-200/80 mt-1 block">Terhubung ke slip gaji</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIWAYAT ENTRI JURNAL BULAN INI */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs overflow-hidden">
+                <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 bg-slate-50/80 dark:bg-slate-900/40 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm flex items-center gap-2">
+                    <BookOpen size={16} className="text-indigo-500" />
+                    <span>Daftar Entri Jurnal Mengajar Bulan Ini</span>
+                  </h4>
+                  <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                    {(jurnalSummary.entries || []).length} Catatan
+                  </span>
+                </div>
+
+                {(jurnalSummary.entries || []).length > 0 ? (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                    {(jurnalSummary.entries || []).map((entri) => {
+                      const totalEntryHours = (Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + (Number(entri.jamRapat) || 0);
+                      return (
+                        <div key={entri.id} className="p-3 sm:p-4 hover:bg-slate-50/80 dark:hover:bg-slate-750 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex flex-col items-center justify-center shrink-0 border border-indigo-200/60 dark:border-indigo-800/40">
+                              <span className="text-[9px] uppercase leading-none text-slate-400">Tgl</span>
+                              <span className="text-sm font-black">{entri.tgl}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
+                                  {entri.mapel || 'Kegiatan Umum'}
+                                </span>
+                                {entri.kelas && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                    {entri.kelas}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
+                                <span>KBM: <b>{entri.jamKbm || 0} JPL</b></span>
+                                <span>•</span>
+                                <span>Piket: <b>{entri.jamPiket || 0} JPL</b></span>
+                                <span>•</span>
+                                <span>Rapat: <b>{entri.jamRapat || 0} JPL</b></span>
+                              </div>
+                              {entri.catatan && (
+                                <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-1 line-clamp-1">
+                                  "{entri.catatan}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
+                            <div className="text-right">
+                              <span className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono block">
+                                +{totalEntryHours} JPL
+                              </span>
+                              <span className="text-[9px] text-slate-400">{entri.tanggalStr || `Tanggal ${entri.tgl}`}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleOpenJurnalModal(entri)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Entri Jurnal"
+                              >
+                                <Edit size={15} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteJurnalEntry(entri.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus Entri Jurnal"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-xs space-y-2">
+                    <p className="font-semibold text-slate-600 dark:text-slate-300">Belum ada catatan jurnal mengajar di bulan ini.</p>
+                    <p className="text-[11px] text-slate-400">Klik tombol di bawah ini untuk mencatat jam mengajar, piket, atau rapat hari ini.</p>
+                    <button
+                      onClick={() => handleOpenJurnalModal()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 font-bold rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs hover:bg-indigo-100 transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Catat Jurnal Pertama</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               {/* KARTU 1: KPI RINGKASAN ROSTER MINGGUAN */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
                 <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
@@ -2961,6 +3305,238 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       </div>
     )}
 
+    {/* MODAL INPUT JURNAL KBM & BEBAN KERJA (PENGGANTI RESMI GOOGLE FORM) */}
+    {isJurnalModalOpen && (
+      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700 max-h-[92vh] animate-in zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50/80 dark:bg-slate-900/50 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <BookOpen size={20} />
+              </div>
+              <div>
+                <h3 className="font-black text-sm sm:text-base text-slate-800 dark:text-white">
+                  {jurnalForm.id ? 'Edit Jurnal Mengajar & Piket' : 'Catat Jam Mengajar & Beban Kerja'}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  SD IT Qurrata A'yun • Catatan Otomatis Masuk ke Gaji
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsJurnalModalOpen(false)}
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Form Body */}
+          <form onSubmit={handleSaveJurnalEntry} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
+            {/* 1. Guru & Tanggal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-900/30 rounded-2xl border border-slate-200/70 dark:border-slate-700/60">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Nama Guru (Otomatis)
+                </label>
+                <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 truncate">
+                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                  <span className="truncate">{myData.name}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Tanggal Pelaksanaan
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={jurnalForm.tanggalStr}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const d = Number(val.split('-')[2]) || new Date().getDate();
+                    setJurnalForm(prev => ({ ...prev, tanggalStr: val, tgl: d }));
+                  }}
+                  className="w-full p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                />
+              </div>
+            </div>
+
+            {/* 2. Stepper Jam */}
+            <div className="space-y-3">
+              <span className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Alokasi Jam Kegiatan Hari Ini
+              </span>
+
+              {/* A. Jam Mengajar / Halaqoh */}
+              <div className="p-3 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
+                    1. Jam Masuk Kelas / Halaqoh (KBM)
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Tatap muka mengajar di kelas</span>
+                </div>
+                <div className="flex items-center gap-1.5 self-end sm:self-center">
+                  {[0, 1, 2, 3, 4, 5, 6].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setJurnalForm(prev => ({ ...prev, jamKbm: n }))}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jurnalForm.jamKbm === n
+                          ? 'bg-indigo-600 text-white shadow-xs scale-105'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 ml-1">JPL</span>
+                </div>
+              </div>
+
+              {/* B. Jam Piket Kantor & Sholat */}
+              <div className="p-3 bg-teal-50/40 dark:bg-teal-950/20 rounded-2xl border border-teal-200/60 dark:border-teal-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
+                    2. Jam Piket Kantor / Sholat
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Piket gerbang, kantor, atau sholat</span>
+                </div>
+                <div className="flex items-center gap-1.5 self-end sm:self-center">
+                  {[0, 1, 2, 3].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setJurnalForm(prev => ({ ...prev, jamPiket: n }))}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jurnalForm.jamPiket === n
+                          ? 'bg-teal-600 text-white shadow-xs scale-105'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-teal-600 dark:text-teal-400 ml-1">JPL</span>
+                </div>
+              </div>
+
+              {/* C. Jam Rapat & Kegiatan Guru */}
+              <div className="p-3 bg-purple-50/40 dark:bg-purple-950/20 rounded-2xl border border-purple-200/60 dark:border-purple-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">
+                    3. Jam Rapat &amp; Kegiatan Sore
+                  </span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat dinas, kajian, halaqoh sore</span>
+                </div>
+                <div className="flex items-center gap-1.5 self-end sm:self-center">
+                  {[0, 1, 2, 3].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setJurnalForm(prev => ({ ...prev, jamRapat: n }))}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        jurnalForm.jamRapat === n
+                          ? 'bg-purple-600 text-white shadow-xs scale-105'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 ml-1">JPL</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Dropdown Mapel & Kelas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Mata Pelajaran (Opsional)
+                </label>
+                <select
+                  value={jurnalForm.mapel}
+                  onChange={(e) => setJurnalForm(prev => ({ ...prev, mapel: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                >
+                  {DEFAULT_MAPEL_KBM.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Kelas yang Diajar (Opsional)
+                </label>
+                <select
+                  value={jurnalForm.kelas}
+                  onChange={(e) => setJurnalForm(prev => ({ ...prev, kelas: e.target.value }))}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+                >
+                  {DEFAULT_KELAS_KBM.map(k => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 4. Catatan Singkat */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Catatan / Materi Pembelajaran (Opsional)
+              </label>
+              <input
+                type="text"
+                placeholder="Cth: Latihan Soal Bab 2, Evaluasi Tahfidz Juz 30"
+                value={jurnalForm.catatan}
+                onChange={(e) => setJurnalForm(prev => ({ ...prev, catatan: e.target.value }))}
+                className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 text-xs"
+              />
+            </div>
+
+            {/* 5. Live Total Preview */}
+            <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-300 block">
+                  Total Jam Entri Ini
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Otomatis terakumulasi ke jam mengajar slip gaji
+                </span>
+              </div>
+              <span className="font-mono text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                +{Number(jurnalForm.jamKbm) + Number(jurnalForm.jamPiket) + Number(jurnalForm.jamRapat)} JPL
+              </span>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsJurnalModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-xs cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingJurnal}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-70 cursor-pointer"
+              >
+                {isSavingJurnal ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save size={15} />}
+                <span>Simpan Jurnal Sekarang</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+
     {/* 📱 PREMIUM SLIM & ERGONOMIC BOTTOM NAVIGATION (KHUSUS MOBILE) */}
     <div className="no-print md:hidden fixed bottom-0 left-0 right-0 z-[100] pointer-events-none">
       
@@ -3023,6 +3599,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                  {(item.id === 'portal_gaji' && myData.payroll?.isNotified && !myData.payroll?.isConfirmed) && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs"></span>
                  )}
+
+                  {/* Amber Dot Pengingat Jurnal KBM */}
+                  {(item.id === 'portal_jadwal' && !hasFilledTodayJurnal && liveNow.getHours() >= 12) && (
+                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse shadow-xs" title="Jangan lupa isi Jurnal KBM hari ini"></span>
+                  )}
                </div>
 
                {/* Teks Label (Selalu terbaca, rapi & presisi) */}

@@ -687,5 +687,121 @@ export const formatTeacherName = (name) => {
   return str;
 };
 
+/**
+ * 📚 DAFTAR MATA PELAJARAN STANDAR KBM
+ * Diambil langsung dari acuan formulir resmi Absen Mengajar sekolah
+ */
+export const DEFAULT_MAPEL_KBM = [
+  "TAHSIN",
+  "TAHFIDZ",
+  "ADAB ISLAM",
+  "BAHASA ARAB",
+  "AL-QUR'AN HADITS",
+  "IBADAH PRAKTIS",
+  "SEJARAH ISLAM",
+  "FIQIH IBADAH",
+  "TAUHID",
+  "BAHASA INGGRIS",
+  "MATEMATIKA",
+  "PENDIDIKAN PANCASILA",
+  "BAHASA INDONESIA",
+  "IPAS",
+  "SENI RUPA",
+  "PJOK",
+  "LAINNYA"
+];
+
+/**
+ * 🏫 DAFTAR KELAS KBM RESMI
+ */
+export const DEFAULT_KELAS_KBM = [
+  "I A Putra", "I B Putra", "I C Putra", "I A Putri", "I B Putri",
+  "II A Putra", "II B Putra", "II A Putri", "II B Putri",
+  "III A Putra", "III B Putra", "III A Putri", "III B Putri",
+  "IV A Putra", "IV B Putra", "IV A Putri", "IV B Putri",
+  "V A Putra", "V B Putra", "V A Putri", "V B Putri",
+  "VI Putra", "VI A Putri", "VI B Putri", "Semua Kelas"
+];
+
+/**
+ * 🧮 HELPER RINGKASAN JURNAL KBM & BEBAN KERJA GURU
+ * Mengakumulasikan jam mengajar, jam piket, jam rapat, dan saldo awal transisi
+ */
+export const calculateJurnalSummary = (teacher) => {
+  const p = teacher?.payroll || {};
+  const entries = Array.isArray(p.jurnalKbm) ? p.jurnalKbm : [];
+  const jamKbm = entries.reduce((s, e) => s + (Number(e.jamKbm) || 0), 0);
+  const jamPiket = entries.reduce((s, e) => s + (Number(e.jamPiket) || 0), 0);
+  const jamRapat = entries.reduce((s, e) => s + (Number(e.jamRapat) || 0), 0);
+  const saldoAwal = Number(p.jamMengajar?.saldoAwalJam) || 0;
+  const totalAkumulasi = jamKbm + jamPiket + jamRapat + saldoAwal;
+  
+  return {
+    entries,
+    jamKbm,
+    jamPiket,
+    jamRapat,
+    saldoAwal,
+    totalAkumulasi
+  };
+};
+
+/**
+ * 🔄 HELPER SINKRONISASI JURNAL KBM KE HARIAN & REALISASI GAJI
+ * Menghitung ulang matriks harian (Tgl 1 - 31) dan total realisasi jam secara otomatis
+ */
+export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) => {
+  if (!teacher) return teacher;
+  const p = teacher.payroll || {};
+  const jamMengajar = p.jamMengajar || {};
+  const saldoAwal = saldoAwalOverride !== undefined 
+    ? (Number(saldoAwalOverride) || 0) 
+    : (Number(jamMengajar.saldoAwalJam) || 0);
+
+  const entries = Array.isArray(newJurnalList) ? newJurnalList : [];
+
+  // Salin array harian (Tgl 1 - 31) yang sudah ada agar data impor lama tidak tertimpa
+  const currentHarian = Array.isArray(jamMengajar.harian) && jamMengajar.harian.length === 31
+    ? [...jamMengajar.harian]
+    : Array(31).fill('');
+
+  // Hitung akumulasi jam per tanggal khusus yang tercatat dalam jurnal
+  const dailyMap = {};
+  entries.forEach(e => {
+    const day = Number(e.tgl);
+    if (day >= 1 && day <= 31) {
+      const dayTotal = (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0);
+      dailyMap[day] = (dailyMap[day] || 0) + dayTotal;
+    }
+  });
+
+  // Terapkan jam jurnal ke hari yang bersangkutan
+  Object.keys(dailyMap).forEach(dStr => {
+    const d = Number(dStr);
+    const dayIdx = d - 1;
+    currentHarian[dayIdx] = dailyMap[d] > 0 ? dailyMap[d] : '';
+  });
+
+  // Hitung total realisasi jam keseluruhan (Jurnal + Saldo Awal Transisi)
+  const totalJurnal = entries.reduce((s, e) => 
+    s + (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0), 0);
+  const newRealisasi = totalJurnal + saldoAwal;
+
+  return {
+    ...teacher,
+    payroll: {
+      ...p,
+      jurnalKbm: entries,
+      jamMengajar: {
+        ...jamMengajar,
+        harian: currentHarian,
+        saldoAwalJam: saldoAwal,
+        realisasi: newRealisasi
+      }
+    }
+  };
+};
+
+
 
 
