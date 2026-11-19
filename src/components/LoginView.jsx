@@ -11,7 +11,8 @@ import {
 import { pushCloudData as pushToSupabase } from '../services/dbService';
 import {
   authenticateWithBiometrics, getSavedBiometricAccount,
-  isBiometricSupported, removeBiometricAccount
+  isBiometricSupported, removeBiometricAccount,
+  registerBiometricLogin
 } from '../services/biometricService';
 
 export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, recordLogin, teachers, setTeachers }) {
@@ -33,6 +34,14 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
   const [isBioAvailable, setIsBioAvailable] = useState(false);
   const [savedBioAccount, setSavedBioAccount] = useState(null);
   const [isBioLoading, setIsBioLoading] = useState(false);
+
+  // 🔐 MODAL HUBUNGI SIDIK JARI LANGSUNG DI HALAMAN LOGIN
+  const [showConnectBioModal, setShowConnectBioModal] = useState(false);
+  const [connectUsername, setConnectUsername] = useState('');
+  const [connectPassword, setConnectPassword] = useState('');
+  const [showConnectPwd, setShowConnectPwd] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  const [isConnectingBio, setIsConnectingBio] = useState(false);
 
   useEffect(() => {
     isBiometricSupported().then(supported => {
@@ -90,6 +99,132 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
     }
   }, []);
 
+  // 🛡️ HELPER VERIFIKASI KREDENSIAL PENGGUNA TERPADU
+  const authenticateCredentials = (rawUser, rawPass) => {
+    const inputUser = String(rawUser || '').trim();
+    const inputPass = String(rawPass || '');
+    if (!inputUser || !inputPass) {
+      return { success: false, message: 'Username dan password wajib diisi!' };
+    }
+
+    const rawAccounts = safeStorageGet('payedu_accounts', []);
+    const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
+    const savedAccounts = [
+      ...(Array.isArray(rawAccounts) ? rawAccounts : []),
+      ...(Array.isArray(rawAdminAccounts) ? rawAdminAccounts : [])
+    ];
+
+    const hashedInputPassword = simpleHash(inputPass);
+    const accInStorage = savedAccounts.find(a => a.username === inputUser);
+
+    if (accInStorage) {
+      if (accInStorage.password === hashedInputPassword) {
+        return {
+          success: true,
+          user: {
+            role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role,
+            name: accInStorage.name,
+            id: accInStorage.id || inputUser,
+            username: inputUser
+          }
+        };
+      }
+    }
+
+    const inputLower = inputUser.toLowerCase();
+    const teacherData = (teachers || []).find(t => 
+      String(t.id).toLowerCase() === inputLower ||
+      (t.nipy && String(t.nipy).trim().toLowerCase() === inputLower) ||
+      (t.linkedUsername && String(t.linkedUsername).trim().toLowerCase() === inputLower) ||
+      (t.name && t.name.trim().toLowerCase() === inputLower)
+    );
+
+    if (teacherData) {
+      if (!isTeacherActive(teacherData)) {
+        return { success: false, message: 'Akses ditolak: Akun pegawai ini telah dinonaktifkan (Status: Resign/Non-Aktif). Hubungi Tata Usaha.' };
+      }
+
+      const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
+      const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
+
+      const isPasswordCorrect = 
+        (teacherData.customPassword && teacherData.customPassword === hashedInputPassword) || 
+        (teacherData.plainPassword && String(teacherData.plainPassword).trim() === inputPass.trim()) ||
+        (inputPass.trim() === defaultPass) ||
+        (teacherData.customPassword && teacherData.customPassword === inputPass.trim());
+
+      if (isPasswordCorrect) {
+        return {
+          success: true,
+          user: {
+            role: 'guru',
+            id: teacherData.id,
+            name: teacherData.name,
+            username: inputUser,
+            nipy: teacherData.nipy
+          }
+        };
+      }
+    }
+
+    // Fallback Hardcoded
+    if (inputUser === 'Akbar' && inputPass === 'Boy2014') {
+      return { success: true, user: { role: 'admin', name: 'Administrator System', username: 'Akbar', id: 'admin-akbar' } };
+    } else if (inputUser === 'kepsek' && inputPass === 'Ilwani2010') {
+      return { success: true, user: { role: 'Kepala Sekolah', name: 'Kepala Sekolah', username: 'kepsek', id: 'kepsek' } };
+    } else if (inputLower === 'yayasan' && (inputPass === 'Yayasan2014' || inputPass === 'Yayasan123')) {
+      return { success: true, user: { role: 'Yayasan', name: 'Pengurus Yayasan', username: 'yayasan', id: 'yayasan' } };
+    }
+
+    return { success: false, message: 'Username atau password salah! Periksa kembali data login Anda.' };
+  };
+
+  const handleOpenConnectBioModal = () => {
+    setConnectUsername(username || '');
+    setConnectPassword(password || '');
+    setConnectError('');
+    setShowConnectBioModal(true);
+  };
+
+  const handleConnectBiometrics = async (e) => {
+    e.preventDefault();
+    setIsConnectingBio(true);
+    setConnectError('');
+
+    try {
+      const authResult = authenticateCredentials(connectUsername, connectPassword);
+      if (!authResult.success) {
+        setConnectError(authResult.message);
+        setIsConnectingBio(false);
+        return;
+      }
+
+      const authUser = authResult.user;
+
+      if (settings?.maintenanceMode && authUser.role === 'guru') {
+        setConnectError('Mohon maaf, Portal Pegawai saat ini sedang dalam Mode Perbaikan.');
+        setIsConnectingBio(false);
+        return;
+      }
+
+      // Meminta pendaftaran sensor biometrik WebAuthn perangkat
+      const credential = await registerBiometricLogin(authUser);
+      if (credential) {
+        recordLogin(authUser.name, authUser.role === 'admin' ? 'Admin' : 'Guru', 'Sukses Daftar Biometrik Login');
+        const saved = getSavedBiometricAccount();
+        setSavedBioAccount(saved);
+        setShowConnectBioModal(false);
+        alert(`✅ Berhasil! Sidik jari ${authUser.name} telah terhubung dengan HP ini. Sekarang Anda langsung login otomatis.`);
+        onLogin(authUser);
+      }
+    } catch (err) {
+      console.warn("Gagal pendaftaran biometrik di login:", err);
+      setConnectError(err.message || 'Pendaftaran sidik jari gagal atau dibatalkan.');
+    } finally {
+      setIsConnectingBio(false);
+    }
+  };
+
   const handleLogin = (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -97,96 +232,30 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
 
     // Simulasi proses loading validasi sesaat (UX)
     setTimeout(() => {
-      // 1. Cek dari LocalStorage (termasuk payedu_admin_accounts jika dibuat via Pengaturan)
-      const rawAccounts = safeStorageGet('payedu_accounts', []);
-      const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
-      const savedAccounts = [
-        ...(Array.isArray(rawAccounts) ? rawAccounts : []),
-        ...(Array.isArray(rawAdminAccounts) ? rawAdminAccounts : [])
-      ];
-      
-      // Hash inputan user sebelum membandingkan dengan database
-      const hashedInputPassword = simpleHash(password);
-      
-      // Cari akun berdasarkan username terlebih dahulu
-      const accInStorage = savedAccounts.find(a => a.username === username);
-      
-      let authUser = null;
+      const authResult = authenticateCredentials(username, password);
+      if (authResult.success) {
+        const authUser = authResult.user;
 
-      if (accInStorage) {
-         // Jika akun ada di storage, password HARUS cocok dengan hash yang tersimpan (Mencegah Bypass)
-         if (accInStorage.password === hashedInputPassword) {
-            recordLogin(accInStorage.name, accInStorage.role, 'Sukses');
-            authUser = { role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role, name: accInStorage.name, id: accInStorage.id || username, username: username.trim() };
-         }
-      } 
-      // 2. Jika akun Guru (Bisa login via ID Pegawai, NIPY, Linked Username, atau Nama)
-      const inputLower = username.trim().toLowerCase();
-      const teacherData = teachers.find(t => 
-        String(t.id).toLowerCase() === inputLower ||
-        (t.nipy && String(t.nipy).trim().toLowerCase() === inputLower) ||
-        (t.linkedUsername && String(t.linkedUsername).trim().toLowerCase() === inputLower) ||
-        (t.name && t.name.trim().toLowerCase() === inputLower)
-      );
-
-      if (teacherData && !authUser) {
-         // 🛡️ KEAMANAN: Tolak login jika guru berstatus Non-Aktif / Resign
-         if (!isTeacherActive(teacherData)) {
-            recordLogin(teacherData.name, 'Guru', 'Gagal (Status Non-Aktif/Resign)');
-            setError('Akses ditolak: Akun pegawai ini telah dinonaktifkan (Status: Resign/Non-Aktif). Hubungi Tata Usaha.');
-            setIsLoading(false);
-            return;
-         }
-
-         // Cek password custom ATAU plain password ATAU default password (2 huruf inisial kapital + 123)
-         const cleanName = teacherData.name ? teacherData.name.replace(/[^a-zA-Z]/g, '') : 'GU';
-         const defaultPass = `${cleanName.length >= 2 ? cleanName.substring(0, 2).toUpperCase() : 'GU'}123`;
-         
-         const isPasswordCorrect = 
-             (teacherData.customPassword && teacherData.customPassword === hashedInputPassword) || 
-             (teacherData.plainPassword && String(teacherData.plainPassword).trim() === password.trim()) ||
-             (password.trim() === defaultPass) ||
-             (teacherData.customPassword && teacherData.customPassword === password.trim());
-
-         if (isPasswordCorrect) {
-            recordLogin(teacherData.name, 'Guru', 'Sukses');
-            authUser = { role: 'guru', id: teacherData.id, name: teacherData.name, username: username.trim(), nipy: teacherData.nipy };
-         }
-      }
-      // 3. Fallback Hardcoded (Jika storage benar-benar hilang/kosong)
-      else if (username === 'Akbar' && password === 'Boy2014') {
-        recordLogin('Administrator System', 'Admin', 'Sukses');
-        authUser = { role: 'admin', name: 'Administrator System' };
-      } else if (username === 'kepsek' && password === 'Ilwani2010') {
-        recordLogin('Kepala Sekolah', 'Kepala Sekolah', 'Sukses');
-        authUser = { role: 'Kepala Sekolah', name: 'Kepala Sekolah' };
-      } else if (username.toLowerCase() === 'yayasan' && (password === 'Yayasan2014' || password === 'Yayasan123')) {
-        recordLogin('Pengurus Yayasan', 'Yayasan', 'Sukses');
-        authUser = { role: 'Yayasan', name: 'Pengurus Yayasan', username: 'yayasan' };
-      }
-
-      if (authUser) {
-        // 🪄 TAMBALAN CERDAS: Cek Mode Maintenance sebelum mengizinkan masuk
         if (settings?.maintenanceMode && authUser.role === 'guru') {
-           recordLogin(authUser.name, 'Guru', 'Gagal (Sistem Maintenance)');
-           setError('Mohon maaf, Portal Pegawai saat ini sedang dalam Mode Perbaikan / Rekapitulasi oleh Administrator. Silakan coba kembali beberapa saat lagi.');
-           setIsLoading(false);
-           return; // Hentikan proses login untuk guru
+          recordLogin(authUser.name, 'Guru', 'Gagal (Sistem Maintenance)');
+          setError('Mohon maaf, Portal Pegawai saat ini sedang dalam Mode Perbaikan / Rekapitulasi oleh Administrator. Silakan coba kembali beberapa saat lagi.');
+          setIsLoading(false);
+          return;
         }
 
-        // Logika eksekusi fungsi "Ingat Saya"
         if (remember) {
           localStorage.setItem('payedu_saved_username', username);
         } else {
           localStorage.removeItem('payedu_saved_username');
         }
+        recordLogin(authUser.name, authUser.role === 'admin' ? 'Admin' : (authUser.role === 'guru' ? 'Guru' : authUser.role), 'Sukses');
         onLogin(authUser);
       } else {
         recordLogin(username || 'Unknown', 'Unknown', 'Gagal (Password Salah)');
-        setError('Username atau password salah! (kalau lupa bisa tanya Pa Akbar)');
+        setError(authResult.message || 'Username atau password salah! (kalau lupa bisa tanya Pa Akbar)');
         setIsLoading(false);
       }
-    }, 800); // Delay 800ms
+    }, 800);
   };
 
   const handleRegister = async (e) => {
@@ -358,6 +427,110 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
         </div>
       )}
 
+      {/* Modal Hubungkan Sidik Jari Langsung di Halaman Login */}
+      {showConnectBioModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-slate-100 dark:border-slate-700">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
+                  <Fingerprint size={26} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold leading-tight">Hubungkan Sidik Jari</h3>
+                  <p className="text-xs text-teal-100 mt-0.5">Aktifkan login cepat di HP ini</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConnectBioModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleConnectBiometrics} className="p-6 space-y-4">
+              <div className="p-3 rounded-2xl bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200/70 dark:border-teal-800/60 text-xs text-teal-800 dark:text-teal-200 flex items-start gap-2.5">
+                <ShieldCheck size={18} className="shrink-0 text-teal-600 dark:text-teal-400 mt-0.5" />
+                <p className="leading-relaxed">
+                  Masukkan <strong>Username/NIPY</strong> dan <strong>Password</strong> Anda satu kali saja untuk memverifikasi akun sebelum menempelkan sidik jari di HP ini.
+                </p>
+              </div>
+
+              {connectError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-medium rounded-xl flex items-start gap-2 border border-red-200 dark:border-red-800/50 animate-in fade-in">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <span>{connectError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5 text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Username / NIPY
+                </label>
+                <div className="relative group">
+                  <UserCircle size={18} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                  <input
+                    type="text"
+                    value={connectUsername}
+                    onChange={(e) => setConnectUsername(e.target.value)}
+                    placeholder="Masukkan username atau NIPY"
+                    required
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:bg-white dark:focus:bg-slate-900 focus:border-teal-500 dark:focus:border-teal-400 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all dark:text-white text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1.5 text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                  Password Akun
+                </label>
+                <div className="relative group">
+                  <Lock size={18} className="absolute left-3.5 top-3.5 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                  <input
+                    type={showConnectPwd ? 'text' : 'password'}
+                    value={connectPassword}
+                    onChange={(e) => setConnectPassword(e.target.value)}
+                    placeholder="Masukkan kata sandi"
+                    required
+                    className="w-full pl-10 pr-11 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 focus:bg-white dark:focus:bg-slate-900 focus:border-teal-500 dark:focus:border-teal-400 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all dark:text-white text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectPwd(!showConnectPwd)}
+                    className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5"
+                  >
+                    {showConnectPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowConnectBioModal(false)}
+                  disabled={isConnectingBio}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConnectingBio}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <Fingerprint size={16} />
+                  <span>{isConnectingBio ? 'Memindai Sensor HP...' : 'Verifikasi & Pindai Sidik Jari'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Ambient Background Elements for Elegance */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-400/20 dark:bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-400/20 dark:bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
@@ -429,9 +602,28 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
             </div>
           )}
           {isBioAvailable && !savedBioAccount && (
-            <div className="p-3 rounded-xl bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-700 dark:text-teal-300 flex items-center gap-2 shadow-xs">
-              <Fingerprint size={18} className="shrink-0 text-teal-600 dark:text-teal-400" />
-              <span>Sensor biometrik HP aktif. Anda dapat menghubungkan sidik jari di menu profil setelah login.</span>
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-cyan-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-300">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner shrink-0">
+                  <Fingerprint size={22} className="animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                    Login Cepat Sidik Jari
+                  </p>
+                  <p className="text-[11px] text-teal-700 dark:text-teal-300 font-medium truncate">
+                    Hubungkan sensor HP ini sekali saja
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenConnectBioModal}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-sm flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
+              >
+                <Fingerprint size={14} />
+                <span>Hubungkan</span>
+              </button>
             </div>
           )}
           {error && <div className="p-3.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium rounded-xl flex items-start gap-2.5 border border-red-100 dark:border-red-800/50 animate-in fade-in slide-in-from-top-2"><AlertCircle size={18} className="mt-0.5 flex-shrink-0"/>{error}</div>}
