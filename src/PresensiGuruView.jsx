@@ -1038,9 +1038,9 @@ function TeacherSelfService({
 
   return (
     <div className="space-y-5 animate-in fade-in duration-500">
-      {/* PEMILIH SESI MULTI (Pagi, Sore, Rapat) - HANYA TAMPIL JIKA ADA LEBIH DARI 1 SESI */}
+      {/* PEMILIH SESI MULTI (Pagi, Sore, Rapat) - HANYA TAMPIL JIKA ADA LEBIH DARI 1 SESI (Mobile-Friendly Grid/Flex) */}
       {multiSesi && sesiList.length > 1 && (
-        <div className="flex items-center bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1 gap-1.5 shadow-xs w-fit max-w-full overflow-x-auto hide-scrollbar">
+        <div className="flex items-center bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-1.5 gap-1.5 shadow-xs w-full sm:w-fit overflow-x-auto hide-scrollbar">
           {sesiList.map(s => {
             const theme = getSesiTheme(s);
             const isSel = sesiAktif.id === s.id;
@@ -1050,9 +1050,9 @@ function TeacherSelfService({
                 key={s.id}
                 type="button"
                 onClick={() => setSelectedSesiId(s.id)}
-                className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
+                className={`flex-1 sm:flex-initial px-3 py-2 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 select-none active:scale-95 ${
                   isSel
-                    ? `${theme.bgActive} shadow-sm scale-102`
+                    ? `${theme.bgActive} shadow-md scale-[1.02]`
                     : `${theme.bgInactive}`
                 }`}
               >
@@ -1065,77 +1065,80 @@ function TeacherSelfService({
         </div>
       )}
 
-      {/* KARTU UTAMA PRESENSI MANDIRI (RINGKAS, MODERN & ERGONOMIC) */}
-      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-2xl sm:rounded-3xl shadow-xl p-4 sm:p-6 md:p-7 text-white relative overflow-hidden transition-all duration-500`}>
-        <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-sm pointer-events-none" />
-        <div className="absolute -right-4 bottom-[-30px] w-28 h-28 bg-white/10 rounded-full blur-sm pointer-events-none" />
+      {/* KARTU UTAMA PRESENSI MANDIRI (RINGKAS, MODERN & ERGONOMIC FOR MOBILE & DESKTOP) */}
+      <div className={`bg-gradient-to-br ${getSesiTheme(sesiAktif).cardGradient} rounded-3xl shadow-xl p-4 sm:p-6 md:p-7 text-white relative overflow-hidden transition-all duration-500 border border-white/10`}>
+        <div className="absolute -right-8 -top-8 w-48 h-48 bg-white/10 rounded-full blur-xl pointer-events-none" />
+        <div className="absolute -right-4 bottom-[-30px] w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
 
         <div className="relative z-10 space-y-4 sm:space-y-5">
           {/* Top Row: Sesi Pill + Tanggal + Cloud Badge */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 border border-white/20 shadow-xs">
+              <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1.5 border border-white/25 shadow-xs">
                 <span>{getSesiTheme(sesiAktif).iconEmoji}</span>
                 <span>Sesi {sesiAktif.nama}</span>
               </span>
-              <span className="text-white/80 text-xs font-bold tracking-wide">
+              <span className="text-white/90 text-xs font-semibold tracking-wide">
                 {formatTanggalPanjang(now)}
               </span>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 backdrop-blur-sm text-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-400/30 shadow-xs" title="Data presensi tersimpan permanen di Supabase Cloud Database">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/25 backdrop-blur-sm text-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-400/30 shadow-xs" title="Data presensi tersimpan permanen di Cloud Database">
               <Cloud size={11} className="text-emerald-300" />
               <span>Cloud Permanen</span>
             </span>
           </div>
 
-          {/* Jam & Info Sesi */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Jam Digital & Info Status Sesi (Mobile-Optimized Layout) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight font-mono drop-shadow-sm">
+                <span className="text-4xl sm:text-5xl md:text-5xl font-black tracking-tight font-mono drop-shadow-sm">
                   {now.toTimeString().slice(0, 8)}
                 </span>
-                <span className="text-sm font-bold text-white/80 font-mono">WIB</span>
+                <span className="text-xs sm:text-sm font-black text-white/80 font-mono uppercase bg-white/15 px-2 py-0.5 rounded-md backdrop-blur-xs">WIB</span>
               </div>
-              <p className="text-xs text-white/85 mt-1 flex items-center gap-1">
-                <Clock3 size={13} className="shrink-0" />
-                Jadwal: Masuk <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')}</b> (tol. {sesiAktif.toleransiMenit} mnt) • Pulang <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')}</b>
+              <p className="text-xs text-white/85 mt-2 flex flex-wrap items-center gap-1.5">
+                <Clock3 size={14} className="shrink-0 text-white/80" />
+                <span>Jadwal: Masuk <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')}</b> (tol. {sesiAktif.toleransiMenit} mnt) • Pulang <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')}</b></span>
               </p>
             </div>
 
-            {/* Status Kehadiran Hari Ini Pill */}
-            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-3 border border-white/20 sm:min-w-[210px]">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white/70 block">
-                Status Sesi {sesiAktif.nama}
-              </span>
-              <div className="flex items-center gap-1.5 mt-0.5">
+            {/* Status Kehadiran Hari Ini Pill (Clean & Informative) */}
+            <div className="bg-white/15 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-white/20 sm:min-w-[220px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                  Status Sesi {sesiAktif.nama}
+                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
                 {sudahMasuk && sudahPulang ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-200 font-black text-sm">
-                    <CheckCircle2 size={16} /> Presensi Lengkap
+                  <span className="inline-flex items-center gap-1 text-emerald-200 font-black text-xs sm:text-sm">
+                    <CheckCircle2 size={16} className="text-emerald-300 shrink-0" /> Presensi Lengkap
                   </span>
                 ) : sudahMasuk ? (
-                  <span className="inline-flex items-center gap-1 text-amber-200 font-black text-sm">
-                    <Clock size={16} /> Belum Absen Pulang
+                  <span className="inline-flex items-center gap-1 text-amber-200 font-black text-xs sm:text-sm">
+                    <Clock size={16} className="text-amber-300 shrink-0 animate-pulse" /> Belum Absen Pulang
                   </span>
                 ) : isIzinLike ? (
-                  <span className="inline-flex items-center gap-1 text-sky-200 font-black text-sm">
-                    <CalendarClock size={16} /> {record.status}
+                  <span className="inline-flex items-center gap-1 text-sky-200 font-black text-xs sm:text-sm">
+                    <CalendarClock size={16} className="text-sky-300 shrink-0" /> {record.status}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-white/90 font-black text-sm">
-                    <AlertCircle size={16} className="text-amber-300" /> Belum Absen Masuk
+                  <span className="inline-flex items-center gap-1 text-white/95 font-black text-xs sm:text-sm">
+                    <AlertCircle size={16} className="text-amber-300 shrink-0" /> Belum Absen Masuk
                   </span>
                 )}
               </div>
               {record?.jamMasuk && (
-                <p className="text-[11px] text-white/90 font-medium mt-1">
-                  Masuk: {formatJam(record.jamMasuk)} {record?.jamPulang ? `• Pulang: ${formatJam(record.jamPulang)}` : ''}
+                <p className="text-[11px] text-white/90 font-medium mt-1 pt-1 border-t border-white/10">
+                  Masuk: <b>{formatJam(record.jamMasuk)} WIB</b> {record?.jamPulang ? `• Pulang: ${formatJam(record.jamPulang)} WIB` : ''}
                 </p>
               )}
             </div>
           </div>
 
-          {/* DYNAMIC ACTION SECTION (Focus-driven & thumb-friendly) */}
+          {/* DYNAMIC ACTION SECTION (Focus-driven & thumb-friendly with Warm Sunset Clock-out & Pure White Clock-in) */}
           <div className="pt-2 border-t border-white/15">
             {!sudahMasuk && !isIzinLike ? (
               <div className="space-y-3">
@@ -1143,10 +1146,10 @@ function TeacherSelfService({
                   <button
                     type="button"
                     onClick={() => handleMulaiVerifikasi('masuk')}
-                    className="flex-1 py-3.5 px-6 rounded-2xl bg-white text-slate-900 font-black text-sm tracking-wide shadow-lg hover:bg-slate-50 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer group"
+                    className="flex-1 py-3.5 sm:py-4 px-6 rounded-2xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-emerald-950 font-black text-sm sm:text-base tracking-wide shadow-xl shadow-emerald-950/30 transition-all flex items-center justify-center gap-3 cursor-pointer border border-white group"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-700 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                      <LogIn size={18} strokeWidth={2.5} />
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
+                      <LogIn size={19} strokeWidth={2.5} />
                     </div>
                     <span>Absen Masuk Sekarang ({sesiAktif.nama})</span>
                   </button>
@@ -1154,9 +1157,9 @@ function TeacherSelfService({
                   <button
                     type="button"
                     onClick={() => setShowIzinModal(true)}
-                    className="py-3 px-4 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-98 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+                    className="py-3 sm:py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-98 text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer backdrop-blur-md"
                   >
-                    <CalendarClock size={15} /> Ajukan Izin / Sakit
+                    <CalendarClock size={16} /> Ajukan Izin / Sakit
                   </button>
                 </div>
                 {perluVerifikasi && (
@@ -1168,29 +1171,30 @@ function TeacherSelfService({
               </div>
             ) : sudahMasuk && !sudahPulang ? (
               <div className="space-y-3">
-                <div className="p-3 bg-white/15 backdrop-blur-md rounded-2xl border border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-300 shrink-0" />
-                    <span>Masuk tercatat pukul <b>{formatJam(record.jamMasuk)} WIB</b> ({record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'})</span>
+                <div className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+                  <div className="flex items-center gap-2 text-white/95">
+                    <CheckCircle2 size={15} className="text-emerald-300 shrink-0" />
+                    <span>Masuk: <b className="text-white">{formatJam(record.jamMasuk)} WIB</b> ({record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'})</span>
                   </div>
                   <span className="text-[11px] text-white/80">
-                    Jadwal pulang: <b>{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>
+                    Jadwal pulang: <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>
                   </span>
                 </div>
 
+                {/* TOMBOL ABSEN PULANG: WARM SUNSET AMBER / GOLDEN ORANGE (ERGO-FRIENDLY & HIGH-CONTRAST) */}
                 <button
                   type="button"
                   onClick={() => handleMulaiVerifikasi('pulang')}
-                  className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white font-black text-sm tracking-wide shadow-lg shadow-indigo-600/30 active:scale-98 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white/30 group"
+                  className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-500 hover:via-orange-600 hover:to-amber-600 active:scale-[0.98] text-slate-950 font-black text-sm sm:text-base tracking-wide shadow-xl shadow-orange-950/40 transition-all flex items-center justify-center gap-3 cursor-pointer border border-amber-200/50 group"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <LogOut size={18} strokeWidth={2.5} />
+                  <div className="w-8 h-8 rounded-xl bg-slate-950/15 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <LogOut size={19} strokeWidth={2.5} />
                   </div>
                   <span>Absen Pulang Sekarang ({sesiAktif.nama})</span>
                 </button>
                 {perluVerifikasi && (
                   <p className="text-[11px] text-white/80 flex items-center justify-center gap-1.5">
-                    <ShieldCheck size={13} className="text-indigo-300 shrink-0" />
+                    <ShieldCheck size={13} className="text-amber-300 shrink-0" />
                     Memerlukan verifikasi {lokasiAktif && qrAktif ? 'lokasi GPS & Barcode QR sekolah' : lokasiAktif ? 'lokasi GPS sekolah' : 'Barcode QR sekolah'}
                   </p>
                 )}
