@@ -1846,7 +1846,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                               <th className="p-3 font-bold text-center">Halaqoh</th>
                               <th className="p-3 font-bold text-center">Piket Ktr</th>
                               <th className="p-3 font-bold text-center">Piket Shlt</th>
-                              <th className="p-3 font-bold text-center">Rapat</th>
+                              <th className="p-3 font-bold text-center">Rapat/Eskul</th>
                               <th className="p-3 font-bold text-center">Saldo Awal</th>
                               <th className="p-3 font-bold text-center">Total Realisasi</th>
                               <th className="p-3 font-bold text-center">Status Hari Ini</th>

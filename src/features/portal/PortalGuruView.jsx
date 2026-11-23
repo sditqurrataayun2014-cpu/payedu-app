@@ -1180,11 +1180,15 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         )}
 
         {activeSection === 'portal_pinjaman' && (
-          <div className="bg-gradient-to-r from-teal-600 to-emerald-500 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500">
+          <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl relative overflow-hidden flex items-center justify-between shrink-0 animate-in fade-in duration-500 border border-purple-400/30">
             {NotificationBell}
             <div className="relative z-10 pr-2">
-              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CreditCard className="text-teal-100 shrink-0" size={24} /> Dashboard Pemantauan Pinjaman</h1>
-              <p className="text-teal-50 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-2 border border-white/20 shadow-xs">
+                <CreditCard size={11} className="text-purple-100" />
+                <span>Buku Pinjaman &amp; Kasbon</span>
+              </div>
+              <h1 className="text-lg sm:text-2xl md:text-3xl font-black mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3"><CreditCard className="text-purple-200 shrink-0" size={24} /> Dashboard Pemantauan Pinjaman</h1>
+              <p className="text-purple-100 text-xs sm:text-sm md:text-base max-w-xl line-clamp-2 sm:line-clamp-none">Pantau transparansi sisa saldo pinjaman, kasbon, atau cicilan koperasi Anda secara detail dan real-time.</p>
             </div>
             <CreditCard size={90} className="absolute -right-4 -bottom-4 text-white/10 transform -rotate-12 pointer-events-none" />
           </div>
@@ -1728,20 +1732,20 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       </div>
                     </div>
 
-                    {/* Kasbon/Pinjaman (3D Glassmorphism) */}
-                    <div onClick={() => setActiveTab('portal_pinjaman')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(20,184,166,0.15)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
-                      <div className="absolute -right-6 -bottom-6 bg-teal-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-colors duration-500"></div>
+                    {/* Kasbon/Pinjaman (3D Glassmorphism - Nuansa Ungu Muda) */}
+                    <div onClick={() => setActiveTab('portal_pinjaman')} className="cursor-pointer bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl p-5 rounded-[1.5rem] border border-white/60 dark:border-slate-700/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_15px_35px_rgba(168,85,247,0.18)] hover:-translate-y-1 hover:bg-white dark:hover:bg-slate-800 transition-all duration-300 group relative overflow-hidden">
+                      <div className="absolute -right-6 -bottom-6 bg-purple-500/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-purple-500/25 transition-colors duration-500"></div>
                       <div className="flex justify-between items-start mb-4 relative z-10">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(20,184,166,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(168,85,247,0.5),inset_0_2px_4px_rgba(255,255,255,0.6),inset_0_-2px_4px_rgba(0,0,0,0.2)] group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
                           <CreditCard size={24} className="text-white drop-shadow-md" />
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-teal-100 dark:group-hover:bg-teal-900/40 transition-colors">
-                          <ChevronRight size={18} className="text-slate-400 group-hover:text-teal-500 transition-all group-hover:translate-x-0.5" />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center group-hover:bg-purple-100 dark:group-hover:bg-purple-900/40 transition-colors">
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-purple-500 transition-all group-hover:translate-x-0.5" />
                         </div>
                       </div>
                       <div className="relative z-10">
                         <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1 tracking-tight">Buku Kasbon</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{loanItems.length > 0 ? <><span className="font-bold text-teal-600 dark:text-teal-400">{loanItems.length} Tagihan</span> Aktif</> : 'Tidak ada tanggungan'}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{loanItems.length > 0 ? <><span className="font-bold text-purple-600 dark:text-purple-400">{loanItems.length} Tagihan</span> Aktif</> : 'Tidak ada tanggungan'}</p>
                       </div>
                     </div>
 
@@ -1870,13 +1874,13 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
                     <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
                       <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
-                        Rapat &amp; Kegiatan Sore
+                        Rapat, Eskul &amp; Khusus
                       </span>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamRapat}</span>
                         <span className="text-xs font-semibold text-indigo-300">JPL</span>
                       </div>
-                      <span className="text-[10px] text-indigo-200/70 mt-1 block">Evaluasi &amp; rapat guru</span>
+                      <span className="text-[10px] text-indigo-200/70 mt-1 block truncate">Rapat, eskul Sabtu, class meeting</span>
                     </div>
 
                     <div className="bg-emerald-500/20 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-emerald-400/30">
@@ -2879,7 +2883,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {loanItems.length === 0 ? (
                 <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 sm:p-12 text-center">
-                  <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                  <div className="w-16 h-16 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-purple-200 dark:border-purple-800/60 shadow-xs">
                     <CheckCircle size={32} />
                   </div>
                   <h4 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 mb-2">Alhamdulillah, Tidak Ada Pinjaman Aktif</h4>
@@ -2889,25 +2893,25 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 </div>
               ) : (
                 <>
-                  {/* HERO KARTU BUKU PINJAMAN PEGAWAI - EDISI MIDNIGHT SAPPHIRE & ROYAL INDIGO */}
-                  <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-900 text-white rounded-3xl p-5 sm:p-7 shadow-xl hover:shadow-2xl transition-all relative overflow-hidden border border-indigo-400/30">
+                  {/* HERO KARTU BUKU PINJAMAN PEGAWAI - EDISI UNGU MUDA & LAVENDER SILK (ELEGANT & DISTINGUISHED) */}
+                  <div className="bg-gradient-to-br from-purple-800 via-indigo-900 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-xl hover:shadow-2xl transition-all relative overflow-hidden border border-purple-400/30">
                     <div className="absolute right-4 bottom-4 text-white/5 pointer-events-none select-none">
                       <CreditCard size={150} strokeWidth={1} />
                     </div>
 
                     <div className="relative z-10 flex flex-col items-center text-center">
                       <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-xs flex items-center gap-1.5 text-indigo-100">
-                          <CreditCard size={13} className="text-indigo-200" />
+                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white/15 backdrop-blur-md px-3 py-1 rounded-full border border-white/25 shadow-xs flex items-center gap-1.5 text-purple-100">
+                          <CreditCard size={13} className="text-purple-200" />
                           <span>Buku Kasbon &amp; Pinjaman</span>
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400/20 text-amber-300 px-3 py-1 rounded-full border border-amber-400/30 flex items-center gap-1.5 shadow-xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400/25 text-amber-200 px-3 py-1 rounded-full border border-amber-300/30 flex items-center gap-1.5 shadow-xs">
                           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                           <span>{loanItems.length} Tagihan Aktif</span>
                         </span>
                       </div>
 
-                      <p className="text-xs font-bold text-indigo-200/80 uppercase tracking-wider mt-1">
+                      <p className="text-xs font-bold text-purple-200 uppercase tracking-wider mt-1">
                         Total Sisa Saldo Pinjaman Anda
                       </p>
 
@@ -2916,12 +2920,12 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       </div>
 
                       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 w-full max-w-md mt-1">
-                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-rose-400/30 text-left shadow-xs">
-                          <span className="block text-[10px] sm:text-xs text-rose-300 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
-                          <span className="font-mono text-xs sm:text-sm font-black text-rose-300">-{formatRp(totalCicilanBulanan)}</span>
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-rose-300/30 text-left shadow-xs">
+                          <span className="block text-[10px] sm:text-xs text-rose-200 font-bold mb-0.5">Potongan Gaji Bulan Ini</span>
+                          <span className="font-mono text-xs sm:text-sm font-black text-rose-200">-{formatRp(totalCicilanBulanan)}</span>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-indigo-400/30 text-left shadow-xs">
-                          <span className="block text-[10px] sm:text-xs text-indigo-200 font-bold mb-0.5">Metode Pelunasan</span>
+                        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-purple-300/30 text-left shadow-xs">
+                          <span className="block text-[10px] sm:text-xs text-purple-200 font-bold mb-0.5">Metode Pelunasan</span>
                           <span className="text-xs sm:text-sm font-black text-emerald-300">Potong Slip Gaji</span>
                         </div>
                       </div>
@@ -2941,12 +2945,12 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                         <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in zoom-in-95">
                           <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 flex justify-between items-center bg-slate-50/70 dark:bg-slate-900/30">
                             <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                              <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
                                 <CreditCard size={15} />
                               </div>
                               <span>{loan.ket}</span>
                             </h3>
-                            <span className="text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
+                            <span className="text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50">
                               Status: Aktif
                             </span>
                           </div>
@@ -2966,9 +2970,9 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                                 <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase tracking-wider font-bold mb-0.5">Potongan / Bulan</p>
                                 <p className="text-xs sm:text-sm font-black text-rose-700 dark:text-rose-300 font-mono">{formatRp(cicilanBulanan)}</p>
                               </div>
-                              <div className="bg-teal-50 dark:bg-teal-950/30 p-3 rounded-xl border border-teal-200/80 dark:border-teal-700/60 text-left shadow-xs">
-                                <p className="text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-wider font-bold mb-0.5">Sisa Hutang</p>
-                                <p className="text-xs sm:text-sm font-black text-teal-700 dark:text-teal-300 font-mono">{formatRp(sisaSaldo)}</p>
+                              <div className="bg-purple-50 dark:bg-purple-950/30 p-3 rounded-xl border border-purple-200/80 dark:border-purple-700/60 text-left shadow-xs">
+                                <p className="text-[10px] text-purple-600 dark:text-purple-400 uppercase tracking-wider font-bold mb-0.5">Sisa Hutang</p>
+                                <p className="text-xs sm:text-sm font-black text-purple-700 dark:text-purple-300 font-mono">{formatRp(sisaSaldo)}</p>
                               </div>
                             </div>
 
@@ -2976,10 +2980,10 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                             <div className="bg-slate-50/70 dark:bg-slate-900/30 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700/50">
                               <div className="flex justify-between items-center mb-1.5">
                                 <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Progres Pelunasan</span>
-                                <span className="text-xs font-black font-mono text-teal-600 dark:text-teal-400">{persentase}%</span>
+                                <span className="text-xs font-black font-mono text-purple-600 dark:text-purple-400">{persentase}%</span>
                               </div>
                               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                                <div className="bg-gradient-to-r from-teal-500 to-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, persentase))}%` }}>
+                                <div className="bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-600 h-full rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, persentase))}%` }}>
                                 </div>
                               </div>
                             </div>
@@ -3040,7 +3044,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                     })}
 
                     <div className="p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2 leading-relaxed">
-                      <Info size={15} className="shrink-0 text-teal-500 mt-0.5" />
+                      <Info size={15} className="shrink-0 text-purple-500 mt-0.5" />
                       <span>Catatan: Rincian ini adalah proyeksi berdasarkan data bendahara. Sisa hutang berkurang setiap kali slip gaji bulanan disahkan. Apabila melakukan pelunasan tunai di luar slip gaji, harap konfirmasi ke Bendahara Sekolah.</span>
                     </div>
                   </div>
@@ -3522,13 +3526,13 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   </div>
                 </div>
 
-                {/* Pilar E: Jam Rapat & Kegiatan Sore */}
+                {/* Pilar E: Jam Rapat, Eskul & Kegiatan Khusus (Termasuk Sabtu & Class Meeting) */}
                 <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-200/70 dark:border-purple-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
-                      5. Jam Rapat &amp; Kegiatan Sore
+                      5. Jam Rapat, Eskul &amp; Kegiatan Khusus
                     </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat guru, muhadatsah, evaluasi dinas</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat guru, eskul Sabtu, class meeting, kegiatan dinas</span>
                   </div>
                   <div className="flex items-center gap-1 self-end sm:self-center">
                     {[0, 1, 2, 3].map(n => (
@@ -3835,7 +3839,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 case 'portal_jadwal': return 'from-pink-500 to-rose-600';
                 case 'portal_kehadiran': return 'from-amber-500 to-orange-600';
                 case 'portal_gaji': return 'from-emerald-500 to-teal-600';
-                case 'portal_pinjaman': return 'from-teal-500 to-cyan-600';
+                case 'portal_pinjaman': return 'from-purple-500 to-indigo-600';
                 case 'portal_riwayat': return 'from-indigo-500 to-blue-600';
                 case 'portal_info': return 'from-purple-500 to-pink-600';
                 case 'portal_saran': return 'from-rose-500 to-red-600';
@@ -3849,7 +3853,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 case 'portal_jadwal': return 'text-pink-600 dark:text-pink-400';
                 case 'portal_kehadiran': return 'text-amber-600 dark:text-amber-400';
                 case 'portal_gaji': return 'text-emerald-600 dark:text-emerald-400';
-                case 'portal_pinjaman': return 'text-teal-600 dark:text-teal-400';
+                case 'portal_pinjaman': return 'text-purple-600 dark:text-purple-400';
                 case 'portal_riwayat': return 'text-indigo-600 dark:text-indigo-400';
                 case 'portal_info': return 'text-purple-600 dark:text-purple-400';
                 case 'portal_saran': return 'text-rose-600 dark:text-rose-400';

@@ -708,6 +708,8 @@ export const DEFAULT_MAPEL_KBM = [
   "IPAS",
   "SENI RUPA",
   "PJOK",
+  "EKSTRAKURIKULER",
+  "CLASS MEETING / EVENT",
   "LAINNYA"
 ];
 
