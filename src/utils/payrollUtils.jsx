@@ -755,6 +755,7 @@ export const calculateJurnalSummary = (teacher) => {
   let jamPiketSholat = 0;
   let jamPiket = 0;
   let jamRapat = 0;
+  let jamEskul = 0;
   let muhadatsahCount = 0;
 
   entries.forEach(e => {
@@ -763,6 +764,7 @@ export const calculateJurnalSummary = (teacher) => {
     const pk = Number(e.jamPiketKantor);
     const ps = Number(e.jamPiketSholat);
     const rp = Number(e.jamRapat) || 0;
+    const es = Number(e.jamEskul) || 0;
 
     // Kompatibilitas mundur jika entri lama hanya menyimpan jamKbm & jamPiket
     const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
@@ -784,6 +786,7 @@ export const calculateJurnalSummary = (teacher) => {
     jamPiket += actualPiket;
 
     jamRapat += rp;
+    jamEskul += es;
 
     if (e.hasMuhadatsah || e.muhadatsah) {
       muhadatsahCount += 1;
@@ -798,7 +801,7 @@ export const calculateJurnalSummary = (teacher) => {
   const totalJamKbm = jamKbm + jamMuhadatsah;
 
   const saldoAwal = Number(p.jamMengajar?.saldoAwalJam) || 0;
-  const totalAkumulasi = totalJamKbm + jamPiket + jamRapat + saldoAwal;
+  const totalAkumulasi = totalJamKbm + jamPiket + jamRapat + jamEskul + saldoAwal;
   
   return {
     entries,
@@ -813,6 +816,7 @@ export const calculateJurnalSummary = (teacher) => {
     jamPiketSholat,
     jamPiket,
     jamRapat,
+    jamEskul,
     saldoAwal,
     totalAkumulasi
   };
@@ -876,6 +880,7 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
       const pk = Number(e.jamPiketKantor);
       const ps = Number(e.jamPiketSholat);
       const rp = Number(e.jamRapat) || 0;
+      const es = Number(e.jamEskul) || 0;
 
       const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
       const entryKbm = hasDetailedKbm ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0)) : (Number(e.jamKbm) || 0);
@@ -883,7 +888,7 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
       const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
       const entryPiket = hasDetailedPiket ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
 
-      const dayTotal = entryKbm + entryPiket + rp;
+      const dayTotal = entryKbm + entryPiket + rp + es;
       dailyMap[day] = (dailyMap[day] || 0) + dayTotal;
     }
   });
@@ -907,6 +912,7 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     const pk = Number(e.jamPiketKantor);
     const ps = Number(e.jamPiketSholat);
     const rp = Number(e.jamRapat) || 0;
+    const es = Number(e.jamEskul) || 0;
 
     const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
     const entryKbm = hasDetailedKbm ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0)) : (Number(e.jamKbm) || 0);
@@ -914,7 +920,7 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     const hasDetailedPiket = !isNaN(pk) || !isNaN(ps);
     const entryPiket = hasDetailedPiket ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
 
-    return s + entryKbm + entryPiket + rp;
+    return s + entryKbm + entryPiket + rp + es;
   }, 0) + totalMuhadatsahJam;
 
   // Kalkulasi Total Realisasi Cerdas:

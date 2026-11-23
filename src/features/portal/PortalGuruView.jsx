@@ -375,6 +375,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     jamPiketKantor: 0,
     jamPiketSholat: 0,
     jamRapat: 0,
+    jamEskul: 0,
     mapel: ['TAHSIN'],
     kelas: ['I A Putra'],
     jamKe: [1, 2],
@@ -424,6 +425,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         jamPiketKantor: !isNaN(pk) ? pk : (Number(entryToEdit.jamPiket) || 0),
         jamPiketSholat: !isNaN(ps) ? ps : 0,
         jamRapat: Number(entryToEdit.jamRapat) || 0,
+        jamEskul: Number(entryToEdit.jamEskul) || 0,
         mapel: mapelArr.length > 0 ? mapelArr : ['TAHSIN'],
         kelas: kelasArr.length > 0 ? kelasArr : ['I A Putra'],
         jamKe: jamKeArr,
@@ -442,6 +444,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         jamPiketKantor: 0,
         jamPiketSholat: 0,
         jamRapat: 0,
+        jamEskul: 0,
         mapel: ['TAHSIN'],
         kelas: ['I A Putra'],
         jamKe: [1, 2],
@@ -506,6 +509,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     const pk = Number(jurnalForm.jamPiketKantor) || 0;
     const ps = Number(jurnalForm.jamPiketSholat) || 0;
     const rp = Number(jurnalForm.jamRapat) || 0;
+    const es = Number(jurnalForm.jamEskul) || 0;
 
     const totalKbm = mk + hq;
     const totalPiket = pk + ps;
@@ -528,6 +532,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
             jamPiketKantor: pk,
             jamPiketSholat: ps,
             jamRapat: rp,
+            jamEskul: es,
             jamKbm: totalKbm,
             jamPiket: totalPiket,
             mapel: mapelArr,
@@ -550,6 +555,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
         jamPiketKantor: pk,
         jamPiketSholat: ps,
         jamRapat: rp,
+        jamEskul: es,
         jamKbm: totalKbm,
         jamPiket: totalPiket,
         mapel: mapelArr,
@@ -1874,13 +1880,15 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
                     <div className="bg-white/10 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-white/10">
                       <span className="text-[10px] sm:text-xs text-indigo-200 font-bold uppercase tracking-wider block mb-1">
-                        Rapat, Eskul &amp; Khusus
+                        Rapat, Kajian &amp; Eskul
                       </span>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-xl sm:text-2xl font-black">{jurnalSummary.jamRapat}</span>
+                        <span className="text-xl sm:text-2xl font-black">{(jurnalSummary.jamRapat || 0) + (jurnalSummary.jamEskul || 0)}</span>
                         <span className="text-xs font-semibold text-indigo-300">JPL</span>
                       </div>
-                      <span className="text-[10px] text-indigo-200/70 mt-1 block truncate">Rapat, eskul Sabtu, class meeting</span>
+                      <span className="text-[10px] text-indigo-200/70 mt-1 block truncate">
+                        Rpt: {jurnalSummary.jamRapat || 0} • Eskul: {jurnalSummary.jamEskul || 0} JPL
+                      </span>
                     </div>
 
                     <div className="bg-emerald-500/20 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-emerald-400/30">
@@ -1923,10 +1931,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                         const pk = Number(entri.jamPiketKantor);
                         const ps = Number(entri.jamPiketSholat);
                         const rp = Number(entri.jamRapat) || 0;
+                        const es = Number(entri.jamEskul) || 0;
 
                         const totalEntryHours = (!isNaN(mk) || !isNaN(hq) || !isNaN(pk) || !isNaN(ps))
-                          ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp)
-                          : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp);
+                          ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp + es)
+                          : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp + es);
 
                         const mapelText = Array.isArray(entri.mapel) ? entri.mapel.join(', ') : (entri.mapel || 'Kegiatan Umum');
                         const kelasText = Array.isArray(entri.kelas) ? entri.kelas.join(', ') : (entri.kelas || '');
@@ -1959,12 +1968,22 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                                   <span>Kelas: <b>{!isNaN(mk) ? mk : (Number(entri.jamKbm) || 0)} JPL</b></span>
                                   <span>•</span>
                                   <span>Halaqoh: <b>{!isNaN(hq) ? hq : 0} JPL</b></span>
+                                  {(entri.hasMuhadatsah || entri.muhadatsah) && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-amber-700 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-300/60 dark:border-amber-800/60 text-[10px]">
+                                        🗣️ Muhadatsah (15m)
+                                      </span>
+                                    </>
+                                  )}
                                   <span>•</span>
                                   <span>Piket Ktr: <b>{!isNaN(pk) ? pk : (Number(entri.jamPiket) || 0)} JPL</b></span>
                                   <span>•</span>
                                   <span>Sholat: <b>{!isNaN(ps) ? ps : 0} JPL</b></span>
                                   <span>•</span>
-                                  <span>Rapat: <b>{rp} JPL</b></span>
+                                  <span>Rpt/Kjn: <b>{rp} JPL</b></span>
+                                  <span>•</span>
+                                  <span>Eskul: <b>{es} JPL</b></span>
                                 </div>
                                 {entri.catatan && (
                                   <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-1 line-clamp-1">
@@ -3483,7 +3502,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                     <span className="text-[10px] text-slate-500 dark:text-slate-400">Piket administrasi dinas kantor / gerbang</span>
                   </div>
                   <div className="flex items-center gap-1 self-end sm:self-center">
-                    {[0, 1, 2].map(n => (
+                    {[0, 1, 2, 3, 4].map(n => (
                       <button
                         key={n}
                         type="button"
@@ -3526,16 +3545,16 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   </div>
                 </div>
 
-                {/* Pilar E: Jam Rapat, Eskul & Kegiatan Khusus (Termasuk Sabtu & Class Meeting) */}
+                {/* Pilar E: Jam Rapat & Kajian (Hari Jum'at & Rapat Dinas) - Pilihan s.d 4 JPL */}
                 <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-200/70 dark:border-purple-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs">
-                      5. Jam Rapat, Eskul &amp; Kegiatan Khusus
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs flex items-center gap-1">
+                      <span>👥</span> 5. Jam Rapat &amp; Kajian Guru
                     </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat guru, eskul Sabtu, class meeting, kegiatan dinas</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Rapat dinas, evaluasi mingguan, kajian Jum'at sore</span>
                   </div>
                   <div className="flex items-center gap-1 self-end sm:self-center">
-                    {[0, 1, 2, 3].map(n => (
+                    {[0, 1, 2, 3, 4].map(n => (
                       <button
                         key={n}
                         type="button"
@@ -3549,6 +3568,32 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                       </button>
                     ))}
                     <span className="text-xs font-bold text-purple-600 dark:text-purple-400 ml-1">JPL</span>
+                  </div>
+                </div>
+
+                {/* Pilar F: Jam Ekstrakurikuler & Khusus (Hari Sabtu & Class Meeting) - Pilihan s.d 4 JPL */}
+                <div className="p-3 bg-rose-50/50 dark:bg-rose-950/20 rounded-2xl border border-rose-200/70 dark:border-rose-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 block text-xs flex items-center gap-1">
+                      <span>🏆</span> 6. Jam Ekskul &amp; Kegiatan Khusus
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Pembinaan ekskul Sabtu, pendampingan class meeting, pentas seni</span>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-center">
+                    {[0, 1, 2, 3, 4].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setJurnalForm(prev => ({ ...prev, jamEskul: n }))}
+                        className={`w-6 sm:w-7 h-6 sm:h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${jurnalForm.jamEskul === n
+                            ? 'bg-rose-600 text-white shadow-xs scale-105'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border border-slate-200 dark:border-slate-700'
+                          }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-rose-600 dark:text-rose-400 ml-1">JPL</span>
                   </div>
                 </div>
               </div>
@@ -3761,7 +3806,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                 const pk = Number(jurnalForm.jamPiketKantor) || 0;
                 const ps = Number(jurnalForm.jamPiketSholat) || 0;
                 const rp = Number(jurnalForm.jamRapat) || 0;
-                const grandTotal = mk + hq + pk + ps + rp;
+                const es = Number(jurnalForm.jamEskul) || 0;
+                const grandTotal = mk + hq + pk + ps + rp + es;
 
                 return (
                   <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -3775,11 +3821,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                         <span>•</span>
                         <span>Halaqoh: <b>{hq} JPL</b></span>
                         <span>•</span>
-                        <span>Piket Ktr: <b>{pk} JPL</b></span>
+                        <span>Piket: <b>{pk + ps} JPL</b></span>
                         <span>•</span>
-                        <span>Sholat: <b>{ps} JPL</b></span>
+                        <span>Rpt/Kjn: <b>{rp} JPL</b></span>
                         <span>•</span>
-                        <span>Rapat: <b>{rp} JPL</b></span>
+                        <span>Eskul: <b>{es} JPL</b></span>
                       </div>
                     </div>
                     <div className="text-right sm:text-right shrink-0">

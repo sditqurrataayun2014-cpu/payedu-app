@@ -952,7 +952,8 @@ export const exportJurnalKbmToExcel = ({
       'Piket Kantor (JPL)',
       'Piket Sholat (JPL)',
       'Total Piket (JPL)',
-      'Jam Rapat & Kegiatan Guru (JPL)',
+      'Jam Rapat & Kajian Guru (JPL)',
+      'Jam Ekskul & Kegiatan Khusus (JPL)',
       'Saldo Awal Transisi Google Form (JPL)',
       'Total Akumulasi Realisasi (JPL)',
       'Target Wajib (JPL)',
@@ -983,6 +984,7 @@ export const exportJurnalKbmToExcel = ({
     let piketKantor = 0;
     let piketSholat = 0;
     let rapat = 0;
+    let eskul = 0;
 
     jList.forEach(j => {
       if (j.hasMuhadatsah || j.muhadatsah) muhadatsahCount++;
@@ -991,6 +993,7 @@ export const exportJurnalKbmToExcel = ({
       const pk = Number(j.jamPiketKantor);
       const ps = Number(j.jamPiketSholat);
       const rp = Number(j.jamRapat) || 0;
+      const es = Number(j.jamEskul) || 0;
 
       const hasDetailedKbm = !isNaN(mk) || !isNaN(hq);
       const actualMk = !isNaN(mk) ? mk : (Number(j.jamKbm) || 0);
@@ -1005,13 +1008,14 @@ export const exportJurnalKbmToExcel = ({
       piketKantor += actualPk;
       piketSholat += actualPs;
       rapat += rp;
+      eskul += es;
     });
 
     const jamMuhadatsah = Math.round((muhadatsahCount * 15) / 35);
     const kbm = masukKelas + halaqoh + jamMuhadatsah;
     const piket = piketKantor + piketSholat;
     const saldo = Number(p.jamMengajar?.saldoAwalJam) || 0;
-    const totalRealisasi = Number(p.jamMengajar?.realisasi) || (kbm + piket + rapat + saldo);
+    const totalRealisasi = Number(p.jamMengajar?.realisasi) || (kbm + piket + rapat + eskul + saldo);
     const wajib = p.jamMengajar?.wajib !== undefined && p.jamMengajar?.wajib !== '' ? Number(p.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
     const selisih = totalRealisasi - wajib;
 
@@ -1022,6 +1026,7 @@ export const exportJurnalKbmToExcel = ({
     totalPiketSholatAll += piketSholat;
     totalPiketAll += piket;
     totalRapatAll += rapat;
+    totalEskulAll += eskul;
     totalSaldoAll += saldo;
     grandTotalAll += totalRealisasi;
 
@@ -1040,6 +1045,7 @@ export const exportJurnalKbmToExcel = ({
       piketSholat,
       piket,
       rapat,
+      eskul,
       saldo,
       totalRealisasi,
       wajib,
@@ -1061,6 +1067,7 @@ export const exportJurnalKbmToExcel = ({
     totalPiketSholatAll,
     totalPiketAll,
     totalRapatAll,
+    totalEskulAll,
     totalSaldoAll,
     grandTotalAll,
     '',

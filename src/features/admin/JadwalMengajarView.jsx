@@ -56,6 +56,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     jamPiketKantor: 0,
     jamPiketSholat: 0,
     jamRapat: 0,
+    jamEskul: 0,
     mapel: ['TAHSIN'],
     kelas: ['I A Putra'],
     jamKe: [1, 2],
@@ -102,7 +103,17 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
         const hasToday = entries.some(e => e.tanggal === todayIso || Number(e.tgl) === todayDay);
         const todayHours = entries
           .filter(e => e.tanggal === todayIso || Number(e.tgl) === todayDay)
-          .reduce((sum, e) => sum + (Number(e.jamKbm) || 0) + (Number(e.jamPiket) || 0) + (Number(e.jamRapat) || 0), 0);
+          .reduce((sum, e) => {
+            const mk = Number(e.jamMasukKelas);
+            const hq = Number(e.jamHalaqoh);
+            const pk = Number(e.jamPiketKantor);
+            const ps = Number(e.jamPiketSholat);
+            const rp = Number(e.jamRapat) || 0;
+            const es = Number(e.jamEskul) || 0;
+            const kbm = (!isNaN(mk) || !isNaN(hq)) ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0)) : (Number(e.jamKbm) || 0);
+            const piket = (!isNaN(pk) || !isNaN(ps)) ? ((!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0)) : (Number(e.jamPiket) || 0);
+            return sum + kbm + piket + rp + es;
+          }, 0);
 
         return {
           teacher: t,
@@ -129,6 +140,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     let totalPiketSholat = 0;
     let totalPiket = 0;
     let totalRapat = 0;
+    let totalEskul = 0;
     let totalSaldoAwal = 0;
     let totalAkumulasi = 0;
     let sudahIsiCount = 0;
@@ -141,6 +153,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       totalPiketSholat += item.summary.jamPiketSholat || 0;
       totalPiket += item.summary.jamPiket || 0;
       totalRapat += item.summary.jamRapat || 0;
+      totalEskul += item.summary.jamEskul || 0;
       totalSaldoAwal += item.summary.saldoAwal || 0;
       totalAkumulasi += item.summary.totalAkumulasi || 0;
       if (item.hasToday) sudahIsiCount++;
@@ -157,6 +170,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       totalPiketSholat,
       totalPiket,
       totalRapat,
+      totalEskul,
       totalSaldoAwal,
       totalAkumulasi,
       sudahIsiCount,
@@ -258,6 +272,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       jamPiketKantor: 0,
       jamPiketSholat: 0,
       jamRapat: 0,
+      jamEskul: 0,
       mapel: ['TAHSIN'],
       kelas: ['I A Putra'],
       jamKe: [1, 2],
@@ -295,6 +310,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       jamPiketKantor: !isNaN(pk) ? pk : (Number(entry.jamPiket) || 0),
       jamPiketSholat: !isNaN(ps) ? ps : 0,
       jamRapat: Number(entry.jamRapat) || 0,
+      jamEskul: Number(entry.jamEskul) || 0,
       mapel: mapelArr.length > 0 ? mapelArr : ['TAHSIN'],
       kelas: kelasArr.length > 0 ? kelasArr : ['I A Putra'],
       jamKe: jamKeArr,
@@ -321,6 +337,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     const pk = Math.max(0, Number(adminEntryForm.jamPiketKantor) || 0);
     const ps = Math.max(0, Number(adminEntryForm.jamPiketSholat) || 0);
     const rp = Math.max(0, Number(adminEntryForm.jamRapat) || 0);
+    const es = Math.max(0, Number(adminEntryForm.jamEskul) || 0);
 
     const totalKbm = mk + hq;
     const totalPiket = pk + ps;
@@ -340,6 +357,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       jamPiketKantor: pk,
       jamPiketSholat: ps,
       jamRapat: rp,
+      jamEskul: es,
       jamKbm: totalKbm,
       jamPiket: totalPiket,
       mapel: mapelArr,
@@ -963,7 +981,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                   <CheckCircle size={14} /> Otomatis Terhubung ke Slip Gaji
                 </div>
                 <p>
-                  Total Realisasi = <b>Entri Jurnal Mandiri ({calculateJurnalSummary(saldoAwalModalTeacher).jamKbm + calculateJurnalSummary(saldoAwalModalTeacher).jamPiket + calculateJurnalSummary(saldoAwalModalTeacher).jamRapat} JPL)</b> + <b>Saldo Awal ({Number(saldoAwalInput) || 0} JPL)</b>.
+                  Total Realisasi = <b>Entri Jurnal Mandiri ({calculateJurnalSummary(saldoAwalModalTeacher).totalAkumulasi - calculateJurnalSummary(saldoAwalModalTeacher).saldoAwal} JPL)</b> + <b>Saldo Awal ({Number(saldoAwalInput) || 0} JPL)</b>.
                 </p>
               </div>
             </div>
@@ -1028,7 +1046,9 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                     <span>•</span>
                     <span>Piket: <b className="text-indigo-600">{summary.jamPiket} JPL</b></span>
                     <span>•</span>
-                    <span>Rapat: <b className="text-purple-600">{summary.jamRapat} JPL</b></span>
+                    <span>Rpt/Kjn: <b className="text-purple-600">{summary.jamRapat || 0} JPL</b></span>
+                    <span>•</span>
+                    <span>Eskul: <b className="text-rose-600">{summary.jamEskul || 0} JPL</b></span>
                     {summary.saldoAwal > 0 && (
                       <>
                         <span>•</span>
@@ -1121,13 +1141,25 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-purple-700 dark:text-purple-300 mb-1">Jam Rapat (JPL):</label>
+                      <label className="block text-[11px] font-bold text-purple-700 dark:text-purple-300 mb-1">Rapat/Kajian (JPL):</label>
                       <input
                         type="number"
                         min="0"
+                        max="8"
                         value={adminEntryForm.jamRapat}
                         onChange={(e) => setAdminEntryForm({ ...adminEntryForm, jamRapat: Number(e.target.value) })}
                         className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-lg text-xs font-black text-purple-600 bg-white dark:bg-slate-900 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-rose-700 dark:text-rose-300 mb-1">Eskul/Khusus (JPL):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="8"
+                        value={adminEntryForm.jamEskul || 0}
+                        onChange={(e) => setAdminEntryForm({ ...adminEntryForm, jamEskul: Number(e.target.value) })}
+                        className="w-full p-2 border border-rose-200 dark:border-rose-800 rounded-lg text-xs font-black text-rose-600 bg-white dark:bg-slate-900 outline-none"
                       />
                     </div>
                   </div>
@@ -1196,6 +1228,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                         jamKbm: 2,
                         jamPiket: 0,
                         jamRapat: 0,
+                        jamEskul: 0,
                         catatan: ''
                       });
                       setIsAdminAddingEntry(true);
@@ -1217,10 +1250,11 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                     const pk = Number(entri.jamPiketKantor);
                     const ps = Number(entri.jamPiketSholat);
                     const rp = Number(entri.jamRapat) || 0;
+                    const es = Number(entri.jamEskul) || 0;
 
                     const totalHours = (!isNaN(mk) || !isNaN(hq) || !isNaN(pk) || !isNaN(ps))
-                      ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp)
-                      : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp);
+                      ? ((!isNaN(mk) ? mk : 0) + (!isNaN(hq) ? hq : 0) + (!isNaN(pk) ? pk : 0) + (!isNaN(ps) ? ps : 0) + rp + es)
+                      : ((Number(entri.jamKbm) || 0) + (Number(entri.jamPiket) || 0) + rp + es);
 
                     const mapelText = Array.isArray(entri.mapel) ? entri.mapel.join(', ') : (entri.mapel || 'Kegiatan Umum');
                     const kelasText = Array.isArray(entri.kelas) ? entri.kelas.join(', ') : (entri.kelas || '');
@@ -1271,7 +1305,9 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                               <span>•</span>
                               <span>Sholat: <b>{!isNaN(ps) ? ps : 0} JPL</b></span>
                               <span>•</span>
-                              <span>Rapat: <b>{rp} JPL</b></span>
+                              <span>Rpt/Kjn: <b>{rp} JPL</b></span>
+                              <span>•</span>
+                              <span>Eskul: <b>{es} JPL</b></span>
                             </div>
                             {entri.catatan && (
                               <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-0.5 line-clamp-1">
@@ -1690,13 +1726,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
                      <div className="bg-purple-50 dark:bg-purple-950/30 p-2.5 sm:p-3 rounded-2xl border border-purple-200 dark:border-purple-800/50">
                         <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider block mb-0.5">
-                           Rapat &amp; Sore
+                           Rapat, Kajian &amp; Eskul
                         </span>
                         <div className="flex items-baseline gap-1">
-                           <span className="text-lg sm:text-xl font-black text-purple-800 dark:text-purple-200">{aggregateKpis.totalRapat}</span>
+                           <span className="text-lg sm:text-xl font-black text-purple-800 dark:text-purple-200">{(aggregateKpis.totalRapat || 0) + (aggregateKpis.totalEskul || 0)}</span>
                            <span className="text-[10px] font-bold text-purple-500">JPL</span>
                         </div>
-                        <span className="text-[9px] text-purple-600/70 dark:text-purple-300/60 block truncate">Evaluasi dinas</span>
+                        <span className="text-[9px] text-purple-600/70 dark:text-purple-300/60 block truncate">
+                           Rpt: {aggregateKpis.totalRapat || 0} • Eskul: {aggregateKpis.totalEskul || 0}
+                        </span>
                      </div>
 
                      <div className="bg-emerald-50 dark:bg-emerald-950/30 p-2.5 sm:p-3 rounded-2xl border border-emerald-200 dark:border-emerald-800/50">
@@ -1846,7 +1884,8 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                               <th className="p-3 font-bold text-center">Halaqoh</th>
                               <th className="p-3 font-bold text-center">Piket Ktr</th>
                               <th className="p-3 font-bold text-center">Piket Shlt</th>
-                              <th className="p-3 font-bold text-center">Rapat/Eskul</th>
+                              <th className="p-3 font-bold text-center">Rapat/Kajian</th>
+                              <th className="p-3 font-bold text-center">Eskul/Khusus</th>
                               <th className="p-3 font-bold text-center">Saldo Awal</th>
                               <th className="p-3 font-bold text-center">Total Realisasi</th>
                               <th className="p-3 font-bold text-center">Status Hari Ini</th>
