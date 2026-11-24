@@ -65,6 +65,23 @@ const nowToHHMMSS = (d) => d.toTimeString().slice(0, 8);
 const formatJam = (hhmmss) => hhmmss ? hhmmss.slice(0, 5) : '--:--';
 const formatTanggalPanjang = (d) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+// Helper pembersih label sesi agar ringkas & bebas redundansi di HP
+const getNamaSesiBersih = (sesi) => {
+  const s = String(sesi?.nama || sesi?.id || sesi || '').toLowerCase();
+  if (s.includes('pagi')) return 'Pagi';
+  if (s.includes('sore') || s.includes('halaqoh')) return 'Sore';
+  if (s.includes('rapat') || s.includes('kajian')) return 'Rapat / Kajian';
+  return sesi?.nama || 'Sesi';
+};
+
+const getNamaSesiTombol = (sesi) => {
+  const s = String(sesi?.nama || sesi?.id || sesi || '').toLowerCase();
+  if (s.includes('pagi')) return 'pagi';
+  if (s.includes('sore') || s.includes('halaqoh')) return 'sore';
+  if (s.includes('rapat') || s.includes('kajian')) return 'Rapat / Kajian';
+  return sesi?.nama || 'sesi';
+};
+
 // ==========================================
 // TEMA WARNA & IKON DISTINKTIF TIAP SESI (PAGI, SORE/HALAQOH, RAPAT/KAJIAN)
 // ==========================================
@@ -1075,7 +1092,7 @@ function TeacherSelfService({
           <div className="flex items-center justify-between gap-2 border-b border-white/15 pb-2.5 sm:pb-3">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur-md text-white text-[11px] sm:text-xs font-bold border border-white/25 shadow-xs">
               <span className="text-xs leading-none">{getSesiTheme(sesiAktif).iconEmoji}</span>
-              <span className="uppercase tracking-wider">Sesi {sesiAktif.nama}</span>
+              <span className="uppercase tracking-wider">Sesi {getNamaSesiBersih(sesiAktif)}</span>
             </div>
             <div className="text-[11px] sm:text-xs font-semibold text-white/90 tracking-wide flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1100,18 +1117,18 @@ function TeacherSelfService({
               </p>
             </div>
 
-            {/* Status Kehadiran Hari Ini Pill (Clean & Informative Compact Box) */}
+            {/* CARD 1: Status Kehadiran Sesi (Bebas Pengulangan - Fokus Status Sesi & Jam Target) */}
             <div className="bg-white/10 backdrop-blur-md rounded-xl sm:rounded-2xl p-2.5 sm:p-3 border border-white/15 sm:min-w-[210px] flex flex-col justify-center">
               <div className="flex items-center justify-between gap-1.5">
                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-white/70">
-                  Status Sesi {sesiAktif.nama}
+                  Status Sesi {getNamaSesiBersih(sesiAktif)}
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5 sm:mt-1">
                 {sudahMasuk && sudahPulang ? (
                   <span className="inline-flex items-center gap-1 text-emerald-200 font-extrabold text-xs sm:text-sm">
-                    <CheckCircle2 size={14} className="text-emerald-300 shrink-0" /> Presensi Lengkap
+                    <CheckCircle2 size={14} className="text-emerald-300 shrink-0" /> Presensi Selesai
                   </span>
                 ) : sudahMasuk ? (
                   <span className="inline-flex items-center gap-1 text-amber-200 font-extrabold text-xs sm:text-sm">
@@ -1127,12 +1144,17 @@ function TeacherSelfService({
                   </span>
                 )}
               </div>
-              {record?.jamMasuk && (
-                <p className="text-[10px] sm:text-[11px] text-white/85 font-medium mt-1 pt-1 border-t border-white/10 flex items-center justify-between gap-1">
-                  <span>Masuk: <b className="text-white">{formatJam(record.jamMasuk)} WIB</b></span>
-                  {record?.jamPulang && <span>Pulang: <b className="text-white">{formatJam(record.jamPulang)} WIB</b></span>}
-                </p>
-              )}
+              <p className="text-[10px] sm:text-[11px] text-white/80 font-medium mt-1 pt-1 border-t border-white/10 flex items-center justify-between gap-1">
+                {sudahMasuk && !sudahPulang ? (
+                  <span>Jadwal pulang: <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')} WIB</b></span>
+                ) : sudahMasuk && sudahPulang ? (
+                  <span className="text-emerald-200 font-semibold">Kehadiran hari ini lengkap 🎉</span>
+                ) : isIzinLike ? (
+                  <span>Keterangan izin tercatat</span>
+                ) : (
+                  <span>Jadwal masuk: <b className="text-white">{formatJam(sesiAktif.jamMasuk + ':00')} WIB</b></span>
+                )}
+              </p>
             </div>
           </div>
 
@@ -1149,7 +1171,7 @@ function TeacherSelfService({
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
                       <LogIn size={16} strokeWidth={2.5} />
                     </div>
-                    <span>Absen Masuk Sekarang ({sesiAktif.nama})</span>
+                    <span>Absen Masuk sekarang ({getNamaSesiTombol(sesiAktif)})</span>
                   </button>
 
                   <button
@@ -1169,13 +1191,18 @@ function TeacherSelfService({
               </div>
             ) : sudahMasuk && !sudahPulang ? (
               <div className="space-y-2 sm:space-y-2.5">
-                <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 bg-black/15 backdrop-blur-md rounded-xl border border-white/15 flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs">
-                  <div className="flex items-center gap-1.5 text-white/95">
-                    <CheckCircle2 size={13} className="text-emerald-300 shrink-0" />
-                    <span>Masuk: <b className="text-white">{formatJam(record.jamMasuk)} WIB</b> <span className="text-white/70">({record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'})</span></span>
+                {/* CARD 2: Bukti Masuk Tercatat (Bebas Pengulangan - Fokus Bukti Jam Masuk & Status Kedatangan) */}
+                <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 bg-black/20 backdrop-blur-md rounded-xl border border-white/15 flex items-center justify-between gap-2 text-[11px] sm:text-xs">
+                  <div className="flex items-center gap-1.5 text-white/95 min-w-0">
+                    <CheckCircle2 size={14} className="text-emerald-300 shrink-0" />
+                    <span className="truncate">Masuk tercatat: <b className="text-white">{formatJam(record.jamMasuk)} WIB</b></span>
                   </div>
-                  <span className="text-[10px] sm:text-[11px] text-white/80">
-                    Jadwal pulang: <b className="text-white">{formatJam(sesiAktif.jamPulang + ':00')} WIB</b>
+                  <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                    record.status === 'Terlambat'
+                      ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
+                      : 'bg-emerald-500/30 text-emerald-100 border border-emerald-400/40'
+                  }`}>
+                    {record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'}
                   </span>
                 </div>
 
@@ -1188,7 +1215,7 @@ function TeacherSelfService({
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-950/15 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                     <LogOut size={16} strokeWidth={2.5} />
                   </div>
-                  <span>Absen Pulang Sekarang ({sesiAktif.nama})</span>
+                  <span>absen pulang sekarang ({getNamaSesiTombol(sesiAktif)})</span>
                 </button>
                 {perluVerifikasi && (
                   <p className="text-[10px] sm:text-[11px] text-white/75 flex items-center justify-center gap-1 text-center">
@@ -1200,7 +1227,7 @@ function TeacherSelfService({
             ) : sudahMasuk && sudahPulang ? (
               <div className="p-3 sm:p-3.5 bg-white/15 backdrop-blur-md rounded-xl sm:rounded-2xl border border-white/25 text-center space-y-1.5">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-100 text-[11px] font-black uppercase tracking-wider">
-                  <CheckCircle2 size={13} /> Presensi Sesi {sesiAktif.nama} Hari Ini Selesai
+                  <CheckCircle2 size={13} /> Presensi Sesi {getNamaSesiBersih(sesiAktif)} Selesai
                 </div>
                 <p className="text-xs text-white/95 font-medium">
                   Masuk: <b>{formatJam(record.jamMasuk)} WIB</b> • Pulang: <b>{formatJam(record.jamPulang)} WIB</b> • Status: <b>{record.status}</b>
