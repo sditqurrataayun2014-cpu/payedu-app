@@ -1,4 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  mergeLoginLogs,
+  getWibDateString
+} from '../utils/payrollUtils';
 import { 
   saveOfflineAttendance, 
   removeOfflineAttendance, 
@@ -839,6 +843,146 @@ export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
 };
 
 // ==========================================
+// RIWAYAT LOGIN: INSTAN & ANTI-HILANG
+// ==========================================
+const PENDING_LOGIN_LOGS_KEY = 'payedu_pending_login_logs';
+
+const mapLogToDbRow = (l) => {
+  const nowIso = new Date().toISOString();
+  return {
+    id: String(l?.id || ('log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+    data: l,
+    created_at: l?.timestamp || l?.created_at || (l?.timeRaw ? new Date(l.timeRaw).toISOString() : nowIso)
+  };
+};
+
+const mapDbRowToLog = (r) => {
+  const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+  return {
+    id: r.id || parsed.id,
+    created_at: r.created_at || parsed.created_at || parsed.timestamp,
+    timestamp: parsed.timestamp || r.created_at,
+    ...parsed,
+    id: r.id || parsed.id
+  };
+};
+
+const enqueuePendingLoginLog = (logEntry) => {
+  try {
+    if (!logEntry || !logEntry.id) return;
+    const current = safeStorageGet(PENDING_LOGIN_LOGS_KEY, []);
+    const list = Array.isArray(current) ? current : [];
+    if (!list.some(item => item && String(item.id) === String(logEntry.id))) {
+      safeStorageSet(PENDING_LOGIN_LOGS_KEY, [logEntry, ...list].slice(0, 100));
+    }
+  } catch (e) {}
+};
+
+const removePendingLoginLog = (logId) => {
+  try {
+    if (!logId) return;
+    const current = safeStorageGet(PENDING_LOGIN_LOGS_KEY, []);
+    if (!Array.isArray(current) || current.length === 0) return;
+    const next = current.filter(item => item && String(item.id) !== String(logId));
+    if (next.length === 0) {
+      localStorage.removeItem(PENDING_LOGIN_LOGS_KEY);
+    } else {
+      safeStorageSet(PENDING_LOGIN_LOGS_KEY, next);
+    }
+  } catch (e) {}
+};
+
+/**
+ * Mengirim 1 catatan login seketika ke tabel `login_logs` di Supabase
+ * tanpa menunggu debounce agar tidak hilang jika user langsung menutup aplikasi.
+ */
+export const pushSingleLoginLog = async (logEntry) => {
+  if (!logEntry) return { status: 'error' };
+  enqueuePendingLoginLog(logEntry);
+
+  if (!isSupabaseConfigured() || !supabase || !navigator.onLine) {
+    return { status: 'offline' };
+  }
+
+  const dbRow = mapLogToDbRow(logEntry);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { error } = await supabase.from('login_logs').upsert([dbRow], { onConflict: 'id' });
+      if (!error) {
+        removePendingLoginLog(dbRow.id);
+        return { status: 'success' };
+      }
+      if (attempt < 3) await new Promise(r => setTimeout(r, 250 * attempt));
+    } catch (e) {
+      if (attempt < 3) await new Promise(r => setTimeout(r, 250 * attempt));
+    }
+  }
+  return { status: 'queued' };
+};
+
+/**
+ * Mengirim ulang catatan login yang sempat tertunda di antrean lokal.
+ */
+export const flushPendingLoginLogs = async () => {
+  if (!isSupabaseConfigured() || !supabase || !navigator.onLine) return;
+  try {
+    const pending = safeStorageGet(PENDING_LOGIN_LOGS_KEY, []);
+    if (!Array.isArray(pending) || pending.length === 0) return;
+    const rows = pending.map(mapLogToDbRow);
+    const { error } = await supabase.from('login_logs').upsert(rows, { onConflict: 'id' });
+    if (!error) {
+      localStorage.removeItem(PENDING_LOGIN_LOGS_KEY);
+    }
+  } catch (e) {
+    console.warn('[Flush LoginLogs] Warning:', e);
+  }
+};
+
+/**
+ * Mengambil seluruh riwayat akses hari ini (WIB) + riwayat terbaru hingga limitCount (default 500),
+ * menggabungkannya dengan antrean lokal yang belum sempat tersinkron, dan mengurutkannya kronologis.
+ */
+export const fetchLoginLogsOnly = async (limitCount = 500) => {
+  const localLogs = safeStorageGet('payedu_loginHistory', []);
+  const pendingLogs = safeStorageGet(PENDING_LOGIN_LOGS_KEY, []);
+  if (!isSupabaseConfigured() || !supabase || !navigator.onLine) {
+    return mergeLoginLogs(pendingLogs, localLogs, limitCount);
+  }
+  try {
+    const todayWib = getWibDateString();
+    const todayStartIso = todayWib ? new Date(`${todayWib}T00:00:00+07:00`).toISOString() : new Date(Date.now() - 86400000).toISOString();
+
+    const [todayRes, recentRes] = await Promise.all([
+      supabase
+        .from('login_logs')
+        .select('id, data, created_at')
+        .gte('created_at', todayStartIso)
+        .order('created_at', { ascending: false })
+        .limit(1000),
+      supabase
+        .from('login_logs')
+        .select('id, data, created_at')
+        .order('created_at', { ascending: false })
+        .limit(limitCount)
+    ]);
+
+    const todayRows = (!todayRes.error && Array.isArray(todayRes.data)) ? todayRes.data.map(mapDbRowToLog) : [];
+    const recentRows = (!recentRes.error && Array.isArray(recentRes.data)) ? recentRes.data.map(mapDbRowToLog) : [];
+
+    const merged = mergeLoginLogs(
+      mergeLoginLogs(todayRows, recentRows, limitCount),
+      pendingLogs,
+      limitCount
+    );
+    safeStorageSet('payedu_loginHistory', merged);
+    return merged;
+  } catch (e) {
+    console.warn('Gagal fetch login_logs dari Supabase:', e);
+    return mergeLoginLogs(pendingLogs, localLogs, limitCount);
+  }
+};
+
+// ==========================================
 // FUNGSI UTAMA: PUSH & FETCH SEMUA DATA (Kecuali presensi)
 // Presensi kini menggunakan pushPresensiGuru & fetchPresensiGuru di atas.
 // ==========================================
@@ -990,16 +1134,20 @@ export const pushCloudData = async (action, payload) => {
       if (error) console.error('Supabase feedbacks upsert error:', error);
     }
 
-    // 5. 🔋 OPTIMASI: Simpan HANYA log login terbaru (bukan me-re-upsert ratusan baris lama)
-    if (Array.isArray(targetLogs) && targetLogs.length > 0) {
-      const recentLogs = targetLogs.slice(0, 2);
-      const logRecords = recentLogs.map(l => ({
-        id: String(l.id || ('log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
-        data: l,
-        created_at: l.timestamp || l.created_at || (l.timeRaw ? new Date(l.timeRaw).toISOString() : now)
-      }));
-      const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
-      if (error) console.error('Supabase login_logs upsert error:', error);
+    // 5. Sinkronisasi Login Logs (mendukung pembersihan eksplisit via SAVE_LOGS [] dan upsert hingga 20 log terbaru)
+    if (Array.isArray(targetLogs)) {
+      if (targetLogs.length === 0) {
+        if (action === 'SAVE_LOGS') {
+          const { error: delErr } = await supabase.from('login_logs').delete().neq('id', '000_dummy_keep');
+          if (delErr) console.error('Supabase login_logs clear error:', delErr);
+          try { localStorage.removeItem(PENDING_LOGIN_LOGS_KEY); } catch (e) {}
+        }
+      } else {
+        const recentLogs = targetLogs.slice(0, 20);
+        const logRecords = recentLogs.map(mapLogToDbRow);
+        const { error } = await supabase.from('login_logs').upsert(logRecords, { onConflict: 'id' });
+        if (error) console.error('Supabase login_logs upsert error:', error);
+      }
     }
 
     return { status: 'success', message: 'Berhasil disinkronkan ke Supabase Cloud!' };
@@ -1151,26 +1299,12 @@ export const fetchCloudData = async (options = {}) => {
     }
 
     // 5. 🔋 OPTIMASI: Login Logs (Riwayat Masuk)
-    // Akun Guru tidak pernah melihat log login admin, lewati unduhan untuk guru!
+    // Akun Guru (dan layar login sebelum auth) tidak mengunduh ratusan log admin.
+    // Admin/Kepsek/Yayasan mengunduh LENGKAP semua login hari ini + hingga 500 riwayat terbaru.
     let serverLogs = localLogs;
-    if (!isGuru) {
-      const { data: logRows, error: logErr } = await supabase
-        .from('login_logs')
-        .select('id, data, created_at')
-        .order('created_at', { ascending: false })
-        .limit(50); // Batasi hanya 50 log terakhir (bukan ribuan)
-      if (!logErr && Array.isArray(logRows)) {
-        serverLogs = logRows.map(r => {
-          const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
-          return {
-            id: r.id || parsed.id,
-            created_at: r.created_at || parsed.created_at || parsed.timestamp,
-            timestamp: parsed.timestamp || r.created_at,
-            ...parsed,
-            id: r.id || parsed.id
-          };
-        });
-      }
+    const isManagement = userRole && userRole !== 'guru';
+    if (isManagement) {
+      serverLogs = await fetchLoginLogsOnly(500);
     }
 
     // Parse data dari Supabase
@@ -1309,12 +1443,12 @@ export const checkCloudTimestamp = async () => {
  * Menggantikan polling agresif — zero bandwidth untuk mendeteksi perubahan.
  * Callback dipanggil saat data di server berubah.
  */
-export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchivesChange) => {
+export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchivesChange, onLogsChange) => {
   if (!isSupabaseConfigured() || !supabase) {
     return () => {}; // noop unsubscribe
   }
 
-  const channel = supabase
+  let channel = supabase
     .channel('payedu-all-data-changes')
     .on('postgres_changes', {
       event: '*',
@@ -1337,8 +1471,19 @@ export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchiv
       table: 'archives'
     }, () => {
       if (typeof onArchivesChange === 'function') onArchivesChange();
-    })
-    .subscribe();
+    });
+
+  if (typeof onLogsChange === 'function') {
+    channel = channel.on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'login_logs'
+    }, () => {
+      onLogsChange();
+    });
+  }
+
+  channel.subscribe();
 
   return () => {
     supabase.removeChannel(channel);

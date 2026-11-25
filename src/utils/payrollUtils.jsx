@@ -513,15 +513,31 @@ export const sanitizeTeacherData = (t) => {
   return result;
 };
 
+export const getWibDateString = (dateObj = new Date()) => {
+  try {
+    const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  } catch (e) {
+    return '';
+  }
+};
+
 export const parseLogTimestamp = (log) => {
   if (!log) return 0;
+  if (log.timeRaw !== undefined && log.timeRaw !== null) {
+    const tr = Number(log.timeRaw);
+    if (!isNaN(tr) && tr > 0) return tr;
+  }
   if (log.timestamp) {
-    const t = Number(log.timestamp);
-    if (!isNaN(t) && t > 0) return t;
+    const numT = Number(log.timestamp);
+    if (!isNaN(numT) && numT > 0) return numT;
+    const isoT = new Date(log.timestamp).getTime();
+    if (!isNaN(isoT) && isoT > 0) return isoT;
   }
   if (log.created_at) {
     const t = new Date(log.created_at).getTime();
-    if (!isNaN(t)) return t;
+    if (!isNaN(t) && t > 0) return t;
   }
   if (typeof log.id === 'string' && log.id.startsWith('log-')) {
     try {
@@ -565,9 +581,49 @@ export const parseLogTimestamp = (log) => {
   return 0;
 };
 
+export const getLogDateWib = (log) => {
+  const ts = parseLogTimestamp(log);
+  if (ts > 0) return getWibDateString(new Date(ts));
+  return '';
+};
+
 export const sortLoginLogs = (logs) => {
   if (!Array.isArray(logs)) return [];
   return [...logs].sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
+};
+
+export const mergeLoginLogs = (listA = [], listB = [], maxTotal = 500) => {
+  const map = new Map();
+  const addItems = (items) => {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const key = item.id
+        ? String(item.id)
+        : `${item.name || ''}|${item.timeRaw || item.timestamp || item.created_at || item.time || ''}|${item.status || ''}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, item);
+      } else {
+        map.set(key, { ...existing, ...item });
+      }
+    }
+  };
+  addItems(listA);
+  addItems(listB);
+
+  const sorted = sortLoginLogs(Array.from(map.values()));
+  if (sorted.length <= maxTotal) return sorted;
+
+  const todayWib = getWibDateString();
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const log = sorted[i];
+    if (i < maxTotal || getLogDateWib(log) === todayWib) {
+      result.push(log);
+    }
+  }
+  return result;
 };
 
 export const calculateYearsFromDate = (dateStr) => {

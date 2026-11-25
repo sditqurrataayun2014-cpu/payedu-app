@@ -9,13 +9,15 @@ import {
 import { 
   FormattedRupiahInput, formatDateId, simpleHash, safeStorageSet, 
   generateUniqueId, isTeacherActive, sanitizeTeacherData, sortLoginLogs,
+  getLogDateWib, getWibDateString,
   TENURE_RATES, EDU_RATES, JOB_CATEGORIES, JOB_ROLES, 
   KINERJA_RATES, KOMPETENSI_FIELDS, KOMPETENSI_LEVEL_RATES, 
   INSENTIF_LIST, POTONGAN_LIST 
 } from '../../utils/payrollUtils';
 import { 
   pushCloudData as pushToSupabase, 
-  pushPresensiGuru, sortTeachersById, deduplicateTeachers 
+  pushPresensiGuru, sortTeachersById, deduplicateTeachers,
+  fetchLoginLogsOnly
 } from '../../services/dbService';
 
 const sanitizeTeacherList = (list) => {
@@ -72,6 +74,29 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   const [activeTabSetting, setActiveTabSetting] = useState(initialTab || 'umum');
   const [logSearch, setLogSearch] = useState('');
   const [logStatusFilter, setLogStatusFilter] = useState('ALL'); // ALL, SUCCESS, FAILED
+  const [logDateFilter, setLogDateFilter] = useState('ALL'); // ALL, TODAY, CUSTOM
+  const [logCustomDate, setLogCustomDate] = useState(() => getWibDateString());
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+
+  const handleRefreshLoginLogs = async (silent = false) => {
+    setIsRefreshingLogs(true);
+    try {
+      const latestLogs = await fetchLoginLogsOnly(500);
+      if (Array.isArray(latestLogs) && setLoginHistory) {
+        setLoginHistory(latestLogs);
+      }
+    } catch (err) {
+      if (!silent) console.warn('Gagal menyegarkan riwayat login:', err);
+    } finally {
+      setIsRefreshingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTabSetting === 'riwayat') {
+      handleRefreshLoginLogs(true);
+    }
+  }, [activeTabSetting]);
   
   // 🛡️ State Log Audit Finansial & Sistem
   const [auditSearch, setAuditSearch] = useState('');
@@ -152,8 +177,32 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     return sortLoginLogs(loginHistory || []);
   }, [loginHistory]);
 
+  const todayWib = getWibDateString();
+
+  const todayLogs = useMemo(() => {
+    return sortedLogs.filter(log => getLogDateWib(log) === todayWib);
+  }, [sortedLogs, todayWib]);
+
+  const todayUniqueUsersCount = useMemo(() => {
+    const names = new Set();
+    todayLogs.forEach(log => {
+      const isFailed = String(log.status || '').toLowerCase().includes('gagal');
+      const cleanName = String(log.name || '').trim().toLowerCase();
+      if (!isFailed && cleanName) names.add(cleanName);
+    });
+    return names.size;
+  }, [todayLogs]);
+
+  const dateFilteredLogs = useMemo(() => {
+    if (logDateFilter === 'TODAY') return todayLogs;
+    if (logDateFilter === 'CUSTOM' && logCustomDate) {
+      return sortedLogs.filter(log => getLogDateWib(log) === logCustomDate);
+    }
+    return sortedLogs;
+  }, [sortedLogs, todayLogs, logDateFilter, logCustomDate]);
+
   const filteredLogs = useMemo(() => {
-    return sortedLogs.filter(log => {
+    return dateFilteredLogs.filter(log => {
       const name = (log.name || '').toLowerCase();
       const role = (log.role || '').toLowerCase();
       const device = (log.device || '').toLowerCase();
@@ -167,7 +216,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       
       return matchSearch && matchStatus;
     });
-  }, [sortedLogs, logSearch, logStatusFilter]);
+  }, [dateFilteredLogs, logSearch, logStatusFilter]);
 
   // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun yang Jauh Lebih Mudah Dikelola
   useEffect(() => {
@@ -1988,83 +2037,129 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             {/* TAB: RIWAYAT LOGIN */}
             {activeTabSetting === 'riwayat' && (
               <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
-                <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
                    <div className="flex items-center gap-2.5">
                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                        <Clock size={18} />
                      </div>
                      <div>
-                       <div className="flex items-center gap-2">
-                         <h3 className="font-bold text-slate-800 dark:text-white text-base">Riwayat Akses Sistem Terakhir</h3>
+                       <div className="flex items-center gap-2 flex-wrap">
+                         <h3 className="font-bold text-slate-800 dark:text-white text-base">Riwayat Akses Sistem</h3>
                          <span className="text-[11px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-full">
-                           {filteredLogs.length} / {sortedLogs.length}
+                           Tampil: {filteredLogs.length} / {sortedLogs.length}
+                         </span>
+                         <span className="text-[11px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                           Hari Ini: {todayUniqueUsersCount} Orang ({todayLogs.length} Akses)
                          </span>
                        </div>
-                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Catatan aktivitas masuk pengguna terurut kronologis (terbaru di atas).</p>
+                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Menampilkan seluruh aktivitas login & buka sesi hari ini serta riwayat hingga 500 entri terbaru.</p>
                      </div>
                    </div>
                    
-                   <button 
-                     type="button"
-                     onClick={async () => {
-                       if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log akan dihapus secara PERMANEN dari memori browser dan Cloud Supabase.")) {
-                          setLoginHistory([]);
-                          localStorage.removeItem('payedu_loginHistory');
-                          localStorage.removeItem('payedu_login_history');
-                          safeStorageSet('payedu_loginHistory', []);
-                          try {
-                             await pushToSupabase('SAVE_LOGS', []);
-                          } catch (err) {
-                             console.warn("Gagal clear cloud logs:", err);
-                          }
-                          alert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
-                       }
-                     }}
-                     className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer w-full sm:w-auto justify-center"
-                   >
-                      <Trash2 size={14} /> Bersihkan Riwayat
-                   </button>
+                   <div className="flex items-center gap-2 w-full lg:w-auto">
+                     <button
+                       type="button"
+                       onClick={() => handleRefreshLoginLogs(false)}
+                       disabled={isRefreshingLogs}
+                       className="bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 lg:flex-initial justify-center disabled:opacity-60"
+                     >
+                       <RefreshCw size={14} className={isRefreshingLogs ? 'animate-spin' : ''} />
+                       <span>{isRefreshingLogs ? 'Memuat...' : 'Muat Ulang'}</span>
+                     </button>
+
+                     <button
+                       type="button"
+                       onClick={async () => {
+                         if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log akan dihapus secara PERMANEN dari memori browser dan Cloud Supabase.")) {
+                            setLoginHistory([]);
+                            localStorage.removeItem('payedu_loginHistory');
+                            localStorage.removeItem('payedu_login_history');
+                            localStorage.removeItem('payedu_pending_login_logs');
+                            safeStorageSet('payedu_loginHistory', []);
+                            try {
+                               await pushToSupabase('SAVE_LOGS', []);
+                            } catch (err) {
+                               console.warn("Gagal clear cloud logs:", err);
+                            }
+                            alert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
+                         }
+                       }}
+                       className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 lg:flex-initial justify-center"
+                     >
+                        <Trash2 size={14} /> Bersihkan Riwayat
+                     </button>
+                   </div>
                 </div>
 
                 {/* Filter & Toolbar Pencarian Log */}
-                <div className="p-3 sm:p-4 bg-white dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                  <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-                    <input 
-                      type="text"
-                      placeholder="Cari pengguna, role, perangkat..."
-                      value={logSearch}
-                      onChange={e => setLogSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                    />
-                    {logSearch && (
-                      <button onClick={() => setLogSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600">
-                        <X size={14} />
+                <div className="p-3 sm:p-4 bg-white dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-col gap-2.5 shrink-0">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                      <input
+                        type="text"
+                        placeholder="Cari pengguna, role, perangkat..."
+                        value={logSearch}
+                        onChange={e => setLogSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                      />
+                      {logSearch && (
+                        <button onClick={() => setLogSearch('')} className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Periode Tanggal */}
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto hide-scrollbar">
+                      <button
+                        type="button"
+                        onClick={() => setLogDateFilter('TODAY')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${logDateFilter === 'TODAY' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'}`}
+                      >
+                        Hari Ini ({todayLogs.length})
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setLogDateFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${logDateFilter === 'ALL' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                      >
+                        Semua Tersimpan ({sortedLogs.length})
+                      </button>
+                      <input
+                        type="date"
+                        value={logCustomDate}
+                        onChange={(e) => {
+                          setLogCustomDate(e.target.value);
+                          setLogDateFilter(e.target.value ? 'CUSTOM' : 'ALL');
+                        }}
+                        title="Filter tanggal akses tertentu"
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border outline-none cursor-pointer ${logDateFilter === 'CUSTOM' ? 'border-indigo-500 bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-200' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300'}`}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto hide-scrollbar">
+                  <div className="flex items-center gap-1.5 w-full overflow-x-auto hide-scrollbar">
                     <button
                       type="button"
                       onClick={() => setLogStatusFilter('ALL')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${logStatusFilter === 'ALL' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                     >
-                      Semua ({sortedLogs.length})
+                      Semua Status ({dateFilteredLogs.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setLogStatusFilter('SUCCESS')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'SUCCESS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'}`}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${logStatusFilter === 'SUCCESS' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'}`}
                     >
-                      Sukses ({sortedLogs.filter(l => !String(l.status || '').toLowerCase().includes('gagal')).length})
+                      Sukses ({dateFilteredLogs.filter(l => !String(l.status || '').toLowerCase().includes('gagal')).length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setLogStatusFilter('FAILED')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${logStatusFilter === 'FAILED' ? 'bg-red-600 text-white shadow-xs' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100'}`}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${logStatusFilter === 'FAILED' ? 'bg-red-600 text-white shadow-xs' : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100'}`}
                     >
-                      Gagal ({sortedLogs.filter(l => String(l.status || '').toLowerCase().includes('gagal')).length})
+                      Gagal ({dateFilteredLogs.filter(l => String(l.status || '').toLowerCase().includes('gagal')).length})
                     </button>
                   </div>
                 </div>

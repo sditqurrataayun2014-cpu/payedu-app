@@ -18,7 +18,10 @@ import {
   syncPendingTeacherAttendance,
   flushPendingPresensi,
   registerOfflineSyncListeners,
-  createTeacherPatchHandler
+  createTeacherPatchHandler,
+  pushSingleLoginLog,
+  flushPendingLoginLogs,
+  fetchLoginLogsOnly
 } from './services/dbService';
 import {
   safeStorageGet,
@@ -26,6 +29,8 @@ import {
   sanitizeTeacherData,
   generateUniqueId,
   sortLoginLogs,
+  mergeLoginLogs,
+  getWibDateString,
   defaultGeneralSettings
 } from './utils/payrollUtils';
 import LoginView from './components/LoginView';
@@ -78,8 +83,9 @@ export default function App() {
 
     const handleOnline = () => {
       setIsOnline(true);
-      // 🛡️ Flush antrian presensi yang gagal saat offline
+      // 🛡️ Flush antrian presensi & log login yang gagal saat offline
       flushPendingPresensi().catch(e => console.warn('[Flush Queue] Warning:', e));
+      flushPendingLoginLogs().catch(e => console.warn('[Flush LoginLogs] Warning:', e));
       fetchCloudData(true);
     };
     const handleOffline = () => {
@@ -251,7 +257,14 @@ export default function App() {
             safeStorageSet('payedu_feedbacks', serverFeedbacks);
             setHasConflict(false);
           } else {
-            // Untuk Admin / Kepsek: Selama Admin tidak sedang mem-push perubahan, terapkan update cloud secara halus
+            // Untuk Admin / Kepsek: perbarui log akses terbaru jika ada di server
+            if (serverLogs.length > 0) {
+              const mergedLogs = mergeLoginLogs(serverLogs, [], 500);
+              setLoginHistory(mergedLogs);
+              lastSavedLogsRef.current = JSON.stringify(mergedLogs);
+              safeStorageSet('payedu_loginHistory', mergedLogs);
+            }
+            // Selama Admin tidak sedang mem-push perubahan, terapkan update cloud secara halus
             if (serverSettings.lastModified > (generalSettings.lastModified + 3000) && !isPushingDataRef.current) {
                lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
                lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
@@ -318,14 +331,17 @@ export default function App() {
           setTeachers(cleanTeachers); 
           setArchives(cleanArchives);
           setFeedbacks(serverFeedbacks);
-          const sortedServerLogs = sortLoginLogs(serverLogs);
-          setLoginHistory(sortedServerLogs);
+          if (user && user.role !== 'guru') {
+            const sortedServerLogs = mergeLoginLogs(serverLogs, [], 500);
+            setLoginHistory(sortedServerLogs);
+            lastSavedLogsRef.current = JSON.stringify(sortedServerLogs);
+            safeStorageSet('payedu_loginHistory', sortedServerLogs);
+          }
           
           safeStorageSet('payedu_settings', finalSettings);
           safeStorageSet('payedu_teachers', cleanTeachers);
           safeStorageSet('payedu_archives', cleanArchives);
           safeStorageSet('payedu_feedbacks', serverFeedbacks);
-          safeStorageSet('payedu_loginHistory', sortedServerLogs);
           
           setHasConflict(false); 
         }
@@ -406,10 +422,12 @@ export default function App() {
   }, []);
 
   // 📡 Real-time Subscription: Menerima perubahan data spesifik via Supabase Realtime (Ultra Hemat Bandwidth)
+  const isManagementUser = Boolean(user && user.role !== 'guru');
   useEffect(() => {
     let settingsTimer = null;
     let teachersTimer = null;
     let archivesTimer = null;
+    let logsTimer = null;
 
     const unsubscribeAll = subscribeAllChanges(
       // 1. Settings berubah -> fetch HANYA settings (~1-2 KB)
@@ -458,24 +476,49 @@ export default function App() {
             });
           }
         }, 1500);
-      }
+      },
+      // 4. Login Logs berubah (Hanya aktif di Admin/Kepsek/Yayasan agar real-time memantau akses hari ini)
+      isManagementUser ? () => {
+        if (logsTimer) return;
+        logsTimer = setTimeout(() => {
+          logsTimer = null;
+          fetchLoginLogsOnly(500).then(logs => {
+            if (Array.isArray(logs)) {
+              setLoginHistory(logs);
+              lastSavedLogsRef.current = JSON.stringify(logs);
+            }
+          });
+        }, 2500);
+      } : undefined
     );
     return () => {
       if (settingsTimer) clearTimeout(settingsTimer);
       if (teachersTimer) clearTimeout(teachersTimer);
       if (archivesTimer) clearTimeout(archivesTimer);
+      if (logsTimer) clearTimeout(logsTimer);
       unsubscribeAll();
     };
-  }, []);
+  }, [isManagementUser]);
 
-  // 🔄 AUTO-SYNC PRESENSI TERTUNDA UNTUK GURU:
-  // Mengirimkan otomatis absen masuk yang tersimpan lokal (misal tadi pagi saat server terputus)
-  // tanpa menunggu guru menekan tombol absen pulang di sore hari!
+  // 🔄 AUTO-SYNC PRESENSI & LOG TERTUNDA SAAT LOGIN:
+  // Sekaligus menarik riwayat login lengkap terbaru dari Cloud khusus untuk Admin/Kepsek/Yayasan
   useEffect(() => {
-    if (!user || user.role !== 'guru' || !isDataLoaded) return;
-    syncPendingTeacherAttendance(user.id, presensiGuru);
-    // 🛡️ Flush antrian presensi yang gagal saat offline (jika ada)
-    flushPendingPresensi().catch(e => console.warn('[Flush Queue Login] Warning:', e));
+    if (!user) return;
+    flushPendingLoginLogs().catch(e => console.warn('[Flush LoginLogs] Warning:', e));
+
+    if (user.role === 'guru') {
+      if (isDataLoaded) {
+        syncPendingTeacherAttendance(user.id, presensiGuru);
+        flushPendingPresensi().catch(e => console.warn('[Flush Queue Login] Warning:', e));
+      }
+    } else {
+      fetchLoginLogsOnly(500).then(logs => {
+        if (Array.isArray(logs)) {
+          setLoginHistory(logs);
+          lastSavedLogsRef.current = JSON.stringify(logs);
+        }
+      }).catch(e => console.warn('[Fetch Admin Logs] Warning:', e));
+    }
   }, [user, isDataLoaded]);
 
   // 🔋 Radar Latar Belakang (Smart Polling Hemat Bandwidth)
@@ -660,7 +703,7 @@ export default function App() {
     return () => clearTimeout(timeoutId);
   }, [feedbacks, isDataLoaded, hasConflict, user]);
 
-  // Auto-Save Riwayat Login (🔋 dengan Debounce)
+  // Sinkronisasi Cache Lokal Riwayat Login (Push ke Cloud kini instan di recordLogin via pushSingleLoginLog)
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return;
     const currentStr = JSON.stringify(loginHistory);
@@ -668,10 +711,6 @@ export default function App() {
 
     lastSavedLogsRef.current = currentStr;
     safeStorageSet('payedu_loginHistory', loginHistory);
-    const timeoutId = setTimeout(() => {
-      pushToSupabase('SAVE_LOGS', loginHistory).catch(e => console.warn(e));
-    }, 5000); // 🔋 Debounce 5 detik (login logs jarang berubah)
-    return () => clearTimeout(timeoutId);
   }, [loginHistory, isDataLoaded, hasConflict]);
 
   // Auto-Save Presensi Guru (🛡️ PERBAIKAN: Kini berlaku untuk SEMUA role, termasuk Guru)
@@ -739,7 +778,7 @@ export default function App() {
     };
   }, [user]);
 
-  const recordLogin = (name, role, status) => {
+  const recordLogin = useCallback((name, role, status) => {
     const ua = navigator.userAgent;
     let browser = "Browser";
     if (ua.includes("Firefox")) browser = "Firefox";
@@ -759,13 +798,59 @@ export default function App() {
       name, role, status,
       timestamp: now.toISOString(),
       timeRaw: now.getTime(),
-      // DIPERBARUI: Memastikan zona waktu dikunci pada Waktu Indonesia Barat (WIB)
+      // Memastikan zona waktu dikunci pada Waktu Indonesia Barat (WIB)
       time: now.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta' }) + ' WIB',
       device: `${browser} / ${os}`
     };
-    // Simpan history maksimum 50 data terbaru agar browser tidak berat dan terurut kronologis
-    setLoginHistory(prev => sortLoginLogs([newLog, ...(prev || [])]).slice(0, 50));
-  };
+
+    safeStorageSet('payedu_last_session_log', {
+      ts: now.getTime(),
+      dateWib: getWibDateString(now),
+      name
+    });
+
+    // Simpan seluruh akses hari ini + hingga 500 riwayat terbaru (tidak lagi terpotong 50!)
+    setLoginHistory(prev => {
+      const next = mergeLoginLogs([newLog], prev || [], 500);
+      lastSavedLogsRef.current = JSON.stringify(next);
+      safeStorageSet('payedu_loginHistory', next);
+      return next;
+    });
+
+    // Kirim INSTAN ke Cloud Database tanpa menunggu debounce 5 detik (anti-hilang saat tab ditutup cepat)
+    pushSingleLoginLog(newLog).catch(e => console.warn('[LoginLog] Instant push queued:', e));
+  }, []);
+
+  // 📋 Catat Akses Otomatis Sesi Tersimpan (Maks 1x per 30 menit / saat pergantian hari WIB)
+  // Agar guru yang membuka aplikasi langsung dari shortcut HP tanpa layar login tetap terekam aksesnya hari ini
+  useEffect(() => {
+    if (!user || !user.name) return;
+
+    const checkAndRecordSessionResume = () => {
+      const nowMs = Date.now();
+      const todayWib = getWibDateString(new Date(nowMs));
+      const lastMeta = safeStorageGet('payedu_last_session_log', null);
+
+      const isSameUser = lastMeta && String(lastMeta.name || '').trim().toLowerCase() === String(user.name || '').trim().toLowerCase();
+      const isSameDay = lastMeta && lastMeta.dateWib === todayWib;
+      const isRecent = lastMeta && (nowMs - Number(lastMeta.ts || 0)) < (30 * 60 * 1000);
+
+      if (isSameUser && isSameDay && isRecent) return;
+
+      const roleLabel = user.role === 'admin' ? 'Admin' : (user.role === 'guru' ? 'Guru' : (user.role || 'User'));
+      recordLogin(user.name, roleLabel, 'Sukses (Buka Sesi)');
+    };
+
+    checkAndRecordSessionResume();
+
+    const onVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        checkAndRecordSessionResume();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [user, recordLogin]);
 
   useEffect(() => {
     const style = document.createElement('style');
