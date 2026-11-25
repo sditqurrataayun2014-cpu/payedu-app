@@ -18,6 +18,7 @@ import {
   exportMultiMonthPayrollMatrixToExcel 
 } from '../../services/excelExportService';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
+import { showAlert } from '../../utils/dialogService';
 
 export default function RekapGajiView({ teachers, setTeachers, onEditGaji, settings, setSettings, archives, setArchives, saveAuditLog, onOpenAuditLog }) {
   const [search, setSearch] = useState('');
@@ -532,7 +533,7 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
       });
     } catch (err) {
       console.error("Gagal ekspor Excel:", err);
-      alert("Gagal mengekspor file Excel: " + (err.message || "Error tidak diketahui"));
+      showAlert("Gagal mengekspor file Excel: " + (err.message || "Error tidak diketahui"));
     }
   };
 

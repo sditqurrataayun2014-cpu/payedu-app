@@ -13,6 +13,7 @@ import {
   deduplicateTeachers, sortTeachersById,
   pushCloudData as pushToSupabase
 } from '../../services/dbService';
+import { showAlert, showConfirm } from '../../utils/dialogService';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 
 const sanitizeTeacherList = (list) => {
@@ -84,10 +85,11 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
     const cleanList = deduplicateTeachers(teachers);
     const countRemoved = teachers.length - cleanList.length;
     if (countRemoved <= 0) {
-      alert("✅ Data Pegawai Bersih!\n\nTidak ditemukan data guru yang ganda pada sistem.");
+      showAlert("✅ Data Pegawai Bersih!\n\nTidak ditemukan data guru yang ganda pada sistem.");
       return;
     }
-    if (window.confirm(`Ditemukan ${countRemoved} data pegawai ganda di sistem.\n\nApakah Anda ingin menggabungkan dan membersihkan duplikasi tersebut secara permanen ke Cloud?`)) {
+    const isConfirmed = await showConfirm(`Ditemukan ${countRemoved} data pegawai ganda di sistem.\n\nApakah Anda ingin menggabungkan dan membersihkan duplikasi tersebut secara permanen ke Cloud?`);
+    if (isConfirmed) {
       setTeachers(cleanList);
       safeStorageSet('payedu_teachers', cleanList);
       saveAuditLog?.(
@@ -99,7 +101,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       );
       try {
         await pushToSupabase('SAVE_TEACHERS', cleanList);
-        alert(`✨ Alhamdulillah! Berhasil membersihkan ${countRemoved} data ganda dan tersimpan permanen ke Cloud Supabase.`);
+        showAlert(`✨ Alhamdulillah! Berhasil membersihkan ${countRemoved} data ganda dan tersimpan permanen ke Cloud Supabase.`);
       } catch (err) {
         console.warn("Gagal sinkronisasi pembersihan duplikat:", err);
       }
@@ -308,7 +310,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       const text = evt.target.result;
       const lines = text.split(/\r?\n/); // Dukung format Windows & Mac
       if(lines.length < 2) {
-         alert("Format file kosong atau tidak valid.");
+         showAlert("Format file kosong atau tidak valid.");
          return;
       }
       
@@ -389,7 +391,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
         return sanitizeTeacherList(Array.from(map.values()));
       });
       
-      alert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Data akan otomatis disinkronkan ke Supabase Cloud.`);
+      showAlert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Data akan otomatis disinkronkan ke Supabase Cloud.`);
       e.target.value = null;
     };
     reader.readAsText(file);

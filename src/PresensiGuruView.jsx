@@ -9,6 +9,7 @@ import jsQR from 'jsqr';
 import { pushPresensiGuru, fetchPresensiGuru, pushSinglePresensiRecord, deleteSinglePresensiRecord } from './services/dbService';
 import { getOrCreateDeviceId, verifyTeacherDevice } from './services/deviceService';
 import { registerBackModal } from './services/navigationService';
+import { showAlert as openAlertDialog, showConfirm as openConfirmDialog } from './utils/dialogService';
 
 // ==========================================
 // KONSTANTA & HELPER LOKAL
@@ -423,20 +424,11 @@ export default function PresensiGuruView({
   }, []);
 
   const showConfirm = useCallback((msg, onConfirm) => {
-    if (window.confirm) {
-      if (window.confirm(msg)) {
+    openConfirmDialog(msg).then((ok) => {
+      if (ok && typeof onConfirm === 'function') {
         onConfirm();
       }
-    } else {
-      setConfirmDialog({
-        message: msg,
-        onConfirm: () => {
-          onConfirm();
-          setConfirmDialog(null);
-        },
-        onCancel: () => setConfirmDialog(null)
-      });
-    }
+    });
   }, []);
 
   const defaultShowCsvPreview = useCallback((csvContent, fileName) => {
@@ -2015,7 +2007,7 @@ function AdminRekapPanel({
     let cleanPhone = String(rawPhone).replace(/[^0-9]/g, '');
     if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
     if (!cleanPhone || cleanPhone.length < 9) {
-      alert(`Nomor WhatsApp untuk "${targetTeacher.name}" belum terdaftar atau formatnya belum valid di Data Guru.`);
+      openAlertDialog(`Nomor WhatsApp untuk "${targetTeacher.name}" belum terdaftar atau formatnya belum valid di Data Guru.`);
       return;
     }
     const namaSesi = sesiTerpilih?.nama || 'Pagi';

@@ -10,6 +10,7 @@ import {
 } from '../../utils/payrollUtils';
 import { exportTeachingHoursToExcel } from '../../services/excelExportService';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
+import { showAlert } from '../../utils/dialogService';
 
 export default function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFilter, settings, presensiGuru = [], saveAuditLog, user }) {
   const [search, setSearch] = useState('');
@@ -138,7 +139,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   // Terapkan sinkronisasi massal dari Presensi Guru ke tabel Rekap Jam Mengajar
   const handleApplySync = () => {
     if (selectedSyncIds.length === 0) {
-      alert("Silakan pilih minimal 1 pegawai untuk disinkronkan.");
+      showAlert("Silakan pilih minimal 1 pegawai untuk disinkronkan.");
       return;
     }
 
@@ -266,7 +267,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       }
     })));
     setConfirmReset(false);
-    setTimeout(() => alert("Sukses! Data absensi seluruh guru telah dibersihkan untuk periode bulan baru."), 300);
+    setTimeout(() => showAlert("Sukses! Data absensi seluruh guru telah dibersihkan untuk periode bulan baru."), 200);
   };
 
   const handleExportExcel = () => {
@@ -323,7 +324,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const text = evt.target.result;
       const lines = text.split('\n');
       if (lines.length < 2) {
-         alert('Format CSV tidak valid atau kosong.');
+         showAlert('Format CSV tidak valid atau kosong.');
          return;
       }
 
@@ -341,7 +342,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       }
 
       if (nameIdx === -1 || totalIdx === -1) {
-         alert('Format kolom tidak dikenali. Pastikan ada judul kolom "Nama Guru" dan "Total".');
+         showAlert('Format kolom tidak dikenali. Pastikan ada judul kolom "Nama Guru" dan "Total".');
          return;
       }
 
@@ -397,9 +398,9 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
       if (updatedCount > 0) {
         setTeachers(updatedTeachers);
-        alert(`Berhasil! Total jam dan rincian harian (Tgl 1-31) untuk ${updatedCount} guru telah diperbarui ke dalam sistem.`);
+        showAlert(`Berhasil! Total jam dan rincian harian (Tgl 1-31) untuk ${updatedCount} guru telah diperbarui ke dalam sistem.`);
       } else {
-        alert('Tidak ada data guru yang cocok untuk diperbarui.');
+        showAlert('Tidak ada data guru yang cocok untuk diperbarui.');
       }
       e.target.value = null; // Reset input
     };
@@ -418,7 +419,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const lines = text.split('\n');
       if (lines.length < 2) {
          setIsSaving(false);
-         alert('Format file mesin tidak valid atau kosong.');
+         showAlert('Format file mesin tidak valid atau kosong.');
          return;
       }
 
@@ -433,7 +434,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
       if (nameIdx === -1 || hadirIdx === -1) {
          setIsSaving(false);
-         alert('Gagal mendeteksi kolom. Pastikan file export dari mesin memiliki kolom "Nama" dan "Hadir/Normal".');
+         showAlert('Gagal mendeteksi kolom. Pastikan file export dari mesin memiliki kolom "Nama" dan "Hadir/Normal".');
          return;
       }
 
@@ -474,9 +475,9 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       setIsSaving(false);
       if (updatedCount > 0) {
         setTeachers(updatedTeachers);
-        alert(`Integrasi Mesin Berhasil! Data kehadiran dan keterlambatan untuk ${updatedCount} pegawai telah terisi otomatis.`);
+        showAlert(`Integrasi Mesin Berhasil! Data kehadiran dan keterlambatan untuk ${updatedCount} pegawai telah terisi otomatis.`);
       } else {
-        alert('Tidak ada nama guru dari mesin yang cocok dengan data di sistem aplikasi.');
+        showAlert('Tidak ada nama guru dari mesin yang cocok dengan data di sistem aplikasi.');
       }
       e.target.value = null;
     };

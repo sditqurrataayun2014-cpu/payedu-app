@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from './dialogService';
 
 // --- DATA DUMMY & KONSTANTA MASTER ---
 export const TENURE_RATES = {
@@ -77,7 +78,7 @@ export const safeStorageSet = (key, value) => {
   } catch (e) {
     if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
       console.error(`Penyimpanan penuh saat mencoba menyimpan ${key}`);
-      alert(`PERINGATAN KRITIKAL: Memori Penyimpanan Penuh!\n\nGagal menyimpan data baru. Memori penyimpanan browser Anda telah mencapai batas maksimal.\n\nSolusi: Buka menu Pengaturan > Sistem, lakukan "Backup Database", lalu bersihkan data lama.`);
+      showAlert(`PERINGATAN KRITIKAL: Memori Penyimpanan Penuh!\n\nGagal menyimpan data baru. Memori penyimpanan browser Anda telah mencapai batas maksimal.\n\nSolusi: Buka menu Pengaturan > Sistem, lakukan "Backup Database", lalu bersihkan data lama.`);
     } else {
       console.error(`Gagal menyimpan ${key} ke LocalStorage:`, e);
     }
@@ -430,7 +431,7 @@ export const exportToPDF = (elementId, filename) => {
   return new Promise((resolve, reject) => {
     const element = document.getElementById(elementId);
     if (!element) {
-      alert("Elemen dokumen tidak ditemukan.");
+      showAlert("Elemen dokumen tidak ditemukan.");
       return reject("Element not found");
     }
     
@@ -452,7 +453,7 @@ export const exportToPDF = (elementId, filename) => {
     const startExport = () => {
       window.html2pdf().set(opt).from(element).save().then(resolve).catch(err => {
          console.error("PDF Error:", err);
-         alert("Gagal membuat PDF. Coba gunakan peramban (browser) lain atau periksa memori perangkat Anda.");
+         showAlert("Gagal membuat PDF. Coba gunakan peramban (browser) lain atau periksa memori perangkat Anda.");
          reject(err);
       });
     };
@@ -464,7 +465,7 @@ export const exportToPDF = (elementId, filename) => {
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
       script.onload = startExport;
       script.onerror = () => {
-         alert("Gagal memuat pustaka PDF. Periksa koneksi internet Anda.");
+         showAlert("Gagal memuat pustaka PDF. Periksa koneksi internet Anda.");
          reject(new Error("Failed to load html2pdf"));
       };
       document.head.appendChild(script);

@@ -35,6 +35,8 @@ import {
 } from './utils/payrollUtils';
 import LoginView from './components/LoginView';
 import MainLayout from './components/MainLayout';
+import GlobalDialogHost from './components/GlobalDialogHost';
+import { showAlert } from './utils/dialogService';
 
 const initialTeachers = [];
 
@@ -579,9 +581,9 @@ export default function App() {
        await pushToSupabase('SAVE_SETTINGS', updatedSettings);
        setSyncStatus('synced');
        if (newVal) {
-          alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+          showAlert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
        } else {
-          alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nStatus telah tersimpan ke Cloud. Portal Guru kini dibuka kembali di seluruh perangkat.");
+          showAlert("✅ MODE MAINTENANCE DIMATIKAN!\n\nStatus telah tersimpan ke Cloud. Portal Guru kini dibuka kembali di seluruh perangkat.");
        }
     } catch (err) {
        console.error("Gagal update maintenance mode di cloud:", err);
@@ -757,7 +759,7 @@ export default function App() {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setUser(null); // Logout paksa
-        alert('🔒 SESI BERAKHIR: Anda telah dikeluarkan secara otomatis karena tidak ada aktivitas selama 15 menit. Silakan login kembali demi keamanan data finansial.');
+        showAlert('🔒 SESI BERAKHIR\n\nAnda telah dikeluarkan secara otomatis karena tidak ada aktivitas selama 15 menit. Silakan login kembali demi keamanan data finansial.');
       }, SESSION_TIMEOUT);
     };
 
@@ -976,6 +978,7 @@ export default function App() {
             }
           `}</style>
         </div>
+        <GlobalDialogHost appName={generalSettings?.appName || 'PayEdu'} />
       </div>
     );
   }
@@ -1078,6 +1081,7 @@ export default function App() {
           resolveConflict={() => fetchCloudData(false)} 
         />
       )}
+      <GlobalDialogHost appName={generalSettings?.appName || 'PayEdu'} />
     </div>
   );
 }

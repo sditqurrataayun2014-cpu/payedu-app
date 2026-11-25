@@ -38,6 +38,7 @@ import {
 
 import { verifyTeacherDevice } from '../../services/deviceService';
 import { registerBackModal } from '../../services/navigationService';
+import { showAlert, showConfirm } from '../../utils/dialogService';
 
 const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
   const colorMap = {
@@ -247,7 +248,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     if (presensiSettings?.deviceLockEnabled) {
       const devCheck = verifyTeacherDevice(myData, true);
       if (!devCheck.isAllowed) {
-        alert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Jika Anda menggunakan HP yang sama tetapi berbeda browser (misal WhatsApp), silakan buka aplikasi di Google Chrome, atau hubungi Admin sekolah.`);
+        showAlert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Jika Anda menggunakan HP yang sama tetapi berbeda browser (misal WhatsApp), silakan buka aplikasi di Google Chrome, atau hubungi Admin sekolah.`);
         return;
       }
       if (devCheck.needsEnroll || devCheck.needsUpdate) {
@@ -307,14 +308,14 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     }
     safeStorageSet('payedu_presensi_guru', updated);
     pushSinglePresensiRecord(patch).catch(e => console.warn('[PortalGuru] Single push error:', e));
-    alert(status === 'Terlambat' ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
+    showAlert(status === 'Terlambat' ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
   };
 
   const handleQuickAbsenPulang = () => {
     if (presensiSettings?.deviceLockEnabled) {
       const devCheck = verifyTeacherDevice(myData, true);
       if (!devCheck.isAllowed) {
-        alert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`);
+        showAlert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`);
         return;
       }
       if (devCheck.needsEnroll || devCheck.needsUpdate) {
@@ -350,7 +351,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       }
       safeStorageSet('payedu_presensi_guru', updated);
       pushSinglePresensiRecord(updated[idx]).catch(e => console.warn('[PortalGuru] Single push error:', e));
-      alert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
+      showAlert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
     }
   };
 
@@ -588,7 +589,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   };
 
   const handleDeleteJurnalEntry = async (entryId) => {
-    if (!window.confirm('Hapus entri jurnal mengajar ini? Akumulasi jam akan otomatis dikurangi.')) return;
+    if (!(await showConfirm('Hapus entri jurnal mengajar ini? Akumulasi jam akan otomatis dikurangi.'))) return;
     const existingEntries = Array.isArray(myData.payroll?.jurnalKbm) ? myData.payroll.jurnalKbm : [];
     const updatedEntries = existingEntries.filter(e => e.id !== entryId);
 
@@ -657,10 +658,10 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     try {
       safeStorageSet('payedu_teachers', updatedTeachers);
       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
-      alert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
+      showAlert('Alhamdulillah! Biodata Anda berhasil diperbarui dan tersimpan langsung ke sistem sekolah.');
       setIsEditBiodataOpen(false);
     } catch (err) {
-      alert('Gagal menyimpan ke server. Pastikan koneksi internet aktif.');
+      showAlert('Gagal menyimpan ke server. Pastikan koneksi internet aktif.');
     } finally {
       setIsSavingBiodata(false);
     }
@@ -724,11 +725,11 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       safeStorageSet('payedu_feedbacks', updatedFeedbacks);
       await pushToSupabase('SAVE_FEEDBACKS', updatedFeedbacks);
 
-      alert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
+      showAlert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
       setFeedbackMsg('');
       setFeedbackSubject('Saran & Masukan Umum');
     } catch (err) {
-      alert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
+      showAlert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
     } finally {
       setIsSendingFeedback(false);
     }
@@ -758,7 +759,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       }, 5000);
     } catch (e) {
       console.error("Gagal simpan konfirmasi:", e);
-      alert("Koneksi tidak stabil. Konfirmasi Anda mungkin belum masuk ke server.");
+      showAlert("Koneksi tidak stabil. Konfirmasi Anda mungkin belum masuk ke server.");
     } finally {
       setIsConfirming(false);
     }
@@ -1116,7 +1117,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                   onClick={(e) => {
                     if (!komplainText.trim()) {
                       e.preventDefault();
-                      alert("Harap tuliskan keterangan komplain terlebih dahulu.");
+                      showAlert("Harap tuliskan keterangan komplain terlebih dahulu.");
                     } else {
                       setIsKomplainModalOpen(false);
                       setKomplainText('');

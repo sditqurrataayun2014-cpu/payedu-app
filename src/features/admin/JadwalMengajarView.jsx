@@ -12,6 +12,7 @@ import {
 } from '../../utils/payrollUtils';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
 import { exportJurnalKbmToExcel } from '../../services/excelExportService';
+import { showAlert, showConfirm } from '../../utils/dialogService';
 
 export default function JadwalMengajarView({ teachers, setTeachers, settings }) {
   const [activeTab, setActiveTab] = useState('roster');
@@ -249,10 +250,10 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       await pushToSupabase('SAVE_TEACHERS', updatedTeachers);
 
       setSaldoAwalModalTeacher(null);
-      alert(`✅ Saldo Awal Google Form untuk ${saldoAwalModalTeacher.name} berhasil disimpan sebesar ${saldoVal} JPL dan otomatis terhubung ke slip gaji!`);
+      showAlert(`✅ Saldo Awal Google Form untuk ${saldoAwalModalTeacher.name} berhasil disimpan sebesar ${saldoVal} JPL dan otomatis terhubung ke slip gaji!`);
     } catch (err) {
       console.error("Gagal simpan saldo awal:", err);
-      alert("⚠️ Terjadi kendala saat menyimpan ke cloud. Periksa koneksi internet Anda.");
+      showAlert("⚠️ Terjadi kendala saat menyimpan ke cloud. Periksa koneksi internet Anda.");
     } finally {
       setIsSavingSaldo(false);
     }
@@ -323,7 +324,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     if (!selectedTeacherForLog) return;
     const tglNum = Number(adminEntryForm.tgl);
     if (!tglNum || tglNum < 1 || tglNum > 31) {
-      alert("Mohon masukkan tanggal yang valid (1-31).");
+      showAlert("Mohon masukkan tanggal yang valid (1-31).");
       return;
     }
 
@@ -401,7 +402,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   const handleAdminDeleteJournalEntry = async (entryId) => {
     if (!selectedTeacherForLog) return;
-    if (!window.confirm("Apakah Anda yakin ingin menghapus catatan jurnal ini? Jam mengajar guru akan dihitung ulang secara otomatis.")) {
+    if (!(await showConfirm("Apakah Anda yakin ingin menghapus catatan jurnal ini? Jam mengajar guru akan dihitung ulang secara otomatis."))) {
       return;
     }
 
@@ -436,7 +437,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       });
     } catch (err) {
       console.error("Gagal ekspor excel jurnal:", err);
-      alert("⚠️ Gagal mengekspor laporan excel jurnal KBM. Periksa konsol untuk rincian error.");
+      showAlert("⚠️ Gagal mengekspor laporan excel jurnal KBM. Periksa konsol untuk rincian error.");
     }
   };
 
@@ -503,7 +504,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       const lines = text.split(/\r?\n/);
       if (lines.length < 2) {
          setIsSaving(false);
-         alert("Format file kosong atau tidak valid.");
+         showAlert("Format file kosong atau tidak valid.");
          return;
       }
 
@@ -557,7 +558,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
       if (nameIdx === -1) {
          setIsSaving(false);
-         alert('Gagal mendeteksi kolom. Pastikan file Excel yang diunggah memiliki kolom "Nama Lengkap". Disarankan untuk mengunduh template terlebih dahulu.');
+         showAlert('Gagal mendeteksi kolom. Pastikan file Excel yang diunggah memiliki kolom "Nama Lengkap". Disarankan untuk mengunduh template terlebih dahulu.');
          return;
       }
 
@@ -604,9 +605,9 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       setIsSaving(false);
       if (updatedCount > 0) {
         setTeachers(updatedTeachers);
-        alert(`Luar Biasa! Pemetaan Roster mingguan untuk ${updatedCount} guru telah berhasil diimpor dan diperbarui secara otomatis.`);
+        showAlert(`Luar Biasa! Pemetaan Roster mingguan untuk ${updatedCount} guru telah berhasil diimpor dan diperbarui secara otomatis.`);
       } else {
-        alert('Tidak ada data guru yang cocok untuk diperbarui. Pastikan nama atau ID sesuai dengan sistem.');
+        showAlert('Tidak ada data guru yang cocok untuk diperbarui. Pastikan nama atau ID sesuai dengan sistem.');
       }
       e.target.value = null; // Reset input agar bisa import file yang sama lagi
     };
@@ -653,7 +654,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
            };
         }));
         setIsSaving(false);
-        alert(`Sukses Hebat! Jadwal rutin telah ditebarkan secara merata ke tanggal 1 sampai ${daysInMonth} pada Rekap Absen bulan ini.`);
+        showAlert(`Sukses Hebat! Jadwal rutin telah ditebarkan secara merata ke tanggal 1 sampai ${daysInMonth} pada Rekap Absen bulan ini.`);
      }, 800);
   };
 
@@ -705,7 +706,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
      }
 
      setIsSaving(false);
-     alert("✨ BERHASIL DIPUBLIKASIKAN & DISINKRONKAN KE CLOUD! ✨\n\nPemetaan Roster dan Jam Mengajar Harian telah terbit dan otomatis terintegrasi ke menu 'Jadwal Saya' pada seluruh Portal Guru di semua perangkat.");
+     showAlert("✨ BERHASIL DIPUBLIKASIKAN & DISINKRONKAN KE CLOUD! ✨\n\nPemetaan Roster dan Jam Mengajar Harian telah terbit dan otomatis terintegrasi ke menu 'Jadwal Saya' pada seluruh Portal Guru di semua perangkat.");
   };
 
   // Handler Insidental
@@ -720,7 +721,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   const handleSaveInsidental = (e) => {
      e.preventDefault();
-     if(selectedTeachers.length === 0) return alert('Silakan centang minimal 1 pegawai dari tabel di bawah!');
+     if(selectedTeachers.length === 0) return showAlert('Silakan centang minimal 1 pegawai dari tabel di bawah!');
      
      setIsSaving(true);
      const activityId = generateUniqueId('keg-');
@@ -760,7 +761,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
         setIsSaving(false);
         setInsidentalForm({ ket: '', tgl: 1, jam: 2 });
         setSelectedTeachers([]);
-        alert('Input Massal Selesai! Kegiatan insidental beserta nominal jamnya berhasil ditambahkan ke kalender kehadiran guru yang dipilih.');
+        showAlert('Input Massal Selesai! Kegiatan insidental beserta nominal jamnya berhasil ditambahkan ke kalender kehadiran guru yang dipilih.');
      }, 800);
   };
 
@@ -813,7 +814,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
           }));
           setIsSaving(false);
           setEditActivity(null);
-          alert("Perbaikan berhasil! Perubahan jadwal dan jam telah diselaraskan ke seluruh kalender absen guru yang terlibat.");
+          showAlert("Perbaikan berhasil! Perubahan jadwal dan jam telah diselaraskan ke seluruh kalender absen guru yang terlibat.");
       }, 800);
   };
 
@@ -859,7 +860,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
           }));
           setIsSaving(false);
           setDeleteActivity(null);
-          alert("Kegiatan massal berhasil dihapus! Seluruh jam ekstra yang sebelumnya diberikan telah ditarik kembali.");
+          showAlert("Kegiatan massal berhasil dihapus! Seluruh jam ekstra yang sebelumnya diberikan telah ditarik kembali.");
       }, 800);
   };
 

@@ -8,6 +8,7 @@ import {
   generateTeacherId, isTeacherActive, safeStorageGet,
   safeStorageSet, simpleHash
 } from '../utils/payrollUtils';
+import { showAlert, showConfirm } from '../utils/dialogService';
 import { pushCloudData as pushToSupabase } from '../services/dbService';
 import {
   authenticateWithBiometrics, getSavedBiometricAccount,
@@ -83,8 +84,9 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
     }
   };
 
-  const handleRemoveBiometric = () => {
-    if (confirm('Hapus kredensial sidik jari dari HP ini? Anda harus login manual untuk menghubungkannya kembali.')) {
+  const handleRemoveBiometric = async () => {
+    const ok = await showConfirm('Hapus kredensial sidik jari dari HP ini? Anda harus login manual untuk menghubungkannya kembali.');
+    if (ok) {
       removeBiometricAccount();
       setSavedBioAccount(null);
     }
@@ -214,7 +216,7 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
         const saved = getSavedBiometricAccount();
         setSavedBioAccount(saved);
         setShowConnectBioModal(false);
-        alert(`✅ Berhasil! Sidik jari ${authUser.name} telah terhubung dengan HP ini. Sekarang Anda langsung login otomatis.`);
+        await showAlert(`✅ Berhasil! Sidik jari ${authUser.name} telah terhubung dengan HP ini. Sekarang Anda langsung login otomatis.`);
         onLogin(authUser);
       }
     } catch (err) {
@@ -323,7 +325,7 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
     setUsername(newId);
     setPassword(defaultPass);
 
-    alert(`✨ PENDAFTARAN PEGAWAI BARU BERHASIL! ✨\n\n- ID / Username Login: ${newId}\n- Password Default: ${defaultPass}\n\nData telah didaftarkan ke Cloud secara otomatis. Form login telah diisikan dengan akun baru Anda, silakan klik tombol "MASUK".`);
+    showAlert(`✨ PENDAFTARAN PEGAWAI BARU BERHASIL! ✨\n\n- ID / Username Login: ${newId}\n- Password Default: ${defaultPass}\n\nData telah didaftarkan ke Cloud secara otomatis. Form login telah diisikan dengan akun baru Anda, silakan klik tombol "MASUK".`);
   };
 
   return (

@@ -25,6 +25,7 @@ const RekapGajiView = React.lazy(() => import('../features/admin/RekapGajiView')
 const PortalGuruView = React.lazy(() => import('../features/portal/PortalGuruView'));
 
 import { calculatePayroll, safeStorageSet } from '../utils/payrollUtils';
+import { showAlert } from '../utils/dialogService';
 import { createTeacherPatchHandler, pushCloudData as pushToSupabase } from '../services/dbService';
 import { popAndCloseTopBackModal } from '../services/navigationService';
 
@@ -496,10 +497,10 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                       pushToSupabase('SAVE_LOGS', loginHistory)
                     ]);
                     setIsManualSyncing(false);
-                    alert("✨ SINKRONISASI BERHASIL! ✨\n\nSeluruh data Pegawai, Pengaturan, Arsip, dan Log Aktivitas telah berhasil disinkronkan ke Cloud.");
+                    showAlert("✨ SINKRONISASI BERHASIL! ✨\n\nSeluruh data Pegawai, Pengaturan, Arsip, dan Log Aktivitas telah berhasil disinkronkan ke Cloud.");
                   } catch (err) {
                     setIsManualSyncing(false);
-                    alert("Selesai disinkronkan ke Penyimpanan Lokal.");
+                    showAlert("Selesai disinkronkan ke Penyimpanan Lokal.");
                   }
                 }}
                 disabled={isManualSyncing}

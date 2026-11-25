@@ -19,6 +19,7 @@ import {
   pushPresensiGuru, sortTeachersById, deduplicateTeachers,
   fetchLoginLogsOnly
 } from '../../services/dbService';
+import { showAlert, showConfirm } from '../../utils/dialogService';
 
 const sanitizeTeacherList = (list) => {
   if (!Array.isArray(list)) return [];
@@ -324,7 +325,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
 
   // 📱 Handler Reset Kunci Perangkat HP Guru
   const handleResetTeacherDevice = async (acc) => {
-    const isConfirmed = window.confirm(`Reset kunci perangkat untuk "${acc.name || 'guru ini'}"?\n\nSetelah direset, guru dapat mengaitkan HP barunya saat login atau presensi berikutnya.`);
+    const isConfirmed = await showConfirm(`Reset kunci perangkat untuk "${acc.name || 'guru ini'}"?\n\nSetelah direset, guru dapat mengaitkan HP barunya saat login atau presensi berikutnya.`);
     if (!isConfirmed) return;
 
     setTeachers(prev => {
@@ -344,12 +345,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       return updated;
     });
 
-    alert(`Berhasil! Kunci HP untuk "${acc.name}" telah dibuka.\nGuru dapat mendaftarkan HP barunya saat presensi berikutnya.`);
+    showAlert(`Berhasil! Kunci HP untuk "${acc.name}" telah dibuka.\nGuru dapat mendaftarkan HP barunya saat presensi berikutnya.`);
   };
 
   // 📱 Handler Reset Kunci Perangkat HP untuk SEMUA Guru Sekaligus
-  const handleResetAllTeacherDevices = () => {
-    const isConfirmed = window.confirm(
+  const handleResetAllTeacherDevices = async () => {
+    const isConfirmed = await showConfirm(
       "PERHATIAN: Apakah Anda yakin ingin membuka kuncian HP untuk SEMUA guru?\n\nSemua guru akan dapat mendaftarkan HP barunya secara otomatis pada saat presensi berikutnya."
     );
     if (!isConfirmed) return;
@@ -368,18 +369,18 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       return updated;
     });
 
-    alert("✅ Berhasil! Kunci HP seluruh guru telah di-reset.\nGuru dapat menautkan HP baru saat presensi.");
+    showAlert("✅ Berhasil! Kunci HP seluruh guru telah di-reset.\nGuru dapat menautkan HP baru saat presensi.");
   };
 
   // 🛡️ Handler Master Switch Kunci 1 Akun 1 HP Guru (Aktifkan / Nonaktifkan Global)
   const isGlobalDeviceLockActive = !!settings?.presensiGuruSettings?.deviceLockEnabled;
 
-  const handleToggleGlobalDeviceLock = () => {
+  const handleToggleGlobalDeviceLock = async () => {
     const nextVal = !isGlobalDeviceLockActive;
     const confirmMsg = nextVal 
       ? "Aktifkan Kunci 1 Akun 1 HP Guru (Device Lock)?\n\nKetika aktif, setiap guru hanya bisa absen dari 1 HP terdaftar miliknya. Titip absen dari HP guru lain akan otomatis ditolak."
       : "Nonaktifkan Kunci HP Guru?\n\nKetika dinonaktifkan, guru bebas presensi dari HP atau browser mana saja tanpa batasan perangkat.";
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await showConfirm(confirmMsg))) return;
 
     const currentPresensiSettings = settings?.presensiGuruSettings || {};
     const updatedPresensiSettings = {
@@ -397,8 +398,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
       localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(updatedPresensiSettings));
     } catch (e) {}
     pushToSupabase('SAVE_SETTINGS', updatedSettings).catch(e => console.warn(e));
-    alert(nextVal 
-      ? "✅ KUNCI 1 AKUN 1 HP GURU BERHASIL DIAKTIFKAN!\n\nSetiap guru kini wajib absen dari HP resmi miliknya." 
+    showAlert(nextVal
+      ? "✅ KUNCI 1 AKUN 1 HP GURU BERHASIL DIAKTIFKAN!\n\nSetiap guru kini wajib absen dari HP resmi miliknya."
       : "🔓 KUNCI HP GURU TELAH DINONAKTIFKAN!\n\nGuru kini bebas presensi dari browser atau HP mana saja."
     );
   };
@@ -438,10 +439,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     pushToSupabase('SAVE_SETTINGS', newSettings)
     .then(() => {
        setIsSaving(false);
-       alert('Pengaturan Umum berhasil disimpan permanen!');
+       showAlert('Pengaturan Umum berhasil disimpan permanen!');
     }).catch(() => {
        setIsSaving(false);
-       alert('Gagal sinkronisasi ke server, namun tersimpan di perangkat.');
+       showAlert('Gagal sinkronisasi ke server, namun tersimpan di perangkat.');
     });
   };
 
@@ -520,10 +521,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     pushToSupabase('SAVE_SETTINGS', newSettings)
     .then(() => {
        setIsSaving(false);
-       alert('Mantap! Master Tarif dan Variabel berhasil diperbarui secara global!');
+       showAlert('Mantap! Master Tarif dan Variabel berhasil diperbarui secara global!');
     }).catch(() => {
        setIsSaving(false);
-       alert('Koneksi terputus. Data tersimpan secara lokal.');
+       showAlert('Koneksi terputus. Data tersimpan secara lokal.');
     });
   };
 
@@ -545,7 +546,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                }
                return t;
             }));
-            alert(`Selesai! Password untuk ${modal.data?.name} berhasil diubah menjadi: ${passInput}`);
+            showAlert(`Selesai! Password untuk ${modal.data?.name} berhasil diubah menjadi: ${passInput}`);
          }
       } else {
          // SEDERHANA: Simpan Admin ke Local Storage terpisah
@@ -570,7 +571,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
          
          localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
          setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
-         alert('Data akses Admin berhasil disimpan.');
+         showAlert('Data akses Admin berhasil disimpan.');
       }
       setIsSaving(false);
       setModal({ isOpen: false, type: null, data: null });
@@ -586,10 +587,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
            }
            return t;
        }));
-       alert(`Selesai! Password untuk ${modal.data.name} telah direset kembali ke default.`);
+       showAlert(`Selesai! Password untuk ${modal.data.name} telah direset kembali ke default.`);
     } else {
        if (modal.data.role === 'Admin' && accounts.filter(a => a.role === 'Admin').length <= 1) {
-         alert('Akses ditolak: Aplikasi harus memiliki setidaknya satu akun Admin aktif!');
+         showAlert('Akses ditolak: Aplikasi harus memiliki setidaknya satu akun Admin aktif!');
          setModal({ isOpen: false, type: null, data: null });
          return;
        }
@@ -597,7 +598,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
        const updatedAdmins = adminAccs.filter(a => a.id !== modal.data.id);
        localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
        setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
-       alert('Akun Admin berhasil dihapus dari sistem.');
+       showAlert('Akun Admin berhasil dihapus dari sistem.');
     }
     setModal({ isOpen: false, type: null, data: null });
   };
@@ -784,15 +785,15 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           saveAuditLog?.('Administrator', 'Restore Database', 'Seluruh Database', `Memulihkan database dari file backup JSON (${restoredTeachersCount} data pegawai)`, 'sistem');
 
           setIsSaving(false);
-          alert(`✅ RESTORE & SYNC DATA BERHASIL!\n\nFile cadangan JSON telah berhasil dipulihkan ke perangkat dan disinkronkan ke Cloud Supabase:\n• Data Pegawai: ${restoredTeachersCount} orang\n• Pengaturan Aplikasi: Sukses\n• Data Pendukung: Terpulihkan.`);
+          showAlert(`✅ RESTORE & SYNC DATA BERHASIL!\n\nFile cadangan JSON telah berhasil dipulihkan ke perangkat dan disinkronkan ke Cloud Supabase:\n• Data Pegawai: ${restoredTeachersCount} orang\n• Pengaturan Aplikasi: Sukses\n• Data Pendukung: Terpulihkan.`);
         } else {
           setIsSaving(false);
-          alert("File backup tidak memiliki struktur data pegawai atau pengaturan yang valid. Pastikan file yang dipilih adalah file .json backup PayEdu.");
+          showAlert("File backup tidak memiliki struktur data pegawai atau pengaturan yang valid. Pastikan file yang dipilih adalah file .json backup PayEdu.");
         }
       } catch (err) {
         setIsSaving(false);
         console.error("Restore error:", err);
-        alert(`Gagal membaca file backup:\n${err.message || 'Format JSON tidak dikenali atau rusak.'}\n\nPastikan file yang dipilih adalah file .json yang valid.`);
+        showAlert(`Gagal membaca file backup:\n${err.message || 'Format JSON tidak dikenali atau rusak.'}\n\nPastikan file yang dipilih adalah file .json yang valid.`);
       }
       e.target.value = null;
     };
@@ -831,15 +832,15 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
               pushToSupabase('SAVE_LOGS', [])
            ]);
            setIsSaving(false);
-           alert("✨ FACTORY RESET BERHASIL! ✨\n\nSeluruh data pegawai, arsip, dan riwayat di perangkat ini maupun di Server Cloud telah dibersihkan secara total.\n\nAplikasi Anda kini kembali seperti baru pertama kali digunakan!");
+           await showAlert("✨ FACTORY RESET BERHASIL! ✨\n\nSeluruh data pegawai, arsip, dan riwayat di perangkat ini maupun di Server Cloud telah dibersihkan secara total.\n\nAplikasi Anda kini kembali seperti baru pertama kali digunakan!");
            window.location.reload(); // Muat ulang paksa halaman
         } catch (e) {
            setIsSaving(false);
-           alert("Gagal terhubung ke server, namun memori perangkat ini telah dibersihkan.");
+           await showAlert("Gagal terhubung ke server, namun memori perangkat ini telah dibersihkan.");
            window.location.reload();
         }
      } else {
-        alert("Reset dibatalkan. Kata kunci yang Anda ketik salah. Pastikan mengetik: RESET TOTAL");
+        showAlert("Reset dibatalkan. Kata kunci yang Anda ketik salah. Pastikan mengetik: RESET TOTAL");
      }
   };
 
@@ -858,7 +859,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
      // Disebabkan ada useEffect di App.jsx yang memantau state 'teachers', sistem 
      // akan otomatis menolak (sync) ID baru ini ke Cloud Database Supabase, sekaligus
      // mengemas kini username login mereka.
-     setTimeout(() => alert("Berjaya! Semua ID pegawai telah ditukar ke format berurutan (G01QA, G02QA, dst). Username login mereka juga telah dikemas kini!"), 300);
+     setTimeout(() => showAlert("Berjaya! Semua ID pegawai telah ditukar ke format berurutan (G01QA, G02QA, dst). Username login mereka juga telah dikemas kini!"), 300);
   };
 
   return (
@@ -1270,10 +1271,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      pushToSupabase('SAVE_SETTINGS', newSettings)
                      .then(() => {
                         setIsSaving(false);
-                        alert('Mantap! Teks Portal Guru berhasil diperbarui dan dikunci ke server database!');
+                        showAlert('Mantap! Teks Portal Guru berhasil diperbarui dan dikunci ke server database!');
                      }).catch(() => {
                         setIsSaving(false);
-                        alert('Koneksi terputus. Data tersimpan secara lokal.');
+                        showAlert('Koneksi terputus. Data tersimpan secara lokal.');
                      });
                   }} className="space-y-4 max-w-4xl">
                      <div>
@@ -1837,9 +1838,9 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                                try {
                                  await pushToSupabase('SAVE_SETTINGS', updated);
                                  if (isChecked) {
-                                    alert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+                                    showAlert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
                                  } else {
-                                    alert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali di seluruh perangkat.");
+                                    showAlert("✅ MODE MAINTENANCE DIMATIKAN!\n\nAkses Portal Guru telah dibuka kembali di seluruh perangkat.");
                                  }
                                } catch(err) {
                                  console.error("Gagal sync maintenance mode ke cloud:", err);
@@ -1923,12 +1924,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      </button>
                      <button 
                        type="button"
-                       onClick={() => {
-                         if (window.confirm("Apakah Anda yakin ingin MEMBERSIHKAN LOG AUDIT? Catatan mutasi finansial akan direset.")) {
+                       onClick={async () => {
+                         if (await showConfirm("Apakah Anda yakin ingin MEMBERSIHKAN LOG AUDIT? Catatan mutasi finansial akan direset.")) {
                             setAuditLogs([]);
                             localStorage.removeItem('payedu_audit_logs');
                             safeStorageSet('payedu_audit_logs', []);
-                            alert("✨ Seluruh Log Audit Finansial berhasil dibersihkan!");
+                            showAlert("✨ Seluruh Log Audit Finansial berhasil dibersihkan!");
                          }
                        }}
                        className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 md:flex-none justify-center"
@@ -2070,7 +2071,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                      <button
                        type="button"
                        onClick={async () => {
-                         if (window.confirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log akan dihapus secara PERMANEN dari memori browser dan Cloud Supabase.")) {
+                         if (await showConfirm("Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT AKSES LOG IN? Data riwayat log akan dihapus secara PERMANEN dari memori browser dan Cloud Supabase.")) {
                             setLoginHistory([]);
                             localStorage.removeItem('payedu_loginHistory');
                             localStorage.removeItem('payedu_login_history');
@@ -2081,7 +2082,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                             } catch (err) {
                                console.warn("Gagal clear cloud logs:", err);
                             }
-                            alert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
+                            showAlert("✨ Riwayat Akses Sistem berhasil dibersihkan total dan dihapus permanen dari Cloud!");
                          }
                        }}
                        className="bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer flex-1 lg:flex-initial justify-center"

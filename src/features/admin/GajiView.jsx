@@ -12,6 +12,7 @@ import {
   POTONGAN_LIST, TENURE_RATES, calculatePayroll, exportToPDF,
   formatRp, formatTeacherName, getFormattedPeriod, isTeacherActive
 } from '../../utils/payrollUtils';
+import { showAlert } from '../../utils/dialogService';
 
 export default function GajiView({ teachers, setTeachers, externalSelectedId, setExternalSelectedId, externalSelectedTab, setExternalSelectedTab, settings, user, saveAuditLog }) {
   const [activeTabGaji, setActiveTabGaji] = useState('masaKerja');
@@ -80,7 +81,7 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
           setMassForm({ ket: 'Potongan / Iuran Wajib', nominal: '', targetGroup: 'Semua' });
           setExcludedIds([]);
           setMassSearch('');
-          alert(`Luar Biasa! Potongan massal "${massForm.ket}" berhasil diterapkan kepada ${appliedCount} pegawai.`);
+          showAlert(`Luar Biasa! Potongan massal "${massForm.ket}" berhasil diterapkan kepada ${appliedCount} pegawai.`);
       }, 800);
   };
 
@@ -158,7 +159,7 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
        const isDuplicate = currentArr.some((item, i) => i !== index && item.ket.toLowerCase() === value.toLowerCase());
        
        if (isDuplicate) {
-          alert(`Peringatan: Komponen dengan keterangan "${value}" sudah ada pada pegawai ini!\n\nMohon gunakan keterangan yang berbeda atau cukup gabungkan nominalnya pada komponen yang sudah ada untuk menghindari duplikasi pelaporan.`);
+          showAlert(`Peringatan: Komponen dengan keterangan "${value}" sudah ada pada pegawai ini!\n\nMohon gunakan keterangan yang berbeda atau cukup gabungkan nominalnya pada komponen yang sudah ada untuk menghindari duplikasi pelaporan.`);
           return; // Gagalkan update jika duplikat
        }
     }
