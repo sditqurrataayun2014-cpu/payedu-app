@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Settings, X, Trash, PlusCircle, Save, BarChart3,
+  Settings, X, Trash, PlusCircle, Save, BarChart3, Lock,
   Calendar, Printer, Download, History, TrendingUp, TrendingDown,
   Activity, Users, Trash2, CheckCircle, PieChart as PieChartIcon,
   Wallet, Edit, ChevronDown, Table, Layers, ArrowUpRight, ArrowDownRight,
@@ -406,17 +406,17 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
             Pembedahan komprehensif struktur pengeluaran gaji sekolah, komposisi komponen tunjangan, arus pemotongan, dan riwayat evaluasi lintas periode.
           </p>
         </div>
-        {!readOnly && (
-          <div className="flex items-center gap-2 relative z-10 w-full md:w-auto justify-end no-print">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-            >
-              <Printer size={16} /> <span>Cetak Laporan</span>
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 relative z-10 w-full md:w-auto justify-end no-print">
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => !readOnly && window.print()}
+            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed disabled:active:scale-100"
+            title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Laporan'}
+          >
+            {readOnly ? <Lock size={15} /> : <Printer size={16} />} <span>Cetak Laporan</span>
+          </button>
+        </div>
         <BarChart3 size={140} className="absolute -right-8 -bottom-8 text-white/5 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
@@ -877,11 +877,14 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
             <h3 className="text-xs sm:text-base font-bold dark:text-white flex items-center gap-2">
               <Wallet size={18} className="text-emerald-500" /> Sumber Alokasi Dana Penggajian
             </h3>
-            {!readOnly && (
-              <button onClick={handleOpenEdit} className="no-print text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer">
-                <Edit size={13} /> Atur Sumber Dana
-              </button>
-            )}
+            <button
+              onClick={handleOpenEdit}
+              disabled={readOnly}
+              className="no-print text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Atur Sumber Dana'}
+            >
+              {readOnly ? <Lock size={12} /> : <Edit size={13} />} Atur Sumber Dana
+            </button>
           </div>
           <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
             <div className="space-y-3.5">

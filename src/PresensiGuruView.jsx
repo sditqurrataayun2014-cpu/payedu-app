@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  ChevronDown, Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
+  ChevronDown, Clock, Clock3, Lock, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   Calendar, CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
   Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Users, Smartphone, MessageCircle
@@ -2650,29 +2650,27 @@ function AdminRekapPanel({
                           <span className="hidden sm:inline-block text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
                             Belum Hadir
                           </span>
-                          {!readOnly && (
-                            <button
-                              type="button"
-                              onClick={() => handleSendTeacherWAReminder(t)}
-                              className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-800 flex items-center justify-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                              title={`Kirim Pesan Pengingat Presensi ke WhatsApp ${t.name}`}
-                            >
-                              <MessageCircle size={11} className="text-emerald-600 dark:text-emerald-400" />
-                              <span>Ingatkan WA</span>
-                            </button>
-                          )}
-                          {!readOnly && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleQuickStatus(t, 'Hadir');
-                              }}
-                              className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-bold shadow-2xs cursor-pointer"
-                              title="Tandai Hadir Manual"
-                            >
-                              Hadirkan
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            disabled={readOnly}
+                            onClick={() => handleSendTeacherWAReminder(t)}
+                            className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-800 flex items-center justify-center gap-1 transition-colors shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : `Kirim Pesan Pengingat Presensi ke WhatsApp ${t.name}`}
+                          >
+                            {readOnly ? <Lock size={11} /> : <MessageCircle size={11} className="text-emerald-600 dark:text-emerald-400" />}
+                            <span>Ingatkan WA</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={readOnly}
+                            onClick={() => {
+                              handleQuickStatus(t, 'Hadir');
+                            }}
+                            className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[10px] font-bold shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1"
+                            title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tandai Hadir Manual'}
+                          >
+                            {readOnly && <Lock size={10} />} Hadirkan
+                          </button>
                         </div>
                       )}
                     </div>
@@ -2768,10 +2766,26 @@ function AdminRekapPanel({
               })}
             </div>
           )}
-          {!readOnly && viewMode === 'harian' && (
+          {viewMode === 'harian' && (
             <>
-              <button type="button" onClick={handleExportHarianCSV} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors" title="Download Rekap Harian CSV/Excel"><Download size={14} /> CSV</button>
-              <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors" title="Cetak Presensi Harian"><Printer size={14} /> Cetak</button>
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={handleExportHarianCSV}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Download Rekap Harian CSV/Excel'}
+              >
+                {readOnly ? <Lock size={13} /> : <Download size={14} />} CSV
+              </button>
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={triggerPrint}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Presensi Harian'}
+              >
+                {readOnly ? <Lock size={13} /> : <Printer size={14} />} Cetak
+              </button>
             </>
           )}
           {(viewMode === 'rekap' || viewMode === 'detail_guru') && (
@@ -2782,12 +2796,24 @@ function AdminRekapPanel({
               <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold dark:text-white cursor-pointer">
                 {[filterYear - 1, filterYear, filterYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              {!readOnly && (
-                <>
-                  <button type="button" onClick={viewMode === 'detail_guru' ? handleExportDetailGuruCSV : handleExportRekap} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors"><Download size={14} /> CSV</button>
-                  <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors"><Printer size={14} /> Cetak</button>
-                </>
-              )}
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={viewMode === 'detail_guru' ? handleExportDetailGuruCSV : handleExportRekap}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Download CSV'}
+              >
+                {readOnly ? <Lock size={13} /> : <Download size={14} />} CSV
+              </button>
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={triggerPrint}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Presensi'}
+              >
+                {readOnly ? <Lock size={13} /> : <Printer size={14} />} Cetak
+              </button>
             </>
           )}
           {!readOnly && isAdmin && (
@@ -2824,12 +2850,12 @@ function AdminRekapPanel({
                   <th className="p-3 text-center print:border print:border-black">Jam Masuk</th>
                   <th className="p-3 text-center print:border print:border-black">Jam Pulang</th>
                   <th className="p-3 text-center print:border print:border-black">Status</th>
-                  {!readOnly && <th className="p-3 pr-6 text-center no-print">Aksi</th>}
+                  <th className="p-3 pr-6 text-center no-print">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40 print:divide-black">
                 {filteredTeachersHarian.length === 0 ? (
-                  <tr><td colSpan={readOnly ? 5 : 6} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
+                  <tr><td colSpan={6} className="p-12 text-center text-slate-400 italic print:border print:border-black">{filteredTeachers.length === 0 ? 'Tidak ada data guru/staff.' : 'Tidak ada guru yang dijadwalkan pada sesi ini hari ini.'}</td></tr>
                 ) : filteredTeachersHarian.map((t, idx) => {
                   const rec = getRecord(t);
                   const isScheduled = isGuruTerjadwal(settings, hariIni, filterSesiId, t.id);
@@ -2867,26 +2893,25 @@ function AdminRekapPanel({
                       <td className="p-3 text-center print:border print:border-black">
                         <Badge colorClass={STATUS_BADGE[status]}>{status}{status === 'Terlambat' ? ` ${rec.terlambatMenit}m` : ''}</Badge>
                       </td>
-                      {!readOnly && (
-                        <td className="p-3 pr-6 no-print">
-                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                            {status === 'Belum Absen' && (
-                              <button
-                                type="button"
-                                onClick={() => handleSendTeacherWAReminder(t)}
-                                title={`Kirim pengingat presensi ke WhatsApp ${t.name}`}
-                                className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-2xs cursor-pointer"
-                              >
-                                <MessageCircle size={14} />
-                              </button>
-                            )}
-                            <button type="button" onClick={() => openEdit(t)} title="Edit manual" className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors"><Edit size={14} /></button>
-                            <button type="button" onClick={() => handleQuickStatus(t, 'Sakit')} title="Tandai Sakit" className="px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase hover:bg-blue-100 transition-colors">Sakit</button>
-                            <button type="button" onClick={() => handleQuickStatus(t, 'Izin')} title="Tandai Izin" className="px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg text-[10px] font-black uppercase hover:bg-violet-100 transition-colors">Izin</button>
-                            {rec && <button type="button" onClick={() => handleDeleteRecord(t)} title="Hapus catatan" className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors"><Trash2 size={14} /></button>}
-                          </div>
-                        </td>
-                      )}
+                      <td className="p-3 pr-6 no-print">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {status === 'Belum Absen' && (
+                            <button
+                              type="button"
+                              disabled={readOnly}
+                              onClick={() => handleSendTeacherWAReminder(t)}
+                              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : `Kirim pengingat presensi ke WhatsApp ${t.name}`}
+                              className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors shadow-2xs cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                            >
+                              {readOnly ? <Lock size={14} /> : <MessageCircle size={14} />}
+                            </button>
+                          )}
+                          <button type="button" disabled={readOnly} onClick={() => openEdit(t)} title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit manual'} className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-45 disabled:cursor-not-allowed">{readOnly ? <Lock size={14} /> : <Edit size={14} />}</button>
+                          <button type="button" disabled={readOnly} onClick={() => handleQuickStatus(t, 'Sakit')} title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tandai Sakit'} className="px-2 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-black uppercase hover:bg-blue-100 transition-colors disabled:opacity-45 disabled:cursor-not-allowed">Sakit</button>
+                          <button type="button" disabled={readOnly} onClick={() => handleQuickStatus(t, 'Izin')} title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tandai Izin'} className="px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg text-[10px] font-black uppercase hover:bg-violet-100 transition-colors disabled:opacity-45 disabled:cursor-not-allowed">Izin</button>
+                          {rec && <button type="button" disabled={readOnly} onClick={() => handleDeleteRecord(t)} title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus catatan'} className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-lg hover:bg-rose-100 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"><Trash2 size={14} /></button>}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AlertCircle, Check, CheckCircle, Clock, Download, Edit,
-  FileText, Fingerprint, Save, Search, Sparkles, Trash2,
+  FileText, Fingerprint, Lock, Save, Search, Sparkles, Trash2,
   Upload, UserCheck, X
 } from 'lucide-react';
 
@@ -1189,45 +1189,64 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
           </div>
 
           {/* Action Buttons: 5 Tombol Grid Presisi di Mobile */}
-          {!readOnly && (
-            <div className="grid grid-cols-5 gap-1 w-full xl:w-auto sm:flex sm:flex-wrap justify-end">
-              {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
-              <button
-                type="button"
-                onClick={handleOpenSyncModal}
-                className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-2 py-1.5 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs cursor-pointer hover:shadow-md"
-                title="Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff"
-              >
-                <UserCheck size={14} />
-                <span className="hidden sm:inline">Presensi</span>
-                <span className="sm:hidden">Absen</span>
-                {totalGuruTelatPresensi > 0 && (
-                  <span className="ml-0.5 px-1 bg-white/25 text-white text-[9px] rounded-full font-black">
-                    {totalGuruTelatPresensi}
-                  </span>
-                )}
-              </button>
+          <div className="grid grid-cols-5 gap-1 w-full xl:w-auto sm:flex sm:flex-wrap justify-end">
+            {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
+            <button
+              type="button"
+              onClick={handleOpenSyncModal}
+              disabled={readOnly}
+              className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-2 py-1.5 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs cursor-pointer hover:shadow-md disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff'}
+            >
+              {readOnly ? <Lock size={13} /> : <UserCheck size={14} />}
+              <span className="hidden sm:inline">Presensi</span>
+              <span className="sm:hidden">Absen</span>
+              {totalGuruTelatPresensi > 0 && (
+                <span className="ml-0.5 px-1 bg-white/25 text-white text-[9px] rounded-full font-black">
+                  {totalGuruTelatPresensi}
+                </span>
+              )}
+            </button>
 
-              {/* TAMBAHAN: Tombol Reset Bulan */}
-              <button onClick={handleResetBulan} className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
-                <Trash2 size={14} /> <span>Reset</span>
-              </button>
+            {/* TAMBAHAN: Tombol Reset Bulan */}
+            <button
+              onClick={handleResetBulan}
+              disabled={readOnly}
+              className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Reset data absensi bulan baru'}
+            >
+              {readOnly ? <Lock size={13} /> : <Trash2 size={14} />} <span>Reset</span>
+            </button>
 
-              {/* TAMBAHAN: Tombol Import Mesin Absen */}
-              <input type="file" accept=".csv, .txt, .xls, .xlsx" ref={mesinInputRef} onChange={handleImportMesinAbsen} className="hidden" />
-              <button onClick={() => mesinInputRef.current?.click()} className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-blue-700 dark:text-blue-400 text-[11px] sm:text-xs">
-                <Fingerprint size={14} /> <span>Mesin</span>
-              </button>
+            {/* TAMBAHAN: Tombol Import Mesin Absen */}
+            <input type="file" accept=".csv, .txt, .xls, .xlsx" ref={mesinInputRef} onChange={handleImportMesinAbsen} className="hidden" />
+            <button
+              onClick={() => !readOnly && mesinInputRef.current?.click()}
+              disabled={readOnly}
+              className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-blue-700 dark:text-blue-400 text-[11px] sm:text-xs disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Impor file mesin absensi'}
+            >
+              {readOnly ? <Lock size={13} /> : <Fingerprint size={14} />} <span>Mesin</span>
+            </button>
 
-              <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
-              <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs">
-                <Upload size={14} /> <span>Impor</span>
-              </button>
-              <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
-                <Download size={14} /> <span>Ekspor</span>
-              </button>
-            </div>
-          )}
+            <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
+            <button
+              onClick={() => !readOnly && fileInputRef.current?.click()}
+              disabled={readOnly}
+              className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Impor Excel/CSV'}
+            >
+              {readOnly ? <Lock size={13} /> : <Upload size={14} />} <span>Impor</span>
+            </button>
+            <button
+              onClick={handleExportExcel}
+              disabled={readOnly}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs disabled:opacity-55 disabled:cursor-not-allowed"
+              title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Ekspor Excel (.xlsx)'}
+            >
+              {readOnly ? <Lock size={13} /> : <Download size={14} />} <span>Ekspor</span>
+            </button>
+          </div>
         </div>
 
         {/* FITUR BARU: Tampilan Kartu Mobile Rekap Absensi (< md) */}
@@ -1257,14 +1276,14 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     </h4>
                     <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || t.status}</div>
                   </div>
-                  {!readOnly && (
-                    <button
-                      onClick={() => handleOpenEdit(t)}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
-                    >
-                      <Edit size={14} /> Edit Jam
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleOpenEdit(t)}
+                    disabled={readOnly}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Jam'}
+                  >
+                    {readOnly ? <Lock size={13} /> : <Edit size={14} />} Edit Jam
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
@@ -1278,12 +1297,14 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     {(() => {
                       const pInfo = teacherPresensiMap[t.id];
                       const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
-                      if (!readOnly && pLate > 0 && pLate !== telat) {
+                      if (pLate > 0 && pLate !== telat) {
                         return (
                           <button
                             type="button"
+                            disabled={readOnly}
                             onClick={() => handleInlineTelatChange(t.id, pLate)}
-                            className="mt-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer shadow-xs"
+                            className="mt-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer shadow-xs disabled:opacity-55 disabled:cursor-not-allowed"
+                            title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Terapkan jumlah terlambat dari Presensi'}
                           >
                             ⚡ Tarik Presensi ({pLate}x)
                           </button>
@@ -1323,9 +1344,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800">Selisih</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-red-600 dark:text-red-400">Telat</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400">Tepat Waktu</th>
-                {!readOnly && (
-                  <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center md:sticky md:right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
-                )}
+                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center md:sticky md:right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 dark:divide-slate-600">
@@ -1382,21 +1401,17 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     ))}
 
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-emerald-50/30 dark:bg-emerald-900/10 align-middle">
-                      {readOnly ? (
-                        <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                          {t.payroll?.jamMengajar?.jamPlus !== undefined && t.payroll?.jamMengajar?.jamPlus !== '' ? t.payroll.jamMengajar.jamPlus : 0}
-                        </span>
-                      ) : (
-                        <input
-                          type="number"
-                          min="0"
-                          value={t.payroll?.jamMengajar?.jamPlus !== undefined ? t.payroll?.jamMengajar?.jamPlus : ''}
-                          onChange={(e) => handleInlineJamPlusChange(t.id, e.target.value)}
-                          className="w-12 p-1.5 text-center border border-emerald-300 dark:border-emerald-600 rounded-lg bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold focus:ring-2 focus:ring-emerald-500 outline-none m-auto block shadow-sm transition-all"
-                          title="Tambahan Jam Mengajar"
-                          placeholder="0"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={readOnly}
+                        readOnly={readOnly}
+                        value={t.payroll?.jamMengajar?.jamPlus !== undefined ? t.payroll?.jamMengajar?.jamPlus : ''}
+                        onChange={(e) => handleInlineJamPlusChange(t.id, e.target.value)}
+                        className="w-12 p-1.5 text-center border border-emerald-300 dark:border-emerald-600 rounded-lg bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold focus:ring-2 focus:ring-emerald-500 outline-none m-auto block shadow-sm transition-all disabled:opacity-75 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambahan Jam Mengajar'}
+                        placeholder="0"
+                      />
                     </td>
 
                     <td className="p-3 text-center font-bold text-base border border-slate-400 dark:border-slate-500 text-blue-700 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10" title="Total Jam dari Kegiatan Insidental">
@@ -1407,59 +1422,47 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                       {real}
                     </td>
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-white/50 dark:bg-slate-800/50 align-middle">
-                      {readOnly ? (
-                        <span className="font-bold text-slate-700 dark:text-slate-300">
-                          {t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? t.payroll.jamMengajar.wajib : (t.status === 'Tetap' ? 60 : 0)}
-                        </span>
-                      ) : (
-                        <input
-                          type="number"
-                          min="0"
-                          value={t.payroll?.jamMengajar?.wajib !== undefined ? t.payroll?.jamMengajar?.wajib : (t.status === 'Tetap' ? 60 : 0)}
-                          onChange={(e) => handleInlineWajibChange(t.id, e.target.value)}
-                          className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-blue-500 outline-none m-auto block shadow-sm transition-all"
-                          title="Edit jumlah target wajib secara langsung"
-                          placeholder="0"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={readOnly}
+                        readOnly={readOnly}
+                        value={t.payroll?.jamMengajar?.wajib !== undefined ? t.payroll?.jamMengajar?.wajib : (t.status === 'Tetap' ? 60 : 0)}
+                        onChange={(e) => handleInlineWajibChange(t.id, e.target.value)}
+                        className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-blue-500 outline-none m-auto block shadow-sm transition-all disabled:opacity-75 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit jumlah target wajib secara langsung'}
+                        placeholder="0"
+                      />
                     </td>
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-purple-50/30 dark:bg-purple-900/10 align-middle">
-                      {readOnly ? (
-                        <span className="font-bold text-purple-700 dark:text-purple-400">
-                          {t.payroll?.jamMengajar?.jsjm !== undefined && t.payroll?.jamMengajar?.jsjm !== '' ? t.payroll.jamMengajar.jsjm : 0}
-                        </span>
-                      ) : (
-                        <input
-                          type="number"
-                          min="0"
-                          value={t.payroll?.jamMengajar?.jsjm !== undefined ? t.payroll?.jamMengajar?.jsjm : ''}
-                          onChange={(e) => handleInlineJsjmChange(t.id, e.target.value)}
-                          className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 font-bold focus:ring-2 focus:ring-purple-500 outline-none m-auto block shadow-sm transition-all"
-                          title="Jabatan Setara Jam Mengajar"
-                          placeholder="0"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={readOnly}
+                        readOnly={readOnly}
+                        value={t.payroll?.jamMengajar?.jsjm !== undefined ? t.payroll?.jamMengajar?.jsjm : ''}
+                        onChange={(e) => handleInlineJsjmChange(t.id, e.target.value)}
+                        className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 font-bold focus:ring-2 focus:ring-purple-500 outline-none m-auto block shadow-sm transition-all disabled:opacity-75 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Jabatan Setara Jam Mengajar'}
+                        placeholder="0"
+                      />
                     </td>
                     <td className={`p-3 text-center font-bold text-base border border-slate-400 dark:border-slate-500 ${selisih < 0 ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {selisih > 0 ? `+${selisih}` : selisih}
                     </td>
                     <td className={`p-1.5 text-center border border-slate-400 dark:border-slate-500 align-middle ${isLateOften ? 'bg-red-100/50 dark:bg-red-900/30' : 'bg-red-50/30 dark:bg-red-900/10'}`}>
                       <div className="flex flex-col items-center justify-center gap-1 py-0.5">
-                        {readOnly ? (
-                          <span className={`font-bold ${isLateOften ? 'text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {t.payroll?.disiplin?.telat !== undefined && t.payroll?.disiplin?.telat !== '' ? t.payroll.disiplin.telat : 0}
-                          </span>
-                        ) : (
-                          <input
-                            type="number"
-                            min="0"
-                            value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0}
-                            onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
-                            className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
-                            title="Edit manual jumlah keterlambatan (dapat diubah bebas oleh Admin)"
-                            placeholder="0"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          min="0"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                          value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0}
+                          onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
+                          className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all disabled:opacity-75 disabled:cursor-not-allowed ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
+                          title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit manual jumlah keterlambatan (dapat diubah bebas oleh Admin)'}
+                          placeholder="0"
+                        />
                         {(() => {
                           const pInfo = teacherPresensiMap[t.id];
                           const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
@@ -1467,19 +1470,13 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
                           if (pLate > 0) {
                             if (pLate !== curLate) {
-                              if (readOnly) {
-                                return (
-                                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold whitespace-nowrap">
-                                    Presensi: {pLate}x
-                                  </span>
-                                );
-                              }
                               return (
                                 <button
                                   type="button"
+                                  disabled={readOnly}
                                   onClick={() => handleInlineTelatChange(t.id, pLate)}
-                                  className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer flex items-center gap-0.5 shadow-xs whitespace-nowrap"
-                                  title={`Presensi Guru mencatat ${pLate}x keterlambatan. Klik untuk langsung menerapkan nilai ini.`}
+                                  className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 px-1.5 py-0.5 rounded font-bold transition-colors cursor-pointer flex items-center gap-0.5 shadow-xs whitespace-nowrap disabled:opacity-55 disabled:cursor-not-allowed"
+                                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : `Presensi Guru mencatat ${pLate}x keterlambatan. Klik untuk langsung menerapkan nilai ini.`}
                                 >
                                   ⚡ Presensi: {pLate}x
                                 </button>
@@ -1505,22 +1502,21 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     <td className="p-3 text-center font-black text-emerald-700 dark:text-emerald-400 border border-slate-400 dark:border-slate-500 bg-emerald-50/50 dark:bg-emerald-900/20 text-lg">
                       {tepatWaktu}
                     </td>
-                    {!readOnly && (
-                      <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 md:sticky md:right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] no-print ${stickyBgClass}`}>
-                        <button
-                          onClick={() => handleOpenEdit(t)}
-                          className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto"
-                          title="Edit Manual Jam & Telat"
-                        >
-                          <Edit size={16} />
-                        </button>
-                      </td>
-                    )}
+                    <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 md:sticky md:right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] no-print ${stickyBgClass}`}>
+                      <button
+                        onClick={() => handleOpenEdit(t)}
+                        disabled={readOnly}
+                        className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto disabled:opacity-45 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Manual Jam & Telat'}
+                      >
+                        {readOnly ? <Lock size={15} /> : <Edit size={16} />}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={readOnly ? 38 : 39} className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan="39" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
           </table>

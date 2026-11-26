@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Activity, Calculator, CreditCard, Download, Edit,
-  History, Info, PlusCircle, Save, Search, Trash2,
+  History, Info, Lock, PlusCircle, Save, Search, Trash2,
   Upload, Wallet, X, FileSpreadsheet, Printer, Clock,
   CheckCircle2, Filter, AlertCircle, FileText
 } from 'lucide-react';
@@ -693,16 +693,17 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
             </div>
 
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
-              {!readOnly ? (
-                <button
-                  onClick={() => {
-                    setSelectedReceiptLoan(selectedLoanHistory);
-                  }}
-                  className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors border border-teal-200 dark:border-teal-700"
-                >
-                  <Printer size={14} /> Cetak Bukti Tanda Terima
-                </button>
-              ) : <div />}
+              <button
+                disabled={readOnly}
+                onClick={() => {
+                  if (readOnly) return;
+                  setSelectedReceiptLoan(selectedLoanHistory);
+                }}
+                className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors border border-teal-200 dark:border-teal-700 disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Bukti Tanda Terima'}
+              >
+                {readOnly ? <Lock size={13} /> : <Printer size={14} />} Cetak Bukti Tanda Terima
+              </button>
               <button onClick={() => setSelectedLoanHistory(null)} className="px-5 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-lg font-bold transition-colors text-xs shadow-sm">
                 Tutup
               </button>
@@ -927,21 +928,34 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
               />
             </div>
 
-            {!readOnly && (
-              <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto">
-                <button onClick={() => setIsAddModalOpen(true)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
-                  <PlusCircle size={14} /> <span>Tambah</span>
-                </button>
-                <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
-                <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex border border-slate-300 dark:border-slate-600">
-                  <Upload size={14} /> <span>Impor</span>
-                </button>
-                {/* 🪄 EKSPOR EXCEL RESMI (.xlsx) */}
-                <button onClick={handleExportExcel} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1.5 shadow-sm cursor-pointer flex" title="Unduh Rekap Format Excel Resmi (.xlsx)">
-                  <FileSpreadsheet size={14} /> <span>Excel (.xlsx)</span>
-                </button>
-              </div>
-            )}
+            <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto">
+              <button
+                disabled={readOnly}
+                onClick={() => !readOnly && setIsAddModalOpen(true)}
+                className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Tagihan Pinjaman'}
+              >
+                {readOnly ? <Lock size={13} /> : <PlusCircle size={14} />} <span>Tambah</span>
+              </button>
+              <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
+              <button
+                disabled={readOnly}
+                onClick={() => !readOnly && fileInputRef.current?.click()}
+                className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex border border-slate-300 dark:border-slate-600 disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Impor Pinjaman CSV/Excel'}
+              >
+                {readOnly ? <Lock size={13} /> : <Upload size={14} />} <span>Impor</span>
+              </button>
+              {/* 🪄 EKSPOR EXCEL RESMI (.xlsx) */}
+              <button
+                disabled={readOnly}
+                onClick={handleExportExcel}
+                className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1.5 shadow-sm cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Rekap Format Excel Resmi (.xlsx)'}
+              >
+                {readOnly ? <Lock size={13} /> : <FileSpreadsheet size={14} />} <span>Excel (.xlsx)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -979,24 +993,33 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
               </div>
 
               <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/50">
-                {!readOnly && (
-                  <button onClick={() => setSelectedReceiptLoan(loan)} className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors" title="Cetak Kwitansi">
-                    <Printer size={12} /> Kwitansi
-                  </button>
-                )}
+                <button
+                  disabled={readOnly}
+                  onClick={() => !readOnly && setSelectedReceiptLoan(loan)}
+                  className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Kwitansi'}
+                >
+                  {readOnly ? <Lock size={11} /> : <Printer size={12} />} Kwitansi
+                </button>
                 <button onClick={() => setSelectedLoanHistory(loan)} className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
                   <History size={12} /> Riwayat
                 </button>
-                {!readOnly && (
-                  <>
-                    <button onClick={() => { setEditForm({ teacherId: loan.teacherId, originalKet: loan.ket, ket: loan.ket, nominal: loan.nominal, totalPinjaman: loan.totalPinjaman, sisaHutang: loan.sisaHutang, tenorBulan: loan.tenorTotal }); setIsEditModalOpen(true); }} className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
-                      <Edit size={12} /> Edit
-                    </button>
-                    <button onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })} className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors">
-                      <Trash2 size={12} /> Hapus
-                    </button>
-                  </>
-                )}
+                <button
+                  disabled={readOnly}
+                  onClick={() => { if (readOnly) return; setEditForm({ teacherId: loan.teacherId, originalKet: loan.ket, ket: loan.ket, nominal: loan.nominal, totalPinjaman: loan.totalPinjaman, sisaHutang: loan.sisaHutang, tenorBulan: loan.tenorTotal }); setIsEditModalOpen(true); }}
+                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Pinjaman'}
+                >
+                  {readOnly ? <Lock size={11} /> : <Edit size={12} />} Edit
+                </button>
+                <button
+                  disabled={readOnly}
+                  onClick={() => !readOnly && setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
+                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Tagihan'}
+                >
+                  {readOnly ? <Lock size={11} /> : <Trash2 size={12} />} Hapus
+                </button>
               </div>
             </div>
           ))}
@@ -1065,15 +1088,14 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      {!readOnly && (
-                        <button
-                          onClick={() => setSelectedReceiptLoan(loan)}
-                          className="p-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors shadow-sm border border-emerald-100 dark:border-emerald-800"
-                          title="Cetak Kwitansi / Tanda Terima Kasbon"
-                        >
-                          <Printer size={15} />
-                        </button>
-                      )}
+                      <button
+                        disabled={readOnly}
+                        onClick={() => !readOnly && setSelectedReceiptLoan(loan)}
+                        className="p-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-md transition-colors shadow-sm border border-emerald-100 dark:border-emerald-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Kwitansi / Tanda Terima Kasbon'}
+                      >
+                        {readOnly ? <Lock size={14} /> : <Printer size={15} />}
+                      </button>
 
                       <button
                         onClick={() => setSelectedLoanHistory(loan)}
@@ -1083,44 +1105,44 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
                         <Activity size={15} />
                       </button>
 
-                      {!readOnly && (
-                        <>
-                          {/* Shortcut ke edit form potongan pegawai */}
-                          <button
-                            onClick={() => onEditGaji(loan.teacherId, 'potongan')}
-                            className="p-2 bg-blue-50 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-300 rounded-md transition-all shadow-sm border border-blue-200 dark:border-blue-700 hover:-translate-y-0.5"
-                            title="Buka Form Potongan Gaji Pegawai Ini"
-                          >
-                            <Calculator size={15} />
-                          </button>
+                      {/* Shortcut ke edit form potongan pegawai */}
+                      <button
+                        disabled={readOnly}
+                        onClick={() => !readOnly && onEditGaji(loan.teacherId, 'potongan')}
+                        className="p-2 bg-blue-50 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-800 text-blue-600 dark:text-blue-300 rounded-md transition-all shadow-sm border border-blue-200 dark:border-blue-700 hover:-translate-y-0.5 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Buka Form Potongan Gaji Pegawai Ini'}
+                      >
+                        {readOnly ? <Lock size={14} /> : <Calculator size={15} />}
+                      </button>
 
-                          <button
-                            onClick={() => {
-                              setEditForm({
-                                teacherId: loan.teacherId,
-                                originalKet: loan.ket,
-                                ket: loan.ket,
-                                nominal: loan.nominal,
-                                totalPinjaman: loan.totalPinjaman,
-                                sisaHutang: loan.sisaHutang,
-                                tenorBulan: loan.tenorTotal
-                              });
-                              setIsEditModalOpen(true);
-                            }}
-                            className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors shadow-sm border border-amber-100 dark:border-amber-800"
-                            title="Edit Sisa Saldo & Tenor Pinjaman"
-                          >
-                            <Edit size={15} />
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
-                            className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors shadow-sm border border-red-100 dark:border-red-800"
-                            title="Hapus Tagihan Permanen"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        disabled={readOnly}
+                        onClick={() => {
+                          if (readOnly) return;
+                          setEditForm({
+                            teacherId: loan.teacherId,
+                            originalKet: loan.ket,
+                            ket: loan.ket,
+                            nominal: loan.nominal,
+                            totalPinjaman: loan.totalPinjaman,
+                            sisaHutang: loan.sisaHutang,
+                            tenorBulan: loan.tenorTotal
+                          });
+                          setIsEditModalOpen(true);
+                        }}
+                        className="p-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-md transition-colors shadow-sm border border-amber-100 dark:border-amber-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Sisa Saldo & Tenor Pinjaman'}
+                      >
+                        {readOnly ? <Lock size={14} /> : <Edit size={15} />}
+                      </button>
+                      <button
+                        disabled={readOnly}
+                        onClick={() => !readOnly && setConfirmDelete({ isOpen: true, teacherId: loan.teacherId, ket: loan.ket })}
+                        className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md transition-colors shadow-sm border border-red-100 dark:border-red-800 disabled:opacity-45 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Tagihan Permanen'}
+                      >
+                        {readOnly ? <Lock size={14} /> : <Trash2 size={15} />}
+                      </button>
                     </div>
                   </td>
                 </tr>

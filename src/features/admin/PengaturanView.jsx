@@ -219,13 +219,28 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     });
   }, [dateFilteredLogs, logSearch, logStatusFilter]);
 
-  // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun yang Jauh Lebih Mudah Dikelola
+  // PENYEDERHANAAN MUTLAK: Sinkronisasi Akun Terintegrasi Cloud Settings + LocalStorage
   useEffect(() => {
-    // 1. Ambil data Admin/Kepsek dari memori lokal (bebas dari sinkronisasi awan)
-    const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
+    const cloudAdmins = Array.isArray(settings?.adminAccounts) && settings.adminAccounts.length > 0
+      ? settings.adminAccounts
+      : null;
+    let localAdmins = null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem('payedu_admin_accounts') || 'null');
+      if (Array.isArray(parsed) && parsed.length > 0) localAdmins = parsed;
+    } catch {
+      localAdmins = null;
+    }
+
+    const adminAccs = cloudAdmins || localAdmins || [
       { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
-      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
+      { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' },
+      { id: 'yayasan-1', name: 'Pengurus Yayasan', username: 'yayasan', password: simpleHash('Yayasan2014'), role: 'Yayasan' }
     ];
+
+    if (cloudAdmins) {
+      localStorage.setItem('payedu_admin_accounts', JSON.stringify(cloudAdmins));
+    }
 
     // 2. Petakan data Guru secara langsung dari database guru dengan urutan rapi dan status keaktifan
     const sortedTeachers = sortTeachersById(teachers);
@@ -251,7 +266,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     });
 
     setAccounts([...adminAccs, ...teacherAccounts]);
-  }, [teachers]);
+  }, [teachers, settings?.adminAccounts]);
 
   const [searchAcc, setSearchAcc] = useState('');
   const [accStatusFilter, setAccStatusFilter] = useState('AKTIF'); // 'AKTIF', 'ALL', 'ADMIN', 'RESIGN'
@@ -549,29 +564,46 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           showAlert(`Selesai! Password untuk ${modal.data?.name} berhasil diubah menjadi: ${passInput}`);
         }
       } else {
-        // SEDERHANA: Simpan Admin ke Local Storage terpisah
-        const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [
-          { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
-          { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' }
-        ];
+        // Sinkronkan Admin/Kepsek/Yayasan ke LocalStorage DAN Cloud Settings agar bisa login di HP/perangkat lain
+        let localAdmins = null;
+        try {
+          const parsed = JSON.parse(localStorage.getItem('payedu_admin_accounts') || 'null');
+          if (Array.isArray(parsed) && parsed.length > 0) localAdmins = parsed;
+        } catch {
+          localAdmins = null;
+        }
+        const adminAccs = (Array.isArray(settings?.adminAccounts) && settings.adminAccounts.length > 0 ? settings.adminAccounts : null)
+          || localAdmins
+          || [
+            { id: 'admin-1', name: 'Administrator System', username: 'Akbar', password: simpleHash('Boy2014'), role: 'Admin' },
+            { id: 'kepsek-1', name: 'Kepala Sekolah', username: 'kepsek', password: simpleHash('Ilwani2010'), role: 'Kepala Sekolah' },
+            { id: 'yayasan-1', name: 'Pengurus Yayasan', username: 'yayasan', password: simpleHash('Yayasan2014'), role: 'Yayasan' }
+          ];
 
+        const cleanName = String(formData.get('name') || '').trim();
+        const cleanUsername = String(formData.get('username') || '').trim();
+        const trimmedPass = String(passInput || '').trim();
         const newData = {
-          name: formData.get('name'),
-          username: formData.get('username'),
+          name: cleanName,
+          username: cleanUsername,
           role: roleInput,
-          password: passInput ? simpleHash(passInput) : (modal.data?.password || simpleHash('12345678'))
+          password: trimmedPass ? simpleHash(trimmedPass) : (modal.data?.password || simpleHash('12345678'))
         };
 
         let updatedAdmins;
         if (modal.type === 'add') {
           updatedAdmins = [{ id: generateUniqueId('acc-'), ...newData }, ...adminAccs];
         } else {
-          updatedAdmins = adminAccs.map(a => a.id === modal.data.id ? { ...a, ...newData } : a);
+          const existsInList = adminAccs.some(a => a.id === modal.data.id);
+          updatedAdmins = existsInList
+            ? adminAccs.map(a => a.id === modal.data.id ? { ...a, ...newData } : a)
+            : [{ id: modal.data.id || generateUniqueId('acc-'), ...newData }, ...adminAccs];
         }
 
         localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
+        setSettings(prev => ({ ...prev, adminAccounts: updatedAdmins, lastModified: Date.now() }));
         setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
-        showAlert('Data akses Admin berhasil disimpan.');
+        showAlert('Data akses berhasil disimpan dan disinkronkan ke Cloud untuk semua perangkat.');
       }
       setIsSaving(false);
       setModal({ isOpen: false, type: null, data: null });
@@ -594,11 +626,14 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         setModal({ isOpen: false, type: null, data: null });
         return;
       }
-      const adminAccs = JSON.parse(localStorage.getItem('payedu_admin_accounts')) || [];
+      const adminAccs = (Array.isArray(settings?.adminAccounts) && settings.adminAccounts.length > 0)
+        ? settings.adminAccounts
+        : (JSON.parse(localStorage.getItem('payedu_admin_accounts') || 'null') || []);
       const updatedAdmins = adminAccs.filter(a => a.id !== modal.data.id);
       localStorage.setItem('payedu_admin_accounts', JSON.stringify(updatedAdmins));
+      setSettings(prev => ({ ...prev, adminAccounts: updatedAdmins, lastModified: Date.now() }));
       setAccounts([...updatedAdmins, ...accounts.filter(a => a.role === 'Guru')]);
-      showAlert('Akun Admin berhasil dihapus dari sistem.');
+      showAlert('Akun berhasil dihapus dari sistem dan Cloud.');
     }
     setModal({ isOpen: false, type: null, data: null });
   };
@@ -715,6 +750,9 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
             setAccounts(rawAccounts);
             const adminAccs = rawAccounts.filter(a => a.role !== 'Guru');
             localStorage.setItem('payedu_admin_accounts', JSON.stringify(adminAccs));
+            cleanSettings = { ...cleanSettings, adminAccounts: adminAccs, lastModified: Date.now() };
+            setSettings(cleanSettings);
+            safeStorageSet('payedu_settings', cleanSettings);
           }
 
           // Ekstraksi Arsip Gaji

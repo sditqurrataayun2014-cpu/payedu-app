@@ -1060,18 +1060,32 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                   </span>
                 </div>
 
-                {!readOnly && (settings?.payrollStatus === 'Draft' || !settings?.payrollStatus) && (
-                  <button onClick={handleAjukanApproval} className="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm">
-                    <Send size={16} /> Ajukan Approval
+                {(settings?.payrollStatus === 'Draft' || !settings?.payrollStatus) && (
+                  <button
+                    onClick={handleAjukanApproval}
+                    disabled={readOnly}
+                    className="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                    title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Ajukan daftar gaji ke Kepala Sekolah untuk persetujuan'}
+                  >
+                    {readOnly ? <Lock size={16} /> : <Send size={16} />} Ajukan Approval
                   </button>
                 )}
-                {!readOnly && settings?.payrollStatus === 'Pending' && (
-                  <button disabled className="flex-1 md:flex-none justify-center bg-amber-100 text-amber-500 dark:bg-amber-900/20 dark:text-amber-600 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm cursor-not-allowed opacity-70">
+                {settings?.payrollStatus === 'Pending' && (
+                  <button
+                    disabled
+                    className="flex-1 md:flex-none justify-center bg-amber-100 text-amber-500 dark:bg-amber-900/20 dark:text-amber-600 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm cursor-not-allowed opacity-70"
+                    title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Menunggu persetujuan Kepala Sekolah'}
+                  >
                     <Lock size={16} /> Pending Kepsek
                   </button>
                 )}
-                {!readOnly && settings?.payrollStatus === 'Approved' && (
-                  <button onClick={handleArchive} disabled={isArchiving} className="flex-1 md:flex-none justify-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm disabled:opacity-50">
+                {settings?.payrollStatus === 'Approved' && (
+                  <button
+                    onClick={handleArchive}
+                    disabled={readOnly || isArchiving}
+                    className="flex-1 md:flex-none justify-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                    title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tutup Buku & Arsipkan Periode Gaji'}
+                  >
                     <Lock size={16} /> {isArchiving ? 'Memproses...' : 'Tutup Buku & Arsipkan'}
                   </button>
                 )}
@@ -1104,32 +1118,47 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                 </select>
               </div>
 
-              {!readOnly && (
-                <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
-                  <button onClick={handleKirimNotifMassal} className="justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex">
-                    <BellRing size={14} /> <span>Notif</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onOpenAuditLog) {
-                        onOpenAuditLog('finansial');
-                      }
-                    }}
-                    className="justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors items-center gap-1 cursor-pointer flex"
-                    title="Buka Jejak Audit Finansial & Mutasi Gaji di Pengaturan"
-                  >
-                    <History size={14} /> <span>Audit</span>
-                  </button>
-                  <button onClick={handleExportExcelPure} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex" title="Unduh Rekap Gaji Lengkap Format Excel (.xlsx)">
-                    <FileSpreadsheet size={14} /> <span>Excel (.xlsx)</span>
-                  </button>
-                  <button onClick={handleMassPrint} disabled={isMassPrinting} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-70 disabled:cursor-not-allowed">
-                    {isMassPrinting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Printer size={14} />}
-                    <span>Cetak</span>
-                  </button>
-                </div>
-              )}
+              <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
+                <button
+                  onClick={handleKirimNotifMassal}
+                  disabled={readOnly}
+                  className="justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Kirim Notifikasi Massal ke Guru'}
+                >
+                  {readOnly ? <Lock size={13} /> : <BellRing size={14} />} <span>Notif</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => {
+                    if (readOnly) return;
+                    if (onOpenAuditLog) {
+                      onOpenAuditLog('finansial');
+                    }
+                  }}
+                  className="justify-center bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-400 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors items-center gap-1 cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Buka Jejak Audit Finansial & Mutasi Gaji di Pengaturan'}
+                >
+                  {readOnly ? <Lock size={13} /> : <History size={14} />} <span>Audit</span>
+                </button>
+                <button
+                  onClick={handleExportExcelPure}
+                  disabled={readOnly}
+                  className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Rekap Gaji Lengkap Format Excel (.xlsx)'}
+                >
+                  {readOnly ? <Lock size={13} /> : <FileSpreadsheet size={14} />} <span>Excel (.xlsx)</span>
+                </button>
+                <button
+                  onClick={handleMassPrint}
+                  disabled={readOnly || isMassPrinting}
+                  className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors items-center gap-1 shadow-sm cursor-pointer flex disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Slip Gaji Massal'}
+                >
+                  {isMassPrinting ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : readOnly ? <Lock size={13} /> : <Printer size={14} />}
+                  <span>Cetak</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1225,14 +1254,14 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                           >
                             <FileText size={14} /> Slip Gaji
                           </button>
-                          {!readOnly && (
-                            <button
-                              onClick={() => onEditGaji(t.id)}
-                              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-                            >
-                              <Edit size={14} /> Edit Gaji
-                            </button>
-                          )}
+                          <button
+                            onClick={() => onEditGaji(t.id)}
+                            disabled={readOnly}
+                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Komponen Gaji'}
+                          >
+                            {readOnly ? <Lock size={13} /> : <Edit size={14} />} Edit Gaji
+                          </button>
                         </div>
                         {t.payroll?.isConfirmed && (
                           <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">
@@ -1403,15 +1432,14 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                                 >
                                   <FileText size={15} />
                                 </button>
-                                {!readOnly && (
-                                  <button
-                                    onClick={() => onEditGaji(t.id)}
-                                    className="text-xs bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 p-1.5 rounded-md font-medium transition-colors"
-                                    title="Edit Komponen Gaji"
-                                  >
-                                    <Edit size={15} />
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => onEditGaji(t.id)}
+                                  disabled={readOnly}
+                                  className="text-xs bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 p-1.5 rounded-md font-medium transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Komponen Gaji'}
+                                >
+                                  {readOnly ? <Lock size={15} /> : <Edit size={15} />}
+                                </button>
 
                                 {/* 🪄 TAMBAHAN: Tombol Riwayat Gaji Individu */}
                                 <button
@@ -1425,16 +1453,14 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                                   <History size={15} />
                                 </button>
 
-                                {!readOnly && (
-                                  <button
-                                    onClick={() => handleKirimNotif(t.id)}
-                                    disabled={(t.payroll?.isNotified && !t.payroll?.isConfirmed) || settings?.payrollStatus !== 'Approved'}
-                                    className={`text-xs p-1.5 rounded-md font-medium transition-colors ${(t.payroll?.isNotified && !t.payroll?.isConfirmed) ? 'bg-indigo-100/50 text-indigo-300 dark:bg-indigo-900/20 dark:text-indigo-700 cursor-not-allowed' : t.payroll?.isConfirmed ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : settings?.payrollStatus !== 'Approved' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 cursor-not-allowed' : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400'}`}
-                                    title={settings?.payrollStatus !== 'Approved' ? "Gaji Belum Disetujui" : t.payroll?.isConfirmed ? "Gaji Telah Dikonfirmasi" : (t.payroll?.isNotified ? "Menunggu Konfirmasi Guru" : "Kirim Notifikasi Transfer")}
-                                  >
-                                    {settings?.payrollStatus !== 'Approved' ? <Lock size={15} /> : t.payroll?.isConfirmed ? <CheckCircle size={15} /> : <Bell size={15} />}
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => handleKirimNotif(t.id)}
+                                  disabled={readOnly || (t.payroll?.isNotified && !t.payroll?.isConfirmed) || settings?.payrollStatus !== 'Approved'}
+                                  className={`text-xs p-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${(t.payroll?.isNotified && !t.payroll?.isConfirmed) ? 'bg-indigo-100/50 text-indigo-300 dark:bg-indigo-900/20 dark:text-indigo-700 cursor-not-allowed' : t.payroll?.isConfirmed ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : settings?.payrollStatus !== 'Approved' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 cursor-not-allowed' : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400'}`}
+                                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : settings?.payrollStatus !== 'Approved' ? "Gaji Belum Disetujui" : t.payroll?.isConfirmed ? "Gaji Telah Dikonfirmasi" : (t.payroll?.isNotified ? "Menunggu Konfirmasi Guru" : "Kirim Notifikasi Transfer")}
+                                >
+                                  {(readOnly || settings?.payrollStatus !== 'Approved') ? <Lock size={15} /> : t.payroll?.isConfirmed ? <CheckCircle size={15} /> : <Bell size={15} />}
+                                </button>
                               </div>
                               {/* Indikator Status Transfer */}
                               {t.payroll?.isConfirmed ? (
@@ -1520,19 +1546,18 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
                 </div>
 
                 {/* Tombol Ekspor Matriks ke Excel */}
-                {!readOnly && (
-                  <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
-                    <button
-                      type="button"
-                      onClick={handleExportMatrixExcel}
-                      className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer active:scale-95"
-                      title="Unduh seluruh matriks komparasi lintas bulan ke dalam format Excel murni (.xlsx)"
-                    >
-                      <FileSpreadsheet size={16} />
-                      <span>Unduh Matriks Excel (.xlsx)</span>
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={handleExportMatrixExcel}
+                    disabled={readOnly}
+                    className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed disabled:active:scale-100"
+                    title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh seluruh matriks komparasi lintas bulan ke dalam format Excel murni (.xlsx)'}
+                  >
+                    {readOnly ? <Lock size={15} /> : <FileSpreadsheet size={16} />}
+                    <span>Unduh Matriks Excel (.xlsx)</span>
+                  </button>
+                </div>
               </div>
 
               {/* KARTU STATISTIK RINGKASAN MATRIKS */}
@@ -1754,23 +1779,30 @@ export default function RekapGajiView({ teachers, setTeachers, onEditGaji, setti
               </div>
             </div>
             <div className="no-print p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              {!readOnly && (
-                <>
-                  <button
-                    onClick={() => {
-                      document.body.classList.add('printing-slip');
-                      window.print();
-                      setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
-                    }}
-                    className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
-                  >
-                    <Printer size={18} /> Print
-                  </button>
-                  <button onClick={(e) => exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`, e.currentTarget)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer">
-                    <Download size={18} /> Unduh PDF
-                  </button>
-                </>
-              )}
+              <button
+                disabled={readOnly}
+                onClick={() => {
+                  if (readOnly) return;
+                  document.body.classList.add('printing-slip');
+                  window.print();
+                  setTimeout(() => document.body.classList.remove('printing-slip'), 1000);
+                }}
+                className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Slip Gaji'}
+              >
+                {readOnly ? <Lock size={16} /> : <Printer size={18} />} Print
+              </button>
+              <button
+                disabled={readOnly}
+                onClick={(e) => {
+                  if (readOnly) return;
+                  exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`, e.currentTarget);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-55 disabled:cursor-not-allowed cursor-pointer"
+                title={readOnly ? 'Terkunci (Unduh PDF dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Slip Gaji PDF'}
+              >
+                {readOnly ? <Lock size={16} /> : <Download size={18} />} Unduh PDF
+              </button>
               <button onClick={() => setSelectedSlip(null)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors cursor-pointer">
                 Tutup
               </button>

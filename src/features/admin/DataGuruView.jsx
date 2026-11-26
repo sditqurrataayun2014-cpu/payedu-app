@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Download, Edit, Eye, PlusCircle, Save, Search,
+  Download, Edit, Eye, Lock, PlusCircle, Save, Search,
   Sparkles, Trash2, Upload, Users, X
 } from 'lucide-react';
 
@@ -658,27 +658,41 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
               />
             </div>
 
-            {!readOnly && (
-              <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
-                <button
-                  type="button"
-                  onClick={handleCleanDuplicates}
-                  className="justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
-                  title="Pindai dan bersihkan data ganda / duplikat"
-                >
-                  <Sparkles size={14} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan</span><span className="sm:hidden">Bersih</span>
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                  <Upload size={14} /> <span>Impor</span>
-                </button>
-                <button onClick={handleExportCSV} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                  <Download size={14} /> <span>Ekspor</span>
-                </button>
-                <button onClick={() => openModal('add', null)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                  <PlusCircle size={14} /> <span>Tambah</span>
-                </button>
-              </div>
-            )}
+            <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={handleCleanDuplicates}
+                className="justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Pindai dan bersihkan data ganda / duplikat'}
+              >
+                {readOnly ? <Lock size={13} /> : <Sparkles size={14} className="text-amber-600 dark:text-amber-400" />} <span className="hidden sm:inline">Bersihkan</span><span className="sm:hidden">Bersih</span>
+              </button>
+              <button
+                disabled={readOnly}
+                onClick={() => !readOnly && fileInputRef.current?.click()}
+                className="justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Impor Data Pegawai'}
+              >
+                {readOnly ? <Lock size={13} /> : <Upload size={14} />} <span>Impor</span>
+              </button>
+              <button
+                disabled={readOnly}
+                onClick={handleExportCSV}
+                className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Ekspor Data CSV'}
+              >
+                {readOnly ? <Lock size={13} /> : <Download size={14} />} <span>Ekspor</span>
+              </button>
+              <button
+                disabled={readOnly}
+                onClick={() => openModal('add', null)}
+                className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Pegawai Baru'}
+              >
+                {readOnly ? <Lock size={13} /> : <PlusCircle size={14} />} <span>Tambah</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -710,16 +724,12 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                 <button onClick={() => openModal('view', t)} className="px-2.5 py-1 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1">
                   <Eye size={13} /> Detail
                 </button>
-                {!readOnly && (
-                  <>
-                    <button onClick={() => openModal('edit', t)} className="px-2.5 py-1 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                      <Edit size={13} /> Edit
-                    </button>
-                    <button onClick={() => openModal('delete', t)} className="px-2.5 py-1 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                      <Trash2 size={13} /> Hapus
-                    </button>
-                  </>
-                )}
+                <button disabled={readOnly} onClick={() => openModal('edit', t)} className="px-2.5 py-1 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Data'}>
+                  {readOnly ? <Lock size={12} /> : <Edit size={13} />} Edit
+                </button>
+                <button disabled={readOnly} onClick={() => openModal('delete', t)} className="px-2.5 py-1 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Data'}>
+                  {readOnly ? <Lock size={12} /> : <Trash2 size={13} />} Hapus
+                </button>
               </div>
             </div>
           ))}
@@ -781,16 +791,12 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                       <button onClick={() => openModal('view', t)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-lg transition-colors shadow-sm" title="Lihat Detail">
                         <Eye size={16} />
                       </button>
-                      {!readOnly && (
-                        <>
-                          <button onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors shadow-sm" title="Edit Data">
-                            <Edit size={16} />
-                          </button>
-                          <button onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors shadow-sm" title="Hapus Data">
-                            <Trash2 size={16} />
-                          </button>
-                        </>
-                      )}
+                      <button disabled={readOnly} onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors shadow-sm disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Edit Data'}>
+                        {readOnly ? <Lock size={15} /> : <Edit size={16} />}
+                      </button>
+                      <button disabled={readOnly} onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors shadow-sm disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Data'}>
+                        {readOnly ? <Lock size={15} /> : <Trash2 size={16} />}
+                      </button>
                     </div>
                   </td>
                 </tr>

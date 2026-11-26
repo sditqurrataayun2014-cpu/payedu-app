@@ -597,28 +597,31 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
               <SlipDocument teacher={selectedSlip} bulan={selectedArchive.periode} settings={settings} />
             </div>
             <div className="p-3 sm:p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap justify-end gap-2 shrink-0">
-              {!readOnly && (
-                <>
-                  <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors">
-                    <Printer size={16} /> Print
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setIsExportingPDF(true);
-                      try {
-                        await exportToPDF('printable-area', `Arsip_Slip_${selectedSlip.name.replace(/\s+/g, '_')}_${selectedArchive.periode}.pdf`);
-                      } finally {
-                        setIsExportingPDF(false);
-                      }
-                    }}
-                    disabled={isExportingPDF}
-                    className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16} />}
-                    {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
-                  </button>
-                </>
-              )}
+              <button
+                disabled={readOnly}
+                onClick={() => !readOnly && window.print()}
+                className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Cetak Slip Arsip'}
+              >
+                {readOnly ? <Lock size={15} /> : <Printer size={16} />} Print
+              </button>
+              <button
+                onClick={async () => {
+                  if (readOnly) return;
+                  setIsExportingPDF(true);
+                  try {
+                    await exportToPDF('printable-area', `Arsip_Slip_${selectedSlip.name.replace(/\s+/g, '_')}_${selectedArchive.periode}.pdf`);
+                  } finally {
+                    setIsExportingPDF(false);
+                  }
+                }}
+                disabled={readOnly || isExportingPDF}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Unduh PDF dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Slip PDF'}
+              >
+                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : readOnly ? <Lock size={15} /> : <Download size={16} />}
+                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
+              </button>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm font-medium transition-colors">
                 Tutup
               </button>
@@ -718,15 +721,14 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                 </select>
               </div>
 
-              {!readOnly && (
-                <button
-                  onClick={handleExportComparisonExcel}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-                  title="Unduh Hasil Audit Format Excel (.xlsx)"
-                >
-                  <FileSpreadsheet size={15} /> <span>Excel (.xlsx)</span>
-                </button>
-              )}
+              <button
+                onClick={handleExportComparisonExcel}
+                disabled={readOnly}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0 disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Hasil Audit Format Excel (.xlsx)'}
+              >
+                {readOnly ? <Lock size={14} /> : <FileSpreadsheet size={15} />} <span>Excel (.xlsx)</span>
+              </button>
             </div>
           </div>
 
@@ -916,16 +918,24 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                   className="w-full pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-xs"
                 />
               </div>
-              {!readOnly && (
-                <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
-                  <button onClick={handleBackupYearly} className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs">
-                    <Download size={13} /> Backup {activeYear}
-                  </button>
-                  <button onClick={() => setConfirmPurge(true)} className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-xs">
-                    <Trash2 size={13} /> Bersihkan Server
-                  </button>
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
+                <button
+                  onClick={handleBackupYearly}
+                  disabled={readOnly}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Backup data tahun ini'}
+                >
+                  {readOnly ? <Lock size={13} /> : <Download size={13} />} Backup {activeYear}
+                </button>
+                <button
+                  onClick={() => !readOnly && setConfirmPurge(true)}
+                  disabled={readOnly}
+                  className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-55 disabled:cursor-not-allowed"
+                  title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Bersihkan data lama dari server'}
+                >
+                  {readOnly ? <Lock size={13} /> : <Trash2 size={13} />} Bersihkan Server
+                </button>
+              </div>
             </div>
           </div>
 
@@ -944,11 +954,14 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-lg sm:rounded-xl flex items-center justify-center">
                         <Archive size={20} />
                       </div>
-                      {!readOnly && (
-                        <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen 1 Bulan Ini">
-                          <Trash2 size={15} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDeleteArchive(arc.id)}
+                        disabled={readOnly}
+                        className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Permanen 1 Bulan Ini'}
+                      >
+                        {readOnly ? <Lock size={14} /> : <Trash2 size={15} />}
+                      </button>
                     </div>
                     <h4 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{arc.periode}</h4>
                     <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 mb-3 sm:mb-5 font-medium">Diarsipkan: {arc.dateArchived}</p>
@@ -968,15 +981,14 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <button onClick={() => { setSelectedArchive(arc); setDetailSearch(''); }} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-xs">
                         Buka Arsip
                       </button>
-                      {!readOnly && (
-                        <button
-                          onClick={() => exportArchiveToExcel({ archive: arc, settings })}
-                          className="p-1.5 sm:p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg transition-colors shadow-xs"
-                          title="Unduh Excel (.xlsx)"
-                        >
-                          <FileSpreadsheet size={16} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => !readOnly && exportArchiveToExcel({ archive: arc, settings })}
+                        disabled={readOnly}
+                        className="p-1.5 sm:p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Excel (.xlsx)'}
+                      >
+                        {readOnly ? <Lock size={15} /> : <FileSpreadsheet size={16} />}
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1017,26 +1029,24 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                 />
               </div>
 
-              {!readOnly && (
-                <>
-                  {/* 🪄 TOMBOL ROLLBACK TUTUP BUKU (KHUSUS KEPSEK) */}
-                  <button
-                    onClick={() => setIsRollbackModalOpen(true)}
-                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700 px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-                    title="Batalkan Tutup Buku & Kembalikan ke Draft (Otorisasi Kepala Sekolah)"
-                  >
-                    <Unlock size={14} /> Buka Kunci (Rollback)
-                  </button>
+              {/* 🪄 TOMBOL ROLLBACK TUTUP BUKU (KHUSUS KEPSEK) */}
+              <button
+                onClick={() => !readOnly && setIsRollbackModalOpen(true)}
+                disabled={readOnly}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700 px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Batalkan Tutup Buku & Kembalikan ke Draft (Otorisasi Kepala Sekolah)'}
+              >
+                {readOnly ? <Lock size={14} /> : <Unlock size={14} />} Buka Kunci (Rollback)
+              </button>
 
-                  <button
-                    onClick={() => exportArchiveToExcel({ archive: selectedArchive, settings })}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-                    title="Unduh Rekap Arsip Gaji Format Excel (.xlsx)"
-                  >
-                    <FileSpreadsheet size={14} /> Unduh Excel (.xlsx)
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => !readOnly && exportArchiveToExcel({ archive: selectedArchive, settings })}
+                disabled={readOnly}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Ekspor dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh Rekap Arsip Gaji Format Excel (.xlsx)'}
+              >
+                {readOnly ? <Lock size={14} /> : <FileSpreadsheet size={14} />} Unduh Excel (.xlsx)
+              </button>
             </div>
           </div>
 

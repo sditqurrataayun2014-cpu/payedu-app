@@ -270,6 +270,10 @@ export default function App() {
           const cleanArchives = deduplicateArchives(serverArchives);
 
           // 🪄 PERBAIKAN MUTLAK: Guru & akun Read-Only (Yayasan) tidak pernah memicu banner konflik
+          if (Array.isArray(serverSettings?.adminAccounts) && serverSettings.adminAccounts.length > 0) {
+            safeStorageSet('payedu_admin_accounts', serverSettings.adminAccounts);
+          }
+
           if (!user || isTeacherRole(user.role) || isReadOnlyRole(user.role)) {
             setGeneralSettings(serverSettings);
             setTeachers(cleanTeachers);
@@ -323,11 +327,27 @@ export default function App() {
           let finalTeachers = serverTeachers;
           let finalArchives = serverArchives;
 
+          const localAdminAccs = safeStorageGet('payedu_admin_accounts', []);
+          const needsAdminAccMigration =
+            canMutateCloud(user) &&
+            (!Array.isArray(finalSettings?.adminAccounts) || finalSettings.adminAccounts.length === 0) &&
+            Array.isArray(localAdminAccs) &&
+            localAdminAccs.length > 0;
+
+          if (Array.isArray(finalSettings?.adminAccounts) && finalSettings.adminAccounts.length > 0) {
+            safeStorageSet('payedu_admin_accounts', finalSettings.adminAccounts);
+          } else if (needsAdminAccMigration) {
+            finalSettings = { ...finalSettings, adminAccounts: localAdminAccs, lastModified: Date.now() };
+          }
+
           // 🛡️ ANTI-WIPEOUT: Hanya ADMIN/KEPSEK yang boleh push SYNC_ALL ke cloud! Guru & Yayasan Read-Only tidak pernah push SYNC_ALL!
-          if (canMutateCloud(user) && (isLocalNewer || isServerTeachersEmpty)) {
+          if (canMutateCloud(user) && (isLocalNewer || isServerTeachersEmpty || needsAdminAccMigration)) {
             console.log("🛡️ Proteksi Sinkronisasi: Mempertahankan data lokal Admin yang lebih baru & auto-push ke Supabase Cloud");
             if (isLocalNewer && localSettings) {
-              finalSettings = { ...serverSettings, ...localSettings };
+              finalSettings = { ...finalSettings, ...localSettings };
+              if (needsAdminAccMigration && (!Array.isArray(finalSettings.adminAccounts) || finalSettings.adminAccounts.length === 0)) {
+                finalSettings.adminAccounts = localAdminAccs;
+              }
             }
             if (isServerTeachersEmpty || (isLocalNewer && localTeachers && localTeachers.length > 0)) {
               finalTeachers = localTeachers;
@@ -337,11 +357,16 @@ export default function App() {
             }
 
             // Segera dorong data lokal terbaru ke Supabase agar tersimpan permanen di cloud
-            pushToSupabase('SYNC_ALL', {
-              settings: finalSettings,
-              teachers: finalTeachers,
-              archives: finalArchives
-            }).catch(e => console.warn("Auto-sync initial cloud push:", e));
+            if (isLocalNewer || isServerTeachersEmpty) {
+              pushToSupabase('SYNC_ALL', {
+                settings: finalSettings,
+                teachers: finalTeachers,
+                archives: finalArchives
+              }).catch(e => console.warn("Auto-sync initial cloud push:", e));
+            } else if (needsAdminAccMigration) {
+              pushToSupabase('SAVE_SETTINGS', finalSettings)
+                .catch(e => console.warn("Auto-sync adminAccounts cloud push:", e));
+            }
           }
 
           const cleanTeachers = sanitizeTeacherList(finalTeachers);
@@ -496,6 +521,9 @@ export default function App() {
               if (newSettings) {
                 setGeneralSettings(newSettings);
                 safeStorageSet('payedu_settings', newSettings);
+                if (Array.isArray(newSettings?.adminAccounts) && newSettings.adminAccounts.length > 0) {
+                  safeStorageSet('payedu_admin_accounts', newSettings.adminAccounts);
+                }
               }
             });
           }
@@ -577,6 +605,22 @@ export default function App() {
           lastSavedLogsRef.current = JSON.stringify(logs);
         }
       }).catch(e => console.warn('[Fetch Admin Logs] Warning:', e));
+
+      // Migrasi otomatis akun Yayasan/Admin lokal ke Supabase Cloud agar bisa login di semua HP/perangkat
+      if (isDataLoaded) {
+        const currentSettings = safeStorageGet('payedu_settings', defaultGeneralSettings);
+        const localAdminAccs = safeStorageGet('payedu_admin_accounts', []);
+        if ((!Array.isArray(currentSettings?.adminAccounts) || currentSettings.adminAccounts.length === 0) && Array.isArray(localAdminAccs) && localAdminAccs.length > 0) {
+          const payload = { ...currentSettings, adminAccounts: localAdminAccs, lastModified: Date.now() };
+          pushToSupabase('SAVE_SETTINGS', payload)
+            .then(() => {
+              lastSavedSettingsRef.current = JSON.stringify({ ...payload, lastModified: 0 });
+              setGeneralSettings(payload);
+              safeStorageSet('payedu_settings', payload);
+            })
+            .catch(e => console.warn('[Sync AdminAccounts] Warning:', e));
+        }
+      }
     }
   }, [user, isDataLoaded, syncLatestPresensi]);
 

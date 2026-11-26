@@ -349,28 +349,31 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
               <SlipDocument teacher={selectedSlip} bulan={bulan} settings={settings} />
             </div>
             <div className="p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex justify-end gap-3 shrink-0">
-              {!readOnly && (
-                <>
-                  <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors">
-                    <Printer size={18} /> Print
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setIsExportingPDF(true);
-                      try {
-                        await exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`);
-                      } finally {
-                        setIsExportingPDF(false);
-                      }
-                    }}
-                    disabled={isExportingPDF}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={18} />}
-                    {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
-                  </button>
-                </>
-              )}
+              <button
+                disabled={readOnly}
+                onClick={() => !readOnly && window.print()}
+                className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Cetak dinonaktifkan untuk Read-Only Yayasan)' : 'Print Slip'}
+              >
+                {readOnly ? <Lock size={16} /> : <Printer size={18} />} Print
+              </button>
+              <button
+                onClick={async () => {
+                  if (readOnly) return;
+                  setIsExportingPDF(true);
+                  try {
+                    await exportToPDF('printable-area', `Slip_Gaji_${selectedSlip.name.replace(/\s+/g, '_')}_${bulan}.pdf`);
+                  } finally {
+                    setIsExportingPDF(false);
+                  }
+                }}
+                disabled={readOnly || isExportingPDF}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 shadow-sm transition-colors disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Unduh PDF dinonaktifkan untuk Read-Only Yayasan)' : 'Unduh PDF'}
+              >
+                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : readOnly ? <Lock size={16} /> : <Download size={18} />}
+                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
+              </button>
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors">
                 Tutup
               </button>
@@ -462,13 +465,16 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
             </div>
 
             {/* 🪄 TOMBOL TRIGGER POTONGAN MASSAL */}
-            {!readOnly && (
-              <div className="w-full md:w-auto flex justify-end">
-                <button onClick={() => setIsMassPotonganOpen(true)} className="w-full sm:w-auto bg-red-50 hover:bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors focus:ring-2 focus:ring-red-500 outline-none">
-                  <Trash size={16} /> Potongan Massal
-                </button>
-              </div>
-            )}
+            <div className="w-full md:w-auto flex justify-end">
+              <button
+                onClick={() => !readOnly && setIsMassPotonganOpen(true)}
+                disabled={readOnly}
+                className="w-full sm:w-auto bg-red-50 hover:bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors focus:ring-2 focus:ring-red-500 outline-none disabled:opacity-55 disabled:cursor-not-allowed"
+                title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Potongan Massal'}
+              >
+                {readOnly ? <Lock size={15} /> : <Trash size={16} />} Potongan Massal
+              </button>
+            </div>
           </div>
 
           {/* List Pegawai */}
@@ -597,10 +603,10 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                                 />
                               </div>
                             </div>
-                            {!readOnly && <button onClick={() => handleRemoveArrayItem(t.id, 'jabatans', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16} /></button>}
+                            <button disabled={readOnly} onClick={() => handleRemoveArrayItem(t.id, 'jabatans', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Jabatan'}><Trash2 size={16} /></button>
                           </div>
                         ))}
-                        {!readOnly && <button onClick={() => handleAddArrayItem(t.id, 'jabatans', { kategori: 'Staff', detail: '', kinerja: 'Baik', nominal: 0 })} className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800"><PlusCircle size={14} /> Tambah Jabatan</button>}
+                        <button disabled={readOnly} onClick={() => handleAddArrayItem(t.id, 'jabatans', { kategori: 'Staff', detail: '', kinerja: 'Baik', nominal: 0 })} className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Jabatan'}>{readOnly ? <Lock size={12} /> : <PlusCircle size={14} />} Tambah Jabatan</button>
                       </div>
                     )}
 
@@ -681,10 +687,10 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                                 />
                               </div>
                             </div>
-                            {!readOnly && <button onClick={() => handleRemoveArrayItem(t.id, 'kompetensi', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16} /></button>}
+                            <button disabled={readOnly} onClick={() => handleRemoveArrayItem(t.id, 'kompetensi', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Kompetensi'}><Trash2 size={16} /></button>
                           </div>
                         ))}
-                        {!readOnly && <button onClick={() => handleAddArrayItem(t.id, 'kompetensi', { bidang: '', level: 'Cukup Ahli', nominal: 0 })} className="text-xs font-bold text-amber-600 flex items-center gap-1"><PlusCircle size={14} /> Tambah Kompetensi</button>}
+                        <button disabled={readOnly} onClick={() => handleAddArrayItem(t.id, 'kompetensi', { bidang: '', level: 'Cukup Ahli', nominal: 0 })} className="text-xs font-bold text-amber-600 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Kompetensi'}>{readOnly ? <Lock size={12} /> : <PlusCircle size={14} />} Tambah Kompetensi</button>
                       </div>
                     )}
 
@@ -782,10 +788,10 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                                 />
                               </div>
                             </div>
-                            {!readOnly && <button onClick={() => handleRemoveArrayItem(t.id, 'insentifTambahan', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16} /></button>}
+                            <button disabled={readOnly} onClick={() => handleRemoveArrayItem(t.id, 'insentifTambahan', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Insentif'}><Trash2 size={16} /></button>
                           </div>
                         ))}
-                        {!readOnly && <button onClick={() => handleAddArrayItem(t.id, 'insentifTambahan', { ket: '', nominal: 0 })} className="text-xs font-bold text-emerald-600 flex items-center gap-1"><PlusCircle size={14} /> Tambah Insentif</button>}
+                        <button disabled={readOnly} onClick={() => handleAddArrayItem(t.id, 'insentifTambahan', { ket: '', nominal: 0 })} className="text-xs font-bold text-emerald-600 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Insentif'}>{readOnly ? <Lock size={12} /> : <PlusCircle size={14} />} Tambah Insentif</button>
                       </div>
                     )}
 
@@ -810,10 +816,10 @@ export default function GajiView({ teachers, setTeachers, externalSelectedId, se
                                 />
                               </div>
                             </div>
-                            {!readOnly && <button onClick={() => handleRemoveArrayItem(t.id, 'potonganLainnya', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg"><Trash2 size={16} /></button>}
+                            <button disabled={readOnly} onClick={() => handleRemoveArrayItem(t.id, 'potonganLainnya', idx)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg disabled:opacity-45 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Hapus Potongan'}><Trash2 size={16} /></button>
                           </div>
                         ))}
-                        {!readOnly && <button onClick={() => handleAddArrayItem(t.id, 'potonganLainnya', { ket: '', nominal: 0 })} className="text-xs font-bold text-red-600 flex items-center gap-1"><PlusCircle size={14} /> Tambah Potongan</button>}
+                        <button disabled={readOnly} onClick={() => handleAddArrayItem(t.id, 'potonganLainnya', { ket: '', nominal: 0 })} className="text-xs font-bold text-red-600 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" title={readOnly ? 'Terkunci (Akses Read-Only Yayasan)' : 'Tambah Potongan'}>{readOnly ? <Lock size={12} /> : <PlusCircle size={14} />} Tambah Potongan</button>
                       </div>
                     )}
 

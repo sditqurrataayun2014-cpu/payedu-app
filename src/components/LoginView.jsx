@@ -67,9 +67,10 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
           return;
         }
 
-        recordLogin(result.user.name, result.user.role === 'admin' ? 'Admin' : 'Guru', 'Sukses (Biometrik WebAuthn)');
+        const bioRoleLabel = result.user.role === 'admin' ? 'Admin' : result.user.role === 'guru' ? 'Guru' : result.user.role;
+        recordLogin(result.user.name, bioRoleLabel, 'Sukses (Biometrik WebAuthn)');
         onLogin({
-          role: result.user.role === 'admin' ? 'admin' : 'guru',
+          role: result.user.role === 'admin' ? 'admin' : result.user.role,
           id: result.user.id,
           name: result.user.name,
           username: result.user.username,
@@ -109,31 +110,46 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
       return { success: false, message: 'Username dan password wajib diisi!' };
     }
 
-    const rawAccounts = safeStorageGet('payedu_accounts', []);
-    const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
-    const savedAccounts = [
-      ...(Array.isArray(rawAccounts) ? rawAccounts : []),
-      ...(Array.isArray(rawAdminAccounts) ? rawAdminAccounts : [])
-    ];
-
+    const inputLower = inputUser.toLowerCase();
     const hashedInputPassword = simpleHash(inputPass);
-    const accInStorage = savedAccounts.find(a => a.username === inputUser);
+    const hashedTrimmedPassword = simpleHash(inputPass.trim());
+    const matchesPassword = (storedPwd) => storedPwd === hashedInputPassword || storedPwd === hashedTrimmedPassword;
 
-    if (accInStorage) {
-      if (accInStorage.password === hashedInputPassword) {
-        return {
-          success: true,
-          user: {
-            role: accInStorage.role === 'Admin' ? 'admin' : accInStorage.role,
-            name: accInStorage.name,
-            id: accInStorage.id || inputUser,
-            username: inputUser
-          }
-        };
-      }
+    const cloudAccounts = Array.isArray(settings?.adminAccounts) ? settings.adminAccounts : [];
+    const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
+    const rawAccounts = safeStorageGet('payedu_accounts', []);
+
+    const findByUsername = (list) =>
+      (Array.isArray(list) ? list : []).filter(a => String(a?.username || '').trim().toLowerCase() === inputLower);
+
+    // Prioritaskan akun Cloud (settings.adminAccounts), lalu cache Admin lokal, lalu legacy accounts
+    const cloudMatches = findByUsername(cloudAccounts);
+    const localAdminMatches = findByUsername(rawAdminAccounts);
+    const legacyMatches = findByUsername(rawAccounts);
+
+    const authoritativeMatches =
+      cloudMatches.length > 0 ? cloudMatches :
+      localAdminMatches.length > 0 ? localAdminMatches :
+      legacyMatches;
+
+    const matchedAcc = authoritativeMatches.find(a => matchesPassword(a.password));
+    if (matchedAcc) {
+      return {
+        success: true,
+        user: {
+          role: matchedAcc.role === 'Admin' ? 'admin' : matchedAcc.role,
+          name: matchedAcc.name,
+          id: matchedAcc.id || inputUser,
+          username: matchedAcc.username || inputUser
+        }
+      };
     }
 
-    const inputLower = inputUser.toLowerCase();
+    // Jika username terdaftar eksplisit di Cloud/Admin lokal tetapi password tidak cocok, hentikan agar password baru tidak dibypass fallback default
+    if (cloudMatches.length > 0 || localAdminMatches.length > 0) {
+      return { success: false, message: 'Username atau password salah! Periksa kembali data login Anda.' };
+    }
+
     const teacherData = (teachers || []).find(t => 
       String(t.id).toLowerCase() === inputLower ||
       (t.nipy && String(t.nipy).trim().toLowerCase() === inputLower) ||
@@ -212,7 +228,8 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
       // Meminta pendaftaran sensor biometrik WebAuthn perangkat
       const credential = await registerBiometricLogin(authUser);
       if (credential) {
-        recordLogin(authUser.name, authUser.role === 'admin' ? 'Admin' : 'Guru', 'Sukses Daftar Biometrik Login');
+        const regRoleLabel = authUser.role === 'admin' ? 'Admin' : authUser.role === 'guru' ? 'Guru' : authUser.role;
+        recordLogin(authUser.name, regRoleLabel, 'Sukses Daftar Biometrik Login');
         const saved = getSavedBiometricAccount();
         setSavedBioAccount(saved);
         setShowConnectBioModal(false);
