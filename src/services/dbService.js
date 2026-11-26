@@ -299,17 +299,23 @@ export const pushSinglePresensiRecord = async (record, options = {}) => {
     console.warn('[SinglePush] Gagal sinkronisasi ke LocalStorage:', err);
   }
 
-  // 2. Jika offline / belum konfigurasi, simpan ke antrian offline single (LocalStorage + IndexedDB Background Sync)
+  // 2. Write-Ahead Queue: Selalu catat ke antrean lokal & IndexedDB SEBELUM request jaringan,
+  //    lalu hapus setelah server mengonfirmasi sukses. Mencegah record hilang bila HP langsung
+  //    dikunci atau browser ditutup sebelum respons server selesai diterima.
+  if (!options._fromQueue) {
+    enqueueSinglePendingRecord(record);
+    saveOfflineAttendance(record);
+  }
+
+  // Jika offline / belum konfigurasi, berhenti di antrean offline lokal
   if (!isSupabaseConfigured() || !navigator.onLine) {
-    if (!options._fromQueue) {
-      enqueueSinglePendingRecord(record);
-      saveOfflineAttendance(record);
-    }
     return { status: 'offline', message: 'Tersimpan di perangkat (offline, masuk antrian retry)' };
   }
 
-  // 3. Konversi ke baris DB
-  const dbRow = mapPresensiToDbRow(record);
+  // 3. Konversi ke baris DB (saat flush antrean tertunda, pakai timestamp server/saat kirim agar lolos delta sync)
+  const dbRow = mapPresensiToDbRow(
+    options._fromQueue ? { ...record, updatedAt: new Date().toISOString() } : record
+  );
 
   // 4. Upsert langsung ke tabel presensi_records dengan retry cepat (3 kali)
   const MAX_ATTEMPTS = 3;
@@ -484,7 +490,11 @@ export const pushPresensiGuru = async (presensiArray, options = {}) => {
  */
 export const fetchPresensiGuru = async (options = {}) => {
   const localPresensi = safeStorageGet('payedu_presensi_guru', []);
-  const safeLocal = Array.isArray(localPresensi) ? localPresensi : [];
+  const pendingSingles = dequeueSinglePendingRecords();
+  const safeLocalBase = Array.isArray(localPresensi) ? localPresensi : [];
+  const safeLocal = pendingSingles.length > 0
+    ? mergePresensiArrays(safeLocalBase, pendingSingles)
+    : safeLocalBase;
 
   if (!isSupabaseConfigured() || !navigator.onLine) {
     return { status: 'success', source: 'local', data: safeLocal };
@@ -492,46 +502,64 @@ export const fetchPresensiGuru = async (options = {}) => {
 
   const hasTable = await isPresensiRecordsTableAvailable();
   const forceFull = options?.force === true;
+  const yesterdayWib = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 
-  // 🚀 MESIN 1: AMBIL DARI TABEL MANDIRI presensi_records DENGAN DELTA SYNC
+  // 🚀 MESIN 1: AMBIL DARI TABEL MANDIRI presensi_records DENGAN HYBRID TODAY + DELTA SYNC
   if (hasTable) {
     try {
-      // 🔋 DELTA SYNC CERDAS (Hemat 99.9% Bandwidth Egress & Log Ingestion):
+      // 🔋 HYBRID SYNC CERDAS:
+      // 1) Selalu tarik penuh presensi 2 hari terakhir (kemarin & hari ini WIB) agar
+      //    absen masuk yang terlambat masuk / selisih jam HP TIDAK PERNAH terlewat oleh filter updated_at!
+      // 2) Tarik delta historis untuk perubahan data lama (> 2 hari lalu) dengan clamp anti-future clock.
       if (!forceFull && safeLocal.length > 0) {
-        let latestLocalTs = '';
+        let maxLocalMs = 0;
         for (const r of safeLocal) {
           const ts = r.updatedAt || r.updated_at || r.createdAt || r.created_at;
-          if (ts && String(ts) > latestLocalTs) {
-            latestLocalTs = String(ts);
+          if (ts) {
+            const parsedMs = new Date(ts).getTime();
+            if (!isNaN(parsedMs) && parsedMs > maxLocalMs) {
+              maxLocalMs = parsedMs;
+            }
           }
         }
+        // Clamp terhadap jam saat ini - 2 menit agar jam HP yang kecepetan tidak memblokir delta sync
+        const safeDeltaMs = maxLocalMs > 0 ? Math.min(maxLocalMs, Date.now()) - 120000 : 0;
+        const safeDeltaIso = safeDeltaMs > 0 ? new Date(safeDeltaMs).toISOString() : '';
 
-        if (latestLocalTs) {
-          // Ambil HANYA baris yang berubah sejak sinkronisasi lokal terakhir
-          const { data: deltaRows, error: deltaErr } = await supabase
-            .from('presensi_records')
-            .select('*')
-            .gt('updated_at', latestLocalTs)
-            .order('updated_at', { ascending: false })
-            .limit(300);
+        const activeDaysPromise = supabase
+          .from('presensi_records')
+          .select('*')
+          .gte('date', yesterdayWib)
+          .order('date', { ascending: false })
+          .limit(500);
 
-          if (!deltaErr && Array.isArray(deltaRows)) {
-            if (deltaRows.length === 0) {
-              // Tidak ada perubahan sama sekali di cloud! (Egress ~150 bytes, respons ~70ms)
-              return { status: 'success', source: 'delta_cache', data: safeLocal };
-            }
-            // Ada baris baru atau update: gabungkan hanya delta tersebut
-            const mappedDelta = deltaRows.map(mapDbRowToPresensi);
-            const merged = mergePresensiArrays(mappedDelta, safeLocal);
-            safeStorageSet('payedu_presensi_guru', merged);
-            return { status: 'success', source: 'delta_sync', data: merged };
+        const histDeltaPromise = safeDeltaIso
+          ? supabase
+              .from('presensi_records')
+              .select('*')
+              .lt('date', yesterdayWib)
+              .gt('updated_at', safeDeltaIso)
+              .order('updated_at', { ascending: false })
+              .limit(300)
+          : Promise.resolve({ data: [], error: null });
+
+        const [activeRes, histRes] = await Promise.all([activeDaysPromise, histDeltaPromise]);
+
+        if (!activeRes.error && Array.isArray(activeRes.data)) {
+          const histRows = (!histRes.error && Array.isArray(histRes.data)) ? histRes.data : [];
+          const combinedServerRows = [...activeRes.data, ...histRows];
+          if (combinedServerRows.length === 0) {
+            return { status: 'success', source: 'delta_cache', data: safeLocal };
           }
+          const mappedDelta = combinedServerRows.map(mapDbRowToPresensi);
+          const merged = mergePresensiArrays(mappedDelta, safeLocal);
+          safeStorageSet('payedu_presensi_guru', merged);
+          return { status: 'success', source: 'delta_sync', data: merged };
         }
       }
 
-      // 📥 INITIAL LOAD / RECOVERY (Jika data lokal kosong atau diminta reload):
-      // Ambil 1500 rekaman paling mutakhir (mencakup 3+ bulan terakhir seluruh sekolah)
-      // bukan men-download seluruh ribuan riwayat tahun lampau tanpa batas!
+      // 📥 INITIAL LOAD / FORCE REFRESH:
+      // Ambil 1500 rekaman paling mutakhir + pastikan hari ini/kemarin WIB tetap lengkap
       const { data: recentRows, error: recentErr } = await supabase
         .from('presensi_records')
         .select('*')
@@ -801,10 +829,12 @@ export const deduplicateTeachers = (teachersList) => {
  * Callback dipanggil setiap kali baris presensi_guru berubah di server.
  * Mengembalikan fungsi unsubscribe.
  */
-export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
+export const subscribePresensiGuru = (onUpdate, onSingleUpdate, onReconnect) => {
   if (!isSupabaseConfigured() || !supabase) {
     return () => {}; // noop unsubscribe
   }
+  let hasSubscribedOnce = false;
+  let needsCatchupSync = false;
   const channel = supabase
     .channel('public:presensi_records_realtime')
     .on('postgres_changes', { 
@@ -835,7 +865,17 @@ export const subscribePresensiGuru = (onUpdate, onSingleUpdate) => {
         console.warn('Gagal sinkronisasi presensi_records real-time:', err);
       }
     })
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (hasSubscribedOnce) needsCatchupSync = true;
+      } else if (status === 'SUBSCRIBED') {
+        if (hasSubscribedOnce && needsCatchupSync && typeof onReconnect === 'function') {
+          needsCatchupSync = false;
+          onReconnect();
+        }
+        hasSubscribedOnce = true;
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);
@@ -859,7 +899,6 @@ const mapLogToDbRow = (l) => {
 const mapDbRowToLog = (r) => {
   const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
   return {
-    id: r.id || parsed.id,
     created_at: r.created_at || parsed.created_at || parsed.timestamp,
     timestamp: parsed.timestamp || r.created_at,
     ...parsed,
@@ -1318,7 +1357,6 @@ export const fetchCloudData = async (options = {}) => {
     const serverTeachers = teachersRows && teachersRows.length > 0 ? teachersRows.map(r => {
       const parsedData = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
       return {
-        id: r.id || parsedData.id,
         name: r.name || parsedData.name || '',
         nipy: parsedData.nipy || '',
         pob: parsedData.pob || '',
@@ -1575,24 +1613,34 @@ export const fetchArchivesOnly = async () => {
  * Begitu guru membuka aplikasi di HP, sistem otomatis menyinkronkannya di latar belakang
  * tanpa menunggu guru menekan tombol absen pulang di sore hari!
  */
-export const syncPendingTeacherAttendance = async (teacherId, localPresensi) => {
+export const syncPendingTeacherAttendance = async (teacherId, localPresensi, teacherName = '') => {
   if (!teacherId || !isSupabaseConfigured() || !navigator.onLine) return;
   const list = Array.isArray(localPresensi) ? localPresensi : safeStorageGet('payedu_presensi_guru', []);
   if (!Array.isArray(list) || list.length === 0) return;
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-  const myTodayRecord = list.find(r => 
-    r && (String(r.teacherId) === String(teacherId) || (r.teacherName && String(r.teacherName).trim().toLowerCase() === String(teacherId).trim().toLowerCase())) && 
-    (r.date === todayStr || !r.date) && 
-    (r.jamMasuk || ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Cuti', 'Dinas Luar'].includes(r.status))
-  );
+  const todayWib = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const yesterdayWib = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const normName = String(teacherName || '').trim().toLowerCase();
 
-  if (myTodayRecord) {
-    console.log('[AutoSync] Presensi guru hari ini ditemukan di memori lokal, menyinkronkan ke Supabase Cloud (Single Record)...');
-    try {
-      await pushSinglePresensiRecord(myTodayRecord);
-    } catch (e) {
-      console.warn('[AutoSync] Background sync single presensi warning:', e);
+  const myRecentRecords = list.filter(r => {
+    if (!r) return false;
+    const isDateMatch = !r.date || r.date === todayWib || r.date === yesterdayWib;
+    if (!isDateMatch) return false;
+    const rId = String(r.teacherId || '').trim();
+    const rName = String(r.teacherName || '').trim().toLowerCase();
+    const isOwner = rId === String(teacherId).trim() || (normName && rName && rName === normName) || (rName && rName === String(teacherId).trim().toLowerCase());
+    if (!isOwner) return false;
+    return !!(r.jamMasuk || ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Cuti', 'Dinas Luar'].includes(r.status));
+  });
+
+  if (myRecentRecords.length > 0) {
+    console.log(`[AutoSync] Memastikan ${myRecentRecords.length} presensi guru terbaru tersinkron ke Supabase Cloud...`);
+    for (const rec of myRecentRecords) {
+      try {
+        await pushSinglePresensiRecord(rec);
+      } catch (e) {
+        console.warn('[AutoSync] Background sync single presensi warning:', e);
+      }
     }
   }
 };

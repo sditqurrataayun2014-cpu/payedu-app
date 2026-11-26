@@ -19,6 +19,7 @@ import {
   generateUniqueId,
   getFormattedPeriod,
   getLocalIsoDate,
+  getWibDateString,
   safeStorageSet,
   DEFAULT_MAPEL_KBM,
   DEFAULT_KELAS_KBM,
@@ -36,7 +37,7 @@ import {
 } from '../../services/dbService';
 
 
-import { verifyTeacherDevice } from '../../services/deviceService';
+import { verifyTeacherDevice, getOrCreateDeviceId } from '../../services/deviceService';
 import { registerBackModal } from '../../services/navigationService';
 import { showAlert, showConfirm } from '../../utils/dialogService';
 
@@ -140,29 +141,47 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
   // 🪄 WIDGET PRESENSI CEPAT: Live clock & kalkulasi presensi hari ini (Mendukung Sesi Pagi & Sore / Seluruh Sesi)
   const [liveNow, setLiveNow] = useState(new Date());
+  const [isQuickAbsenSubmitting, setIsQuickAbsenSubmitting] = useState(false);
+  const quickSubmittingRef = useRef(false);
+  const presensiRef = useRef(presensiGuru);
+  useEffect(() => {
+    presensiRef.current = presensiGuru;
+  }, [presensiGuru]);
+
   useEffect(() => {
     const timer = setInterval(() => setLiveNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   const liveDateStr = liveNow.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
-  const liveTimeStr = liveNow.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }).replace(/\./g, ':');
-  const todayIsoDate = getLocalIsoDate(liveNow);
+  const liveTimeStr = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta', hour12: false }).format(liveNow);
+  const todayIsoDate = getWibDateString(liveNow) || getLocalIsoDate(liveNow);
 
-  const presensiSettings = settings?.presensiGuruSettings || {};
-  const defaultSesiList = [
-    { id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' },
-    { id: 'sore', nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' },
-    { id: 'rapat', nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' }
-  ];
-  const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0
-    ? presensiSettings.sesiList
-    : defaultSesiList;
-
-  // Pastikan opsi multi-sesi lengkap tersedia agar guru bisa memilih sesi Pagi, Sore, maupun Rapat
-  const sesiList = rawSesiList.length === 1 && rawSesiList[0].id === 'pagi'
-    ? defaultSesiList
-    : rawSesiList;
+  const presensiSettings = useMemo(() => {
+    let localSaved = {};
+    try {
+      const raw = localStorage.getItem('payedu_presensi_guru_settings');
+      if (raw) localSaved = JSON.parse(raw);
+    } catch (e) {}
+    return {
+      ...localSaved,
+      ...(settings?.presensiGuruSettings || {})
+    };
+  }, [settings?.presensiGuruSettings]);
+  // Pastikan opsi multi-sesi lengkap tersedia sambil tetap mempertahankan jadwal Pagi kustom Admin
+  const sesiList = useMemo(() => {
+    const defaultSesiList = [
+      { id: 'pagi', nama: 'Pagi (KBM)', jamMasuk: presensiSettings?.jamMasuk || '07:00', toleransiMenit: presensiSettings?.toleransiMenit ?? 15, jamPulang: presensiSettings?.jamPulang || '14:00' },
+      { id: 'sore', nama: 'Sore (Halaqoh)', jamMasuk: '15:30', toleransiMenit: 15, jamPulang: '17:30' },
+      { id: 'rapat', nama: 'Rapat / Kajian', jamMasuk: '13:00', toleransiMenit: 15, jamPulang: '15:00' }
+    ];
+    const rawSesiList = presensiSettings?.sesiList && presensiSettings.sesiList.length > 0
+      ? presensiSettings.sesiList
+      : defaultSesiList;
+    return rawSesiList.length === 1 && rawSesiList[0].id === 'pagi'
+      ? [rawSesiList[0], ...defaultSesiList.slice(1)]
+      : rawSesiList;
+  }, [presensiSettings]);
 
   // 🎯 SMART SESSION DETECTOR (Anti-Absen Hilang di Siang/Sore Hari):
   // 1. Prioritas Tertinggi: Jika guru SUDAH absen masuk di suatu sesi hari ini tapi BELUM absen pulang (jamMasuk && !jamPulang),
@@ -171,7 +190,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   //    - Sebelum jam 15:00 -> tetap prioritaskan Sesi Pagi (KBM utama sekolah).
   //    - Jam 15:00 ke atas -> jika ada sesi Sore/Halaqoh, barulah beralih ke Sesi Sore.
   const [selectedQuickSesiId, setSelectedQuickSesiId] = useState(() => {
-    const todayStr = getLocalIsoDate(new Date());
+    const todayStr = getWibDateString(new Date()) || getLocalIsoDate(new Date());
     const myId = String(myData?.id || '').trim();
     const myCleanName = myData?.name ? String(myData.name).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
@@ -187,7 +206,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       return activeUnfinishedRecord.sesiId;
     }
 
-    const currentHour = new Date().getHours();
+    const wibHourStr = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' }).format(new Date());
+    const currentHour = Number(wibHourStr) || new Date().getHours();
     if (currentHour >= 15 && sesiList.some(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'))) {
       const sore = sesiList.find(s => s.id === 'sore' || s.nama?.toLowerCase().includes('sore') || s.nama?.toLowerCase().includes('halaqoh'));
       return sore ? sore.id : (sesiList[0]?.id || 'pagi');
@@ -240,11 +260,24 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
   const sudahAbsenPulang = !!todayAttendance?.jamPulang;
   const isIzinToday = todayAttendance && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(todayAttendance.status) && !todayAttendance.jamMasuk;
 
-  const isGpsActive = (Array.isArray(presensiSettings?.lokasiList) && presensiSettings.lokasiList.length > 0) || (presensiSettings?.lokasi?.latitude != null);
+  const hasLokasiList = Array.isArray(presensiSettings?.lokasiList) && presensiSettings.lokasiList.some(l => l && (l.latitude != null || l.lat != null) && (l.longitude != null || l.lng != null || l.long != null));
+  const hasLegacyLokasi = (presensiSettings?.lokasi?.latitude != null || presensiSettings?.lokasi?.lat != null) && (presensiSettings?.lokasi?.longitude != null || presensiSettings?.lokasi?.lng != null || presensiSettings?.lokasi?.long != null);
+  const isGpsActive = hasLokasiList || hasLegacyLokasi;
   const isQrActive = !!presensiSettings?.qrToken;
   const needVerification = isGpsActive || isQrActive;
 
-  const handleQuickAbsenMasuk = () => {
+  const findQuickRecordIndex = (arr) => (arr || []).findIndex(r => {
+    if (!r || r.date !== todayIsoDate) return false;
+    const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
+    const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
+    if (!isMe) return false;
+    const rSesi = r.sesiId || sesiList[0]?.id;
+    return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
+  });
+
+  const handleQuickAbsenMasuk = async () => {
+    if (quickSubmittingRef.current || sudahAbsenMasuk || isIzinToday) return;
     if (presensiSettings?.deviceLockEnabled) {
       const devCheck = verifyTeacherDevice(myData, true);
       if (!devCheck.isAllowed) {
@@ -265,57 +298,81 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       setActiveTab('portal_presensi');
       return;
     }
-    const capture = new Date();
-    const nowHHMMSS = capture.toTimeString().slice(0, 8);
-    const targetMin = (Number(currentQuickSesi.jamMasuk?.split(':')[0]) || 7) * 60 + (Number(currentQuickSesi.jamMasuk?.split(':')[1]) || 0) + (Number(currentQuickSesi.toleransiMenit) || 0);
-    const actualMin = capture.getHours() * 60 + capture.getMinutes();
-    const terlambatMenit = Math.max(0, actualMin - targetMin);
-    const status = terlambatMenit > 0 ? 'Terlambat' : 'Hadir';
 
-    const updated = [...(presensiGuru || [])];
-    const idx = updated.findIndex(r => {
-      if (!r || r.date !== todayIsoDate) return false;
-      const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
-      const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-      const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
-      if (!isMe) return false;
-      const rSesi = r.sesiId || sesiList[0]?.id;
-      return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
-    });
-    const existingRec = idx >= 0 ? updated[idx] : null;
-    const patch = {
-      id: existingRec?.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
-      teacherId: myData.id,
-      teacherName: myData.name,
-      date: todayIsoDate,
-      sesiId: currentQuickSesi.id,
-      sesiNama: currentQuickSesi.nama,
-      jamMasuk: nowHHMMSS,
-      jamPulang: existingRec?.jamPulang || null,
-      status,
-      terlambatMenit,
-      keterangan: existingRec?.keterangan || '',
-      updatedAt: new Date().toISOString(),
-      updatedBy: myData.name || 'Guru'
-    };
-    if (idx >= 0) {
-      updated[idx] = { ...updated[idx], ...patch };
-    } else {
-      updated.push(patch);
+    quickSubmittingRef.current = true;
+    setIsQuickAbsenSubmitting(true);
+    try {
+      const capture = new Date();
+      const nowHHMMSS = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta', hour12: false }).format(capture);
+      const [hNow, mNow] = nowHHMMSS.split(':').map(Number);
+      const targetMin = (Number(currentQuickSesi.jamMasuk?.split(':')[0]) || 7) * 60 + (Number(currentQuickSesi.jamMasuk?.split(':')[1]) || 0) + (Number(currentQuickSesi.toleransiMenit) || 0);
+      const actualMin = (hNow || 0) * 60 + (mNow || 0);
+      const terlambatMenit = Math.max(0, actualMin - targetMin);
+      const status = terlambatMenit > 0 ? 'Terlambat' : 'Hadir';
+      const wibToday = getWibDateString(capture) || todayIsoDate;
+
+      const snapshot = presensiRef.current || [];
+      const snapIdx = findQuickRecordIndex(snapshot);
+      const existingRec = snapIdx >= 0 ? snapshot[snapIdx] : null;
+      const patch = {
+        id: existingRec?.id || ('pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+        teacherId: myData.id,
+        teacherName: myData.name,
+        date: wibToday,
+        sesiId: currentQuickSesi.id,
+        sesiNama: currentQuickSesi.nama,
+        jamMasuk: nowHHMMSS,
+        jamPulang: existingRec?.jamPulang || null,
+        status,
+        terlambatMenit,
+        keterangan: existingRec?.keterangan || '',
+        deviceId: getOrCreateDeviceId(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: myData.name || 'Guru'
+      };
+
+      if (typeof setPresensiGuru === 'function') {
+        setPresensiGuru(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const pIdx = findQuickRecordIndex(list);
+          let nextList;
+          if (pIdx >= 0) {
+            nextList = [...list];
+            nextList[pIdx] = { ...list[pIdx], ...patch, id: list[pIdx].id || patch.id };
+          } else {
+            nextList = [...list, patch];
+          }
+          safeStorageSet('payedu_presensi_guru', nextList);
+          return nextList;
+        });
+      }
+
+      const pushRes = await pushSinglePresensiRecord(patch).catch(e => {
+        console.warn('[PortalGuru] Single push error:', e);
+        return { status: 'partial' };
+      });
+      const cloudNote = pushRes?.status === 'success'
+        ? '\n(Status: Tersimpan permanen di Cloud)'
+        : '\n(Status: Tersimpan di HP — masuk antrean otomatis ke Cloud)';
+
+      saveAuditLog?.(myData.name, 'Absen Masuk', myData.name, `Sesi ${currentQuickSesi.nama}, Pukul ${nowHHMMSS.slice(0, 5)} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''})`, 'presensi_guru');
+      showAlert(
+        (status === 'Terlambat'
+          ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} WIB (Terlambat ${terlambatMenit} menit).`
+          : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} WIB — Tepat Waktu!`) + cloudNote
+      );
+    } finally {
+      quickSubmittingRef.current = false;
+      setIsQuickAbsenSubmitting(false);
     }
-    if (typeof setPresensiGuru === 'function') {
-      setPresensiGuru(updated);
-    }
-    safeStorageSet('payedu_presensi_guru', updated);
-    pushSinglePresensiRecord(patch).catch(e => console.warn('[PortalGuru] Single push error:', e));
-    showAlert(status === 'Terlambat' ? `Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} (Terlambat ${terlambatMenit} menit).` : `Alhamdulillah! Absen Masuk (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} — Tepat Waktu! 🎉`);
   };
 
-  const handleQuickAbsenPulang = () => {
+  const handleQuickAbsenPulang = async () => {
+    if (quickSubmittingRef.current || !sudahAbsenMasuk || sudahAbsenPulang) return;
     if (presensiSettings?.deviceLockEnabled) {
       const devCheck = verifyTeacherDevice(myData, true);
       if (!devCheck.isAllowed) {
-        showAlert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Hubungi Admin jika Anda berganti HP.`);
+        showAlert(`Presensi Ditolak! Akun Anda terdaftar pada perangkat: ${devCheck.registeredDeviceName || 'HP Terdaftar'}.\nPerangkat saat ini: ${devCheck.currentDeviceName}.\n\nDilarang titip absen dari HP lain. Jika Anda menggunakan HP yang sama tetapi berbeda browser (misal WhatsApp), silakan buka aplikasi di Google Chrome, atau hubungi Admin sekolah.`);
         return;
       }
       if (devCheck.needsEnroll || devCheck.needsUpdate) {
@@ -332,26 +389,53 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
       setActiveTab('portal_presensi');
       return;
     }
-    const capture = new Date();
-    const nowHHMMSS = capture.toTimeString().slice(0, 8);
-    const updated = [...(presensiGuru || [])];
-    const idx = updated.findIndex(r => {
-      if (!r || r.date !== todayIsoDate) return false;
-      const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
-      const rClean = r.teacherName ? String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-      const isMe = (myIdStr && rId && rId === myIdStr) || (myCleanNameStr && rClean && myCleanNameStr === rClean);
-      if (!isMe) return false;
-      const rSesi = r.sesiId || sesiList[0]?.id;
-      return rSesi === currentQuickSesi.id || (r.sesiNama && currentQuickSesi.nama && r.sesiNama.trim().toLowerCase() === currentQuickSesi.nama.trim().toLowerCase());
-    });
-    if (idx >= 0) {
-      updated[idx] = { ...updated[idx], jamPulang: nowHHMMSS, updatedAt: new Date().toISOString(), updatedBy: myData.name || 'Guru' };
+
+    const snapshot = presensiRef.current || [];
+    const idx = findQuickRecordIndex(snapshot);
+    if (idx < 0) return;
+
+    quickSubmittingRef.current = true;
+    setIsQuickAbsenSubmitting(true);
+    try {
+      const capture = new Date();
+      const nowHHMMSS = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta', hour12: false }).format(capture);
+      const updatedPatch = {
+        ...snapshot[idx],
+        jamPulang: nowHHMMSS,
+        deviceId: getOrCreateDeviceId(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: myData.name || 'Guru'
+      };
+
       if (typeof setPresensiGuru === 'function') {
-        setPresensiGuru(updated);
+        setPresensiGuru(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const pIdx = findQuickRecordIndex(list);
+          let nextList;
+          if (pIdx >= 0) {
+            nextList = [...list];
+            nextList[pIdx] = { ...list[pIdx], ...updatedPatch };
+          } else {
+            nextList = [...list, updatedPatch];
+          }
+          safeStorageSet('payedu_presensi_guru', nextList);
+          return nextList;
+        });
       }
-      safeStorageSet('payedu_presensi_guru', updated);
-      pushSinglePresensiRecord(updated[idx]).catch(e => console.warn('[PortalGuru] Single push error:', e));
-      showAlert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)}. Selamat beristirahat!`);
+
+      const pushRes = await pushSinglePresensiRecord(updatedPatch).catch(e => {
+        console.warn('[PortalGuru] Single push error:', e);
+        return { status: 'partial' };
+      });
+      const cloudNote = pushRes?.status === 'success'
+        ? '\n(Status: Tersimpan permanen di Cloud)'
+        : '\n(Status: Tersimpan di HP — masuk antrean otomatis ke Cloud)';
+
+      saveAuditLog?.(myData.name, 'Absen Pulang', myData.name, `Sesi ${currentQuickSesi.nama}, Pukul ${nowHHMMSS.slice(0, 5)}`, 'presensi_guru');
+      showAlert(`Absen Pulang (${currentQuickSesi.nama}) berhasil dicatat pukul ${nowHHMMSS.slice(0, 5)} WIB. Selamat beristirahat!` + cloudNote);
+    } finally {
+      quickSubmittingRef.current = false;
+      setIsQuickAbsenSubmitting(false);
     }
   };
 
@@ -1456,8 +1540,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                           <button
                             type="button"
                             onClick={handleQuickAbsenMasuk}
-                            disabled={sudahAbsenMasuk || isIzinToday}
-                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${sudahAbsenMasuk || isIzinToday
+                            disabled={sudahAbsenMasuk || isIzinToday || isQuickAbsenSubmitting}
+                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${sudahAbsenMasuk || isIzinToday || isQuickAbsenSubmitting
                                 ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
                                 : currentTheme.type === 'sore'
                                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 active:scale-98'
@@ -1474,7 +1558,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                             ) : (
                               <>
                                 <LogIn size={14} />
-                                <span>Absen Masuk Sekarang</span>
+                                <span>{isQuickAbsenSubmitting ? 'Menyimpan...' : 'Absen Masuk Sekarang'}</span>
                               </>
                             )}
                           </button>
@@ -1526,8 +1610,8 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                           <button
                             type="button"
                             onClick={handleQuickAbsenPulang}
-                            disabled={!sudahAbsenMasuk || sudahAbsenPulang}
-                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${!sudahAbsenMasuk || sudahAbsenPulang
+                            disabled={!sudahAbsenMasuk || sudahAbsenPulang || isQuickAbsenSubmitting}
+                            className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${!sudahAbsenMasuk || sudahAbsenPulang || isQuickAbsenSubmitting
                                 ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700/60 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md shadow-orange-500/25 active:scale-98'
                               }`}
@@ -1540,7 +1624,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
                             ) : (
                               <>
                                 <LogOut size={14} />
-                                <span>Absen Pulang Sekarang</span>
+                                <span>{isQuickAbsenSubmitting ? 'Menyimpan...' : 'Absen Pulang Sekarang'}</span>
                               </>
                             )}
                           </button>

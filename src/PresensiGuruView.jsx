@@ -3,10 +3,10 @@ import {
   ChevronDown, Clock, Clock3, LogIn, LogOut, CheckCircle2, AlertTriangle, XCircle,
   Search, Download, Printer, Edit, Trash2, Settings, Save,
   Calendar, CalendarClock, CalendarDays, AlertCircle, MapPin, ScanLine, Navigation, ShieldCheck,
-  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Sparkles, Users, Smartphone, MessageCircle, BellRing, Cloud
+  Loader2, Copy, RefreshCw, Camera, QrCode, Crosshair, VideoOff, Fingerprint, Users, Smartphone, MessageCircle
 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { pushPresensiGuru, fetchPresensiGuru, pushSinglePresensiRecord, deleteSinglePresensiRecord } from './services/dbService';
+import { pushPresensiGuru, fetchPresensiGuru, pushSinglePresensiRecord, deleteSinglePresensiRecord, flushPendingPresensi, dequeueSinglePendingRecords } from './services/dbService';
 import { getOrCreateDeviceId, verifyTeacherDevice } from './services/deviceService';
 import { registerBackModal } from './services/navigationService';
 import { showAlert as openAlertDialog, showConfirm as openConfirmDialog } from './utils/dialogService';
@@ -54,17 +54,33 @@ const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Ju
 const QR_PREFIX = 'EDUFINANCE-PRESENSI';
 
 const todayStr = (d = new Date()) => {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  try {
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  } catch {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
 };
 const toMinutes = (hhmm) => {
   if (!hhmm) return 0;
   const [h, m] = hhmm.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 };
-const nowToHHMMSS = (d) => d.toTimeString().slice(0, 8);
+const nowToHHMMSS = (d = new Date()) => {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(d);
+  } catch {
+    return d.toTimeString().slice(0, 8);
+  }
+};
 const formatJam = (hhmmss) => hhmmss ? hhmmss.slice(0, 5) : '--:--';
-const formatTanggalPanjang = (d) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const formatTanggalPanjang = (d) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
 
 // Helper pembersih label sesi agar ringkas & bebas redundansi di HP
 const getNamaSesiBersih = (sesi) => {
@@ -287,10 +303,15 @@ const buildQrImageUrl = (payload) => `https://api.qrserver.com/v1/create-qr-code
 const isLokasiAktif = (settings) => getLokasiList(settings).length > 0;
 const isQrAktif = (settings) => !!settings?.qrToken;
 
-// Daftar sesi efektif (selalu minimal 3 sesi default: Pagi, Sore/Halaqoh, Rapat/Kajian jika belum dikustomisasi)
+// Daftar sesi efektif (selalu minimal 3 sesi default: Pagi, Sore/Halaqoh, Rapat/Kajian,
+// namun tetap mempertahankan jam masuk/pulang/toleransi kustom Admin pada sesi Pagi)
 const getSesiList = (settings) => {
-  if (Array.isArray(settings?.sesiList) && settings.sesiList.length > 1) return settings.sesiList;
-  if (Array.isArray(settings?.sesiList) && settings.sesiList.length === 1 && settings.sesiList[0].id !== 'pagi') return settings.sesiList;
+  const list = settings?.sesiList;
+  if (Array.isArray(list) && list.length > 1) return list;
+  if (Array.isArray(list) && list.length === 1 && list[0].id !== 'pagi') return list;
+  if (Array.isArray(list) && list.length === 1 && list[0].id === 'pagi') {
+    return [list[0], ...DEFAULT_SETTINGS.sesiList.slice(1)];
+  }
   return DEFAULT_SETTINGS.sesiList;
 };
 
@@ -310,7 +331,20 @@ const HARI_LIST = [
 ];
 // JS Date.getDay(): 0=Minggu, 1=Senin, ... 6=Sabtu. Minggu dianggap libur (tidak ada jadwal presensi).
 const JS_DAY_TO_HARI = { 1: 'senin', 2: 'selasa', 3: 'rabu', 4: 'kamis', 5: 'jumat', 6: 'sabtu' };
-const getHariIni = (d = new Date()) => JS_DAY_TO_HARI[d.getDay()] || null;
+const HARI_DISPLAY_MAP = { senin: 'Senin', selasa: 'Selasa', rabu: 'Rabu', kamis: 'Kamis', jumat: "Jum'at", sabtu: 'Sabtu' };
+const getHariIni = (d = new Date()) => {
+  try {
+    const wibDay = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Asia/Jakarta' }).format(d);
+    const map = { Mon: 'senin', Tue: 'selasa', Wed: 'rabu', Thu: 'kamis', Fri: 'jumat', Sat: 'sabtu' };
+    return map[wibDay] || null;
+  } catch {
+    return JS_DAY_TO_HARI[d.getDay()] || null;
+  }
+};
+const getNamaHariLengkap = (d = new Date()) => {
+  const key = getHariIni(d);
+  return key ? HARI_DISPLAY_MAP[key] : 'Minggu';
+};
 const getJadwalGuru = (settings) => settings?.jadwalGuru || {};
 
 // Apakah guru dijadwalkan hadir pada kombinasi hari+sesi tertentu.
@@ -326,7 +360,9 @@ const isGuruTerjadwal = (settings, hariKey, sesiId, teacherId) => {
 
 const computeStatus = (captureDate, sesi) => {
   const targetMin = toMinutes(sesi.jamMasuk) + (Number(sesi.toleransiMenit) || 0);
-  const actualMin = captureDate.getHours() * 60 + captureDate.getMinutes();
+  const wibTime = nowToHHMMSS(captureDate);
+  const [h, m] = wibTime.split(':').map(Number);
+  const actualMin = (h || 0) * 60 + (m || 0);
   const terlambatMenit = Math.max(0, actualMin - targetMin);
   return { status: terlambatMenit > 0 ? 'Terlambat' : 'Hadir', terlambatMenit };
 };
@@ -494,6 +530,11 @@ export default function PresensiGuruView({
     return list[0]?.id || 'pagi';
   }, [settings, schoolProfile?.presensiGuruSettings]);
 
+  const presensiRef = useRef(presensiGuru);
+  useEffect(() => {
+    presensiRef.current = presensiGuru;
+  }, [presensiGuru]);
+
   // Jam berjalan (live clock)
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -504,66 +545,84 @@ export default function PresensiGuruView({
   // Data lama (sebelum fitur multi-sesi) tidak punya sesiId — dianggap milik sesi utama/pertama.
   const sesiRecord = (r, sesiId) => (r.sesiId || sesiUtamaId) === sesiId;
 
-  const upsertRecord = (teacherId, teacherName, date, sesiId, patch) => {
-    let updated = [];
+  const upsertRecord = async (teacherId, teacherName, date, sesiId, patch) => {
     const targetTId = teacherId != null ? String(teacherId).trim() : '';
     const normTName = teacherName ? String(teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
-    const idx = (presensiGuru || []).findIndex(r => {
+    const findMatchIndex = (arr) => (arr || []).findIndex(r => {
       if (!r || r.date !== date || !sesiRecord(r, sesiId)) return false;
       const rId = r.teacherId != null ? String(r.teacherId).trim() : '';
       if (rId && targetTId && rId === targetTId) return true;
       if (normTName && r.teacherName) {
         const rNormName = String(r.teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Wajib pencocokan nama PERSIS (exact match), DILARANG pakai includes/substring agar tidak tertukar antar guru (misal INA dengan NUR 'AFNI AGUSTINA)
+        // Wajib pencocokan nama PERSIS (exact match), DILARANG pakai includes/substring agar tidak tertukar antar guru
         if (rNormName && rNormName === normTName) return true;
       }
       return false;
     });
 
-    let targetRecord;
-    if (idx >= 0) {
-      updated = [...presensiGuru];
-      targetRecord = {
-        ...updated[idx],
-        ...patch,
-        teacherId: teacherId != null ? teacherId : updated[idx].teacherId,
-        teacherName: teacherName || updated[idx].teacherName,
-        sesiId,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser?.name || 'Sistem'
-      };
-      updated[idx] = targetRecord;
-    } else {
-      targetRecord = {
-        id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-        teacherId, teacherName, date, sesiId,
-        jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
-        ...patch,
-        updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || 'Sistem',
-      };
-      updated = [
-        ...(presensiGuru || []),
-        targetRecord,
-      ];
-    }
+    const snapshot = presensiRef.current || [];
+    const idx = findMatchIndex(snapshot);
+    const existingRec = idx >= 0 ? snapshot[idx] : null;
+    const nowIso = new Date().toISOString();
+
+    const targetRecord = existingRec
+      ? {
+          ...existingRec,
+          ...patch,
+          teacherId: teacherId != null ? teacherId : existingRec.teacherId,
+          teacherName: teacherName || existingRec.teacherName,
+          sesiId,
+          updatedAt: nowIso,
+          updatedBy: currentUser?.name || 'Sistem'
+        }
+      : {
+          id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+          teacherId, teacherName, date, sesiId,
+          jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
+          ...patch,
+          updatedAt: nowIso, updatedBy: currentUser?.name || 'Sistem',
+        };
+
     if (typeof setPresensiGuru === 'function') {
-      setPresensiGuru(updated);
+      setPresensiGuru(prev => {
+        const list = Array.isArray(prev) ? prev : [];
+        const pIdx = findMatchIndex(list);
+        let nextList;
+        if (pIdx >= 0) {
+          nextList = [...list];
+          nextList[pIdx] = { ...list[pIdx], ...targetRecord, id: list[pIdx].id || targetRecord.id };
+        } else {
+          nextList = [...list, targetRecord];
+        }
+        try {
+          localStorage.setItem('payedu_presensi_guru', JSON.stringify(nextList));
+        } catch (e) {}
+        return nextList;
+      });
+    } else {
+      try {
+        const list = Array.isArray(snapshot) ? snapshot : [];
+        const fallbackUpdated = existingRec
+          ? list.map((item, i) => i === idx ? targetRecord : item)
+          : [...list, targetRecord];
+        localStorage.setItem('payedu_presensi_guru', JSON.stringify(fallbackUpdated));
+      } catch (e) {}
     }
 
-    // INSTANT LOCALSTORAGE BACKUP
+    // 🚀 ULTRA CEPAT & ATOMIK (~96ms): Await push 1 record ini ke Supabase presensi_records
     try {
-      localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
-    } catch (e) {}
-
-    // 🚀 ULTRA CEPAT & ATOMIK (~96ms): Langsung push 1 record ini ke Supabase presensi_records
-    pushSinglePresensiRecord(targetRecord).then(res => {
+      const res = await pushSinglePresensiRecord(targetRecord);
       if (res?.status === 'success') {
         console.log('[Presensi] ✅ Single record tersimpan ke cloud Supabase!');
       } else {
         console.warn('[Presensi] ⚠️ Single record offline/masuk antrian:', res?.message);
       }
-    }).catch(e => console.warn('[Presensi] Single push warning:', e));
+      return res || { status: 'partial' };
+    } catch (e) {
+      console.warn('[Presensi] Single push warning:', e);
+      return { status: 'partial', error: e };
+    }
   };
 
   // Identifikasi profil guru yang sedang aktif/login secara akurat & aman
@@ -758,6 +817,20 @@ function TeacherSelfService({
   const [verifikasiMode, setVerifikasiMode] = useState(null); // null | 'masuk' | 'pulang'
   const [verifikasiTargetSesi, setVerifikasiTargetSesi] = useState(null);
   const [historyMonthFilter, setHistoryMonthFilter] = useState(() => todayStr().slice(0, 7));
+  const [isSubmittingPresensi, setIsSubmittingPresensi] = useState(false);
+  const submittingRef = useRef(false);
+  const [pendingQueueCount, setPendingQueueCount] = useState(() => dequeueSinglePendingRecords().length);
+  const [isFlushingQueue, setIsFlushingQueue] = useState(false);
+
+  const refreshPendingCount = useCallback(() => {
+    setPendingQueueCount(dequeueSinglePendingRecords().length);
+  }, []);
+
+  useEffect(() => {
+    refreshPendingCount();
+    const interval = setInterval(refreshPendingCount, 5000);
+    return () => clearInterval(interval);
+  }, [presensiGuru, refreshPendingCount]);
 
   const sesiSemua = getSesiList(settings);
   const sesiUtamaId = sesiSemua[0]?.id;
@@ -832,43 +905,61 @@ function TeacherSelfService({
   const sudahPulang = !!record?.jamPulang;
   const isIzinLike = record && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(record.status) && !record.jamMasuk;
 
-  const handleAbsenMasuk = (verifikasi = {}, customSesi = null) => {
+  const handleAbsenMasuk = async (verifikasi = {}, customSesi = null) => {
+    if (submittingRef.current) return;
     const s = customSesi || verifikasiTargetSesi || sesiAktif;
-    if (!s) return;
-    const curRecord = teacher ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id)) : null;
+    if (!s || !teacher) return;
+    const curRecord = (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id));
     if (curRecord?.jamMasuk) {
       showToast(`Anda sudah melakukan absen masuk sesi ${s.nama} hari ini.`, 'error');
       return;
     }
-    const capture = new Date();
-    const { status, terlambatMenit } = computeStatus(capture, s);
-    const patch = { 
-      jamMasuk: nowToHHMMSS(capture), 
-      status, 
-      terlambatMenit, 
-      keterangan: '', 
-      sesiNama: s.nama,
-      deviceId: getOrCreateDeviceId()
-    };
-    if (verifikasi.lokasi) patch.lokasiMasuk = verifikasi.lokasi;
-    if (verifikasi.qrValid !== undefined) patch.qrValidMasuk = verifikasi.qrValid;
-    upsertRecord(teacher.id, teacher.name, today, s.id, patch);
-    showToast(
-      status === 'Terlambat'
-        ? `Absen masuk (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Terlambat ${terlambatMenit} menit.`
-        : `Absen masuk (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))} — Tepat waktu! 🎉`,
-      status === 'Terlambat' ? 'error' : 'success'
-    );
-    const jarakMasuk = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakMasuk}m` : '';
-    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
-    addAuditLog?.(currentUser?.name, 'Absen Masuk', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(nowToHHMMSS(capture))} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''}${lokasiKet}${qrKet})`, 'presensi_guru');
+    if (curRecord && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(curRecord.status) && !curRecord.jamMasuk) {
+      showToast(`Anda sudah tercatat ${curRecord.status} untuk sesi ${s.nama} hari ini.`, 'error');
+      return;
+    }
+    submittingRef.current = true;
+    setIsSubmittingPresensi(true);
+    try {
+      const capture = new Date();
+      const { status, terlambatMenit } = computeStatus(capture, s);
+      const jamMasukStr = nowToHHMMSS(capture);
+      const patch = {
+        jamMasuk: jamMasukStr,
+        status,
+        terlambatMenit,
+        keterangan: '',
+        sesiNama: s.nama,
+        deviceId: getOrCreateDeviceId()
+      };
+      if (verifikasi.lokasi) patch.lokasiMasuk = verifikasi.lokasi;
+      if (verifikasi.qrValid !== undefined) patch.qrValidMasuk = verifikasi.qrValid;
+      const pushRes = await upsertRecord(teacher.id, teacher.name, today, s.id, patch);
+      const cloudLabel = pushRes?.status === 'success'
+        ? 'Tersimpan di Cloud'
+        : 'Tersimpan di HP (antrean Cloud)';
+      showToast(
+        status === 'Terlambat'
+          ? `Absen masuk (${s.nama}) tercatat pukul ${formatJam(jamMasukStr)} — Terlambat ${terlambatMenit} menit (${cloudLabel}).`
+          : `Absen masuk (${s.nama}) tercatat pukul ${formatJam(jamMasukStr)} — Tepat waktu! (${cloudLabel})`,
+        status === 'Terlambat' ? 'error' : 'success'
+      );
+      const jarakMasuk = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+      const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakMasuk}m` : '';
+      const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
+      addAuditLog?.(currentUser?.name, 'Absen Masuk', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(jamMasukStr)} (${status}${terlambatMenit ? `, telat ${terlambatMenit} menit` : ''}${lokasiKet}${qrKet})`, 'presensi_guru');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmittingPresensi(false);
+      refreshPendingCount();
+    }
   };
 
-  const handleAbsenPulang = (verifikasi = {}, customSesi = null) => {
+  const handleAbsenPulang = async (verifikasi = {}, customSesi = null) => {
+    if (submittingRef.current) return;
     const s = customSesi || verifikasiTargetSesi || sesiAktif;
-    if (!s) return;
-    const curRecord = teacher ? (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id)) : null;
+    if (!s || !teacher) return;
+    const curRecord = (presensiGuru || []).find(r => isTeacherRecordMatch(r, today, s.id));
     if (!curRecord?.jamMasuk) {
       showToast(`Anda belum melakukan absen masuk sesi ${s.nama} hari ini.`, 'error');
       return;
@@ -877,19 +968,31 @@ function TeacherSelfService({
       showToast(`Anda sudah melakukan absen pulang sesi ${s.nama} hari ini.`, 'error');
       return;
     }
-    const capture = new Date();
-    const patch = { 
-      jamPulang: nowToHHMMSS(capture),
-      deviceId: getOrCreateDeviceId()
-    };
-    if (verifikasi.lokasi) patch.lokasiPulang = verifikasi.lokasi;
-    if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
-    upsertRecord(teacher.id, teacher.name, today, s.id, patch);
-    showToast(`Absen pulang (${s.nama}) tercatat pukul ${formatJam(nowToHHMMSS(capture))}. Selamat beristirahat!`, 'success');
-    const jarakPulang = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
-    const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakPulang}m` : '';
-    const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
-    addAuditLog?.(currentUser?.name, 'Absen Pulang', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(nowToHHMMSS(capture))}${lokasiKet}${qrKet}`, 'presensi_guru');
+    submittingRef.current = true;
+    setIsSubmittingPresensi(true);
+    try {
+      const capture = new Date();
+      const jamPulangStr = nowToHHMMSS(capture);
+      const patch = {
+        jamPulang: jamPulangStr,
+        deviceId: getOrCreateDeviceId()
+      };
+      if (verifikasi.lokasi) patch.lokasiPulang = verifikasi.lokasi;
+      if (verifikasi.qrValid !== undefined) patch.qrValidPulang = verifikasi.qrValid;
+      const pushRes = await upsertRecord(teacher.id, teacher.name, today, s.id, patch);
+      const cloudLabel = pushRes?.status === 'success'
+        ? 'Tersimpan di Cloud'
+        : 'Tersimpan di HP (antrean Cloud)';
+      showToast(`Absen pulang (${s.nama}) tercatat pukul ${formatJam(jamPulangStr)} (${cloudLabel}). Selamat beristirahat!`, 'success');
+      const jarakPulang = verifikasi.lokasi ? (verifikasi.lokasi.jarakMeter ?? verifikasi.lokasi.jarak ?? 0) : null;
+      const lokasiKet = verifikasi.lokasi ? `, ${verifikasi.lokasi.nama || 'lokasi'} ±${jarakPulang}m` : '';
+      const qrKet = verifikasi.qrValid ? ', QR tervalidasi' : '';
+      addAuditLog?.(currentUser?.name, 'Absen Pulang', teacher.name, `Sesi ${s.nama}, Pukul ${formatJam(jamPulangStr)}${lokasiKet}${qrKet}`, 'presensi_guru');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmittingPresensi(false);
+      refreshPendingCount();
+    }
   };
 
   const lokasiAktif = isLokasiAktif(settings);
@@ -907,6 +1010,10 @@ function TeacherSelfService({
 
     if (mode === 'masuk' && isMasuk) {
       showToast(`Anda sudah melakukan absen masuk sesi ${targetSesi.nama} hari ini.`, 'error');
+      return;
+    }
+    if (mode === 'masuk' && curRecord && ['Sakit', 'Izin', 'Cuti', 'Dinas Luar'].includes(curRecord.status) && !curRecord.jamMasuk) {
+      showToast(`Anda sudah tercatat ${curRecord.status} untuk sesi ${targetSesi.nama} hari ini.`, 'error');
       return;
     }
     if (mode === 'pulang' && !isMasuk) {
@@ -963,46 +1070,12 @@ function TeacherSelfService({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAction, initialSesiId]);
 
-  if (!teacher) {
-    return (
-      <div className={`${cx.card3xl} p-10 text-center`}>
-        <AlertTriangle className="mx-auto text-amber-500 mb-3" size={40} />
-        <p className="font-bold text-slate-700 dark:text-white">Akun Anda belum tertaut ke Data Guru.</p>
-        <p className="text-sm text-slate-500 mt-1">
-          Minta Admin membuka <b>Data Master &rarr; Data Guru</b>, edit data Anda, lalu pilih akun Anda di
-          kolom <b>Akun Login Terkait</b>. Cara lama (mencocokkan nama persis antara Pengaturan &rarr; Pengguna
-          Internal dan Data Guru) masih berfungsi sebagai cadangan, tapi menautkan langsung lebih pasti dan
-          tidak terganggu perbedaan huruf besar/kecil, gelar, atau spasi.
-        </p>
-      </div>
-    );
-  }
-
-  if (!sesiAktif) {
-    return (
-      <div className={`${cx.card3xl} p-10 text-center`}>
-        <CalendarClock className="mx-auto text-slate-400 mb-3" size={40} />
-        <p className="font-bold text-slate-700 dark:text-white">
-          {hariIni ? 'Tidak ada jadwal presensi untuk Anda hari ini.' : 'Hari ini libur (Minggu) — tidak ada jadwal presensi.'}
-        </p>
-        <p className="text-sm text-slate-500 mt-1">Jika ini tidak sesuai, hubungi Admin untuk memeriksa <b>Jadwal Guru</b> di menu Pengaturan Presensi Guru.</p>
-      </div>
-    );
-  }
-
-  const handleAjukan = () => {
-    if (sudahMasuk) { showToast('Anda sudah absen masuk hari ini, tidak bisa mengajukan izin/sakit.', 'error'); return; }
-    upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, { status: izinStatus, keterangan: izinKeterangan, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiAktif.nama });
-    showToast(`Pengajuan ${izinStatus} hari ini berhasil dicatat.`, 'success');
-    addAuditLog?.(currentUser?.name, `Ajukan ${izinStatus}`, teacher.name, izinKeterangan || '-', 'presensi_guru');
-    setShowIzinModal(false);
-    setIzinKeterangan('');
-  };
-
-  // Data riwayat presensi guru untuk sesi yang sedang dipilih
+  // Data riwayat presensi guru untuk sesi yang sedang dipilih (Hooks selalu dipanggil sebelum early return)
+  const activeSesiIdForHooks = sesiAktif?.id || sesiUtamaId;
   const allTeacherRecords = useMemo(() => {
-    return (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, sesiAktif.id));
-  }, [presensiGuru, isTeacherRecordMatch, sesiAktif.id]);
+    if (!teacher || !activeSesiIdForHooks) return [];
+    return (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, activeSesiIdForHooks));
+  }, [presensiGuru, isTeacherRecordMatch, teacher, activeSesiIdForHooks]);
 
   const availableHistoryMonths = useMemo(() => {
     const set = new Set();
@@ -1037,6 +1110,68 @@ function TeacherSelfService({
       })
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [allTeacherRecords, historyMonthFilter]);
+
+  if (!teacher) {
+    return (
+      <div className={`${cx.card3xl} p-10 text-center`}>
+        <AlertTriangle className="mx-auto text-amber-500 mb-3" size={40} />
+        <p className="font-bold text-slate-700 dark:text-white">Akun Anda belum tertaut ke Data Guru.</p>
+        <p className="text-sm text-slate-500 mt-1">
+          Minta Admin membuka <b>Data Master &rarr; Data Guru</b>, edit data Anda, lalu pilih akun Anda di
+          kolom <b>Akun Login Terkait</b>. Cara lama (mencocokkan nama persis antara Pengaturan &rarr; Pengguna
+          Internal dan Data Guru) masih berfungsi sebagai cadangan, tapi menautkan langsung lebih pasti dan
+          tidak terganggu perbedaan huruf besar/kecil, gelar, atau spasi.
+        </p>
+      </div>
+    );
+  }
+
+  if (!sesiAktif) {
+    return (
+      <div className={`${cx.card3xl} p-10 text-center`}>
+        <CalendarClock className="mx-auto text-slate-400 mb-3" size={40} />
+        <p className="font-bold text-slate-700 dark:text-white">
+          {hariIni ? 'Tidak ada jadwal presensi untuk Anda hari ini.' : 'Hari ini libur (Minggu) — tidak ada jadwal presensi.'}
+        </p>
+        <p className="text-sm text-slate-500 mt-1">Jika ini tidak sesuai, hubungi Admin untuk memeriksa <b>Jadwal Guru</b> di menu Pengaturan Presensi Guru.</p>
+      </div>
+    );
+  }
+
+  const handleAjukan = async () => {
+    if (submittingRef.current) return;
+    if (sudahMasuk) { showToast('Anda sudah absen masuk hari ini, tidak bisa mengajukan izin/sakit.', 'error'); return; }
+    submittingRef.current = true;
+    setIsSubmittingPresensi(true);
+    try {
+      const pushRes = await upsertRecord(teacher.id, teacher.name, today, sesiAktif.id, { status: izinStatus, keterangan: izinKeterangan, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiAktif.nama });
+      const cloudLabel = pushRes?.status === 'success' ? 'Tersimpan di Cloud' : 'Tersimpan di HP (antrean Cloud)';
+      showToast(`Pengajuan ${izinStatus} hari ini berhasil dicatat (${cloudLabel}).`, 'success');
+      addAuditLog?.(currentUser?.name, `Ajukan ${izinStatus}`, teacher.name, izinKeterangan || '-', 'presensi_guru');
+      setShowIzinModal(false);
+      setIzinKeterangan('');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmittingPresensi(false);
+      refreshPendingCount();
+    }
+  };
+
+  const handleFlushPendingNow = async () => {
+    if (isFlushingQueue) return;
+    setIsFlushingQueue(true);
+    try {
+      await flushPendingPresensi();
+      refreshPendingCount();
+      if (dequeueSinglePendingRecords().length === 0) {
+        showToast('Seluruh data presensi tertunda berhasil dikirim ke Cloud!', 'success');
+      } else {
+        showToast('Sebagian data masih tertunda karena koneksi internet tidak stabil.', 'error');
+      }
+    } finally {
+      setIsFlushingQueue(false);
+    }
+  };
 
   const thisMonthKey = today.slice(0, 7);
   const monthRecords = (presensiGuru || []).filter(r => isTeacherRecordMatch(r, null, sesiAktif.id) && r.date?.startsWith(thisMonthKey));
@@ -1097,7 +1232,7 @@ function TeacherSelfService({
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5 sm:gap-2">
                 <span className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight font-mono drop-shadow-xs">
-                  {now.toTimeString().slice(0, 8)}
+                  {nowToHHMMSS(now)}
                 </span>
                 <span className="text-[10px] sm:text-xs font-black text-white/80 font-mono uppercase bg-white/15 px-1.5 py-0.5 rounded-md backdrop-blur-xs">
                   WIB
@@ -1157,19 +1292,21 @@ function TeacherSelfService({
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5">
                   <button
                     type="button"
+                    disabled={isSubmittingPresensi}
                     onClick={() => handleMulaiVerifikasi('masuk')}
-                    className="flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-emerald-700 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
+                    className="flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-emerald-50 active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait text-emerald-700 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
                   >
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
-                      <LogIn size={16} strokeWidth={2.5} />
+                      {isSubmittingPresensi ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} strokeWidth={2.5} />}
                     </div>
-                    <span>Absen Masuk sekarang ({getNamaSesiTombol(sesiAktif)})</span>
+                    <span>{isSubmittingPresensi ? 'Menyimpan...' : `Absen Masuk sekarang (${getNamaSesiTombol(sesiAktif)})`}</span>
                   </button>
 
                   <button
                     type="button"
+                    disabled={isSubmittingPresensi}
                     onClick={() => setShowIzinModal(true)}
-                    className="py-2.5 sm:py-3 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-white/15 hover:bg-white/25 active:scale-98 text-white font-bold text-xs sm:text-xs transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer backdrop-blur-md shrink-0"
+                    className="py-2.5 sm:py-3 px-3.5 sm:px-4 rounded-xl sm:rounded-2xl bg-white/15 hover:bg-white/25 active:scale-98 disabled:opacity-50 text-white font-bold text-xs sm:text-xs transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer backdrop-blur-md shrink-0"
                   >
                     <CalendarClock size={15} /> Ajukan Izin / Sakit
                   </button>
@@ -1201,13 +1338,14 @@ function TeacherSelfService({
                 {/* TOMBOL ABSEN PULANG: PUTIH BERSIH DENGAN IKON & TEKS MERAH TEGAS */}
                 <button
                   type="button"
+                  disabled={isSubmittingPresensi}
                   onClick={() => handleMulaiVerifikasi('pulang')}
-                  className="w-full py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
+                  className="w-full py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-red-50 active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait text-red-600 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
                 >
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
-                    <LogOut size={16} strokeWidth={2.5} />
+                    {isSubmittingPresensi ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} strokeWidth={2.5} />}
                   </div>
-                  <span>absen pulang sekarang ({getNamaSesiTombol(sesiAktif)})</span>
+                  <span>{isSubmittingPresensi ? 'Menyimpan...' : `absen pulang sekarang (${getNamaSesiTombol(sesiAktif)})`}</span>
                 </button>
                 {perluVerifikasi && (
                   <p className="text-[10px] sm:text-[11px] text-white/75 flex items-center justify-center gap-1 text-center">
@@ -1239,6 +1377,22 @@ function TeacherSelfService({
               </div>
             ) : null}
           </div>
+
+          {pendingQueueCount > 0 && (
+            <div className="mt-2 px-3 py-2 rounded-xl bg-amber-400/20 border border-amber-300/40 flex items-center justify-between gap-2 text-[11px] text-amber-100">
+              <span className="font-bold">
+                ⏳ {pendingQueueCount} data presensi menunggu dikirim ke Cloud (sinyal lemah/offline).
+              </span>
+              <button
+                type="button"
+                disabled={isFlushingQueue}
+                onClick={handleFlushPendingNow}
+                className="px-2.5 py-1 rounded-lg bg-white text-amber-900 font-black text-[10px] uppercase tracking-wider hover:bg-amber-50 disabled:opacity-60 shrink-0 cursor-pointer"
+              >
+                {isFlushingQueue ? 'Mengirim...' : 'Kirim Sekarang'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1384,8 +1538,8 @@ function TeacherSelfService({
             <label className={cx.label}>Keterangan</label>
             <textarea rows={3} className={cx.inputFocus} value={izinKeterangan} onChange={e => setIzinKeterangan(e.target.value)} placeholder="Contoh: Demam sejak semalam, sudah periksa ke puskesmas." />
           </div>
-          <button type="button" onClick={handleAjukan} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">
-            Kirim Pengajuan
+          <button type="button" disabled={isSubmittingPresensi} onClick={handleAjukan} className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white font-black py-3 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2">
+            {isSubmittingPresensi ? <><Loader2 size={16} className="animate-spin" /> Menyimpan...</> : 'Kirim Pengajuan'}
           </button>
         </div>
       </Modal>
@@ -1441,6 +1595,26 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const rafRef = useRef(null);
+  const watchIdRef = useRef(null);
+  const gpsWaitTimerRef = useRef(null);
+  const gpsSafetyTimerRef = useRef(null);
+  const [gpsProgressText, setGpsProgressText] = useState('Mendeteksi koordinat posisi Anda saat ini…');
+  const verifiedFiredRef = useRef(false);
+
+  const stopGpsWatch = useCallback(() => {
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (gpsWaitTimerRef.current) {
+      clearTimeout(gpsWaitTimerRef.current);
+      gpsWaitTimerRef.current = null;
+    }
+    if (gpsSafetyTimerRef.current) {
+      clearTimeout(gpsSafetyTimerRef.current);
+      gpsSafetyTimerRef.current = null;
+    }
+  }, []);
 
   const stopScan = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -1452,9 +1626,11 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   }, []);
 
   const checkGps = useCallback(() => {
+    stopGpsWatch();
     setGpsStatus('checking');
     gpsStatusRef.current = 'checking';
     setGpsError('');
+    setGpsProgressText('Mendeteksi koordinat satelit GPS Anda saat ini…');
     if (!navigator.geolocation) {
       setGpsError('Perangkat/browser ini tidak mendukung fitur sensor GPS.');
       setGpsStatus('fail');
@@ -1462,15 +1638,17 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       return;
     }
 
-    // 🛡️ PERBAIKAN: Multi-reading GPS dengan toleransi akurasi
+    // 🛡️ STABILISASI GPS SATELIT (Anti-Meleset Wi-Fi/Cell-Tower 550m):
+    // Gunakan watchPosition high-accuracy agar bacaan awal coarse/multipath tidak
+    // langsung menolak guru sebelum satelit GPS mengunci posisi yang stabil.
     const gpsReadings = [];
     let gpsResolved = false;
-    let gpsTimer = null;
+    let stabilizeStarted = false;
 
     const processGpsResult = () => {
       if (gpsResolved) return;
       gpsResolved = true;
-      if (gpsTimer) clearTimeout(gpsTimer);
+      stopGpsWatch();
 
       if (gpsReadings.length === 0) {
         setGpsError('Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.');
@@ -1479,8 +1657,11 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
         return;
       }
 
-      // Pilih reading paling akurat
-      gpsReadings.sort((a, b) => (a.accuracy || 9999) - (b.accuracy || 9999));
+      // Prioritaskan reading satelit high-accuracy yang paling akurat (atau terdekat dalam radius)
+      gpsReadings.sort((a, b) => {
+        if (a.highAccuracy !== b.highAccuracy) return a.highAccuracy ? -1 : 1;
+        return (a.accuracy || 9999) - (b.accuracy || 9999);
+      });
       const best = gpsReadings[0];
       const { latitude, longitude, accuracy } = best;
 
@@ -1503,17 +1684,13 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       gpsInfoRef.current = resolvedGps;
       setGpsInfo(resolvedGps);
 
-      // 🛡️ PERBAIKAN: Toleransi akurasi GPS
-      // Jika akurasi sensor GPS sangat rendah (>200m), kemungkinan besar posisi
-      // berasal dari cell tower (bukan GPS satelit) — ini terjadi saat transisi
-      // WiFi → data seluler. Beri pesan khusus agar guru mengerti dan coba lagi.
-      if (!dalamRadius && accuracy > 200) {
+      // 🛡️ PERBAIKAN: Proteksi sinyal tidak akurat (> 100m atau non-satelit di luar radius)
+      if (!dalamRadius && (!best.highAccuracy || accuracy > 100)) {
         setGpsError(
-          `⚠️ Sinyal GPS lemah (akurasi ±${Math.round(accuracy)}m). ` +
+          `⚠️ Sinyal GPS belum akurat (akurasi ±${Math.round(accuracy)}m). ` +
           `Posisi terdeteksi ±${jarak ?? 0}m dari "${terdekat?.nama || 'Lokasi Sekolah'}" ` +
-          `tetapi hasil ini TIDAK AKURAT karena sinyal GPS sedang lemah. ` +
-          `Ini biasa terjadi saat WiFi terputus dan HP berpindah ke paket data. ` +
-          `Tunggu 10-15 detik lalu tekan "Cek Ulang" agar GPS mendapatkan sinyal satelit yang lebih baik.`
+          `karena HP baru mendapatkan sinyal jaringan/Wi-Fi, bukan kunci satelit penuh. ` +
+          `Tunggu 5–10 detik atau bergerak sedikit ke dekat jendela/area terbuka lalu tekan "Cek Ulang Posisi GPS".`
         );
         setGpsStatus('fail');
         gpsStatusRef.current = 'fail';
@@ -1524,50 +1701,100 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
       gpsStatusRef.current = dalamRadius ? 'ok' : 'fail';
       if (!dalamRadius) {
         setGpsError(terdekat
-          ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m)${accuracy > 100 ? ` — Akurasi GPS: ±${Math.round(accuracy)}m (sinyal kurang optimal)` : ''}. Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
+          ? `Posisi GPS Anda terdeteksi berjarak ±${jarak ?? 0}m dari "${terdekat.nama || 'Lokasi Sekolah'}" (Batas radius toleransi maksimal ${terdekat.radiusMeter || 150}m)${accuracy > 60 ? ` — Akurasi GPS: ±${Math.round(accuracy)}m` : ''}. Presensi otomatis DITOLAK karena Anda berada di luar lingkungan sekolah.`
           : 'Titik koordinat lokasi sekolah belum dapat diverifikasi atau belum didaftarkan di pengaturan. Hubungi Admin Sekolah.');
       }
     };
 
-    // Bacaan 1: Cepat (dari cache GPS terakhir, mencegah error saat transisi jaringan)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        gpsReadings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
-        if (pos.coords.accuracy < 50) processGpsResult(); // Akurasi bagus, langsung proses
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 3000 }
-    );
+    const handleHighAccuracyReading = (pos) => {
+      if (gpsResolved) return;
+      const reading = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy ?? 999,
+        highAccuracy: true,
+      };
+      gpsReadings.push(reading);
 
-    // Bacaan 2: Fresh dari sensor GPS satelit
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        gpsReadings.push({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      const cek = cariLokasiTerdekat(reading.latitude, reading.longitude, lokasiList, reading.accuracy);
+      const isInside = cek ? (cek.dalamRadius ?? cek.diDalamRadius ?? false) : false;
+
+      // Lolos instan HANYA jika membaca koordinat satelit di dalam radius & akurasi baik
+      if (isInside && reading.accuracy <= 65) {
         processGpsResult();
-      },
-      (err) => {
-        if (gpsReadings.length > 0) {
-          processGpsResult();
-        } else {
-          const errMsg = err.code === 1
-            ? 'Izin akses lokasi (GPS) DITOLAK oleh browser/HP. Anda wajib mengizinkan akses lokasi untuk melakukan presensi.'
-            : 'Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.';
-          if (!gpsResolved) {
+        return;
+      }
+
+      // Jika bacaan pertama tampak di luar radius / belum akurat, beri waktu hingga 4.5 detik
+      // agar satelit GPS sempat mengunci titik sebenarnya (menghindari loncatan coarse fix awal)
+      if (!stabilizeStarted) {
+        stabilizeStarted = true;
+        setGpsProgressText('Menstabilkan kunci sinyal satelit GPS agar koordinat akurat…');
+        gpsWaitTimerRef.current = setTimeout(() => {
+          if (!gpsResolved) processGpsResult();
+        }, 4500);
+      }
+    };
+
+    if (typeof navigator.geolocation.watchPosition === 'function') {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        handleHighAccuracyReading,
+        (err) => {
+          if (gpsResolved) return;
+          if (err.code === 1) {
             gpsResolved = true;
-            setGpsError(errMsg);
+            stopGpsWatch();
+            setGpsError('Izin akses lokasi (GPS) DITOLAK oleh browser/HP. Anda wajib mengizinkan akses lokasi untuk melakukan presensi.');
             setGpsStatus('fail');
             gpsStatusRef.current = 'fail';
           }
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+        },
+        { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
+      );
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        handleHighAccuracyReading,
+        () => {},
+        { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
+      );
+    }
 
-    // Safety timeout
-    gpsTimer = setTimeout(() => {
-      if (!gpsResolved) processGpsResult();
-    }, 16000);
-  }, [lokasiList]);
+    // Fallback jaringan HANYA jika setelah 8 detik tidak ada 1 pun bacaan satelit yang masuk
+    gpsSafetyTimerRef.current = setTimeout(() => {
+      if (gpsResolved) return;
+      if (gpsReadings.length > 0) {
+        processGpsResult();
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (gpsResolved) return;
+          gpsReadings.push({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy ?? 999,
+            highAccuracy: false,
+          });
+          processGpsResult();
+        },
+        (err) => {
+          if (gpsResolved) return;
+          if (gpsReadings.length > 0) {
+            processGpsResult();
+          } else {
+            gpsResolved = true;
+            stopGpsWatch();
+            setGpsError(err.code === 1
+              ? 'Izin akses lokasi (GPS) DITOLAK oleh browser/HP. Anda wajib mengizinkan akses lokasi untuk melakukan presensi.'
+              : 'Gagal mendeteksi koordinat lokasi GPS. Pastikan GPS aktif dan koneksi internet stabil.');
+            setGpsStatus('fail');
+            gpsStatusRef.current = 'fail';
+          }
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 3000 }
+      );
+    }, 8500);
+  }, [lokasiList, stopGpsWatch]);
 
   const tick = useCallback(() => {
     const video = videoRef.current;
@@ -1613,6 +1840,8 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
           }
 
           setTimeout(() => {
+            if (verifiedFiredRef.current) return;
+            verifiedFiredRef.current = true;
             const jarak = effectiveGps?.jarakMeter ?? effectiveGps?.jarak ?? 0;
             onVerified({
               lokasi: lokasiAktif ? {
@@ -1652,7 +1881,13 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
 
   // Reset & mulai verifikasi otomatis tiap kali modal dibuka
   useEffect(() => {
-    if (!isOpen) { stopScan(); return; }
+    if (!isOpen) {
+      stopScan();
+      stopGpsWatch();
+      verifiedFiredRef.current = false;
+      return;
+    }
+    verifiedFiredRef.current = false;
     setGpsStatus('idle'); setGpsInfo(null); setGpsError('');
     gpsStatusRef.current = 'idle'; gpsInfoRef.current = null;
     setQrStatus('idle'); setCameraError('');
@@ -1660,7 +1895,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  useEffect(() => () => stopScan(), [stopScan]);
+  useEffect(() => () => { stopScan(); stopGpsWatch(); }, [stopScan, stopGpsWatch]);
 
   if (!isOpen) return null;
 
@@ -1669,8 +1904,10 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   const canConfirm = gpsPass && qrPass;
 
   const handleConfirm = () => {
-    if (!canConfirm) return;
+    if (!canConfirm || verifiedFiredRef.current) return;
+    verifiedFiredRef.current = true;
     stopScan();
+    stopGpsWatch();
     const jarak = gpsInfo?.jarakMeter ?? gpsInfo?.jarak ?? 0;
     onVerified({
       lokasi: lokasiAktif && gpsInfo ? {
@@ -1685,12 +1922,12 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={() => { stopScan(); onClose(); }} title={mode === 'pulang' ? 'Verifikasi Absen Pulang' : 'Verifikasi Absen Masuk'}>
+    <Modal isOpen={isOpen} onClose={() => { stopScan(); stopGpsWatch(); onClose(); }} title={mode === 'pulang' ? 'Verifikasi Absen Pulang' : 'Verifikasi Absen Masuk'}>
       <div className="space-y-4">
         {!lokasiAktif && !qrAktif && (
           <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 rounded-xl p-3 flex items-start gap-2 border border-slate-200 dark:border-slate-700">
             <AlertCircle size={16} className="shrink-0 mt-0.5 text-slate-400" />
-            Admin belum mengaktifkan validasi lokasi/QR untuk sekolah ini. Absen akan tercatat menggunakan jam perangkat Anda saat ini.
+            Admin belum mengaktifkan validasi lokasi/QR untuk sekolah ini. Absen akan tercatat menggunakan jam WIB saat ini.
           </div>
         )}
 
@@ -1707,7 +1944,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
 
             {gpsStatus === 'checking' && (
               <p className="text-xs text-slate-500 flex items-center gap-1.5 font-medium">
-                <Loader2 size={12} className="animate-spin text-teal-600" /> Mendeteksi koordinat posisi Anda saat ini…
+                <Loader2 size={12} className="animate-spin text-teal-600" /> {gpsProgressText}
               </p>
             )}
 
@@ -1853,6 +2090,7 @@ function AdminRekapPanel({
     }
   }, [filterDate]);
   const hariIni = getHariIni(selectedDateObj);
+  const hariDisplay = getNamaHariLengkap(selectedDateObj);
 
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [showAllTeachersHarian, setShowAllTeachersHarian] = useState(false);
@@ -1860,7 +2098,7 @@ function AdminRekapPanel({
   const handleSyncCloud = async () => {
     setIsSyncingCloud(true);
     try {
-      const res = await fetchPresensiGuru();
+      const res = await fetchPresensiGuru({ force: true });
       if (res.status === 'success' && Array.isArray(res.data)) {
         if (typeof setPresensiGuru === 'function') {
           setPresensiGuru(res.data);
@@ -1910,8 +2148,8 @@ function AdminRekapPanel({
         }
       }
 
-      // 3. Cocokkan via NIPY / Username jika ID tersimpan sebagai NIPY/Username
-      if (rId && ((targetNipy && rId === targetNipy) || (targetLinked && rId === targetLinked))) {
+      // 3. Cocokkan via NIPY / Username jika ID tersimpan sebagai NIPY/Username (case-insensitive)
+      if (rId && ((targetNipy && rId.toLowerCase() === targetNipy) || (targetLinked && rId.toLowerCase() === targetLinked))) {
         return true;
       }
 
@@ -1981,7 +2219,7 @@ function AdminRekapPanel({
       BelumAbsen: 'BELUM MELAKUKAN ABSEN'
     };
     let text = `*DAFTAR PEGAWAI ${titleMap[statDrilldown]}*\n`;
-    text += `📅 Tanggal: ${filterDate} (${hariIni})\n`;
+    text += `📅 Tanggal: ${filterDate} (${hariDisplay})\n`;
     text += `⏰ Sesi: ${sesiTerpilih.nama}\n`;
     text += `👥 Total: ${drilldownTeachers.length} Orang\n\n`;
     drilldownTeachers.forEach((t, i) => {
@@ -2300,7 +2538,7 @@ function AdminRekapPanel({
           <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2">
               <CalendarDays size={14} className="text-teal-600 dark:text-teal-400" />
-              <span>{hariIni}, {filterDate}</span>
+              <span>{hariDisplay}, {filterDate}</span>
               <span className="text-slate-300 dark:text-slate-600">•</span>
               <span className="text-teal-700 dark:text-teal-300 font-extrabold">Sesi {sesiTerpilih.nama}</span>
             </div>
@@ -2337,7 +2575,7 @@ function AdminRekapPanel({
               </div>
             ) : (
               drilldownTeachers.map((t, idx) => {
-                const rec = getRecord(t.id);
+                const rec = getRecord(t);
                 return (
                   <div
                     key={t.id}
@@ -2560,7 +2798,7 @@ function AdminRekapPanel({
           <div className="hidden print:block p-5 border-b-2 border-black text-center mb-4">
             <h2 className="text-xl font-black uppercase tracking-wider text-black">{schoolProfile?.nama || 'SDIT QURRATA A\'YUN'}</h2>
             <p className="text-sm font-bold text-black uppercase mt-0.5">REKAPITULASI PRESENSI HARIAN GURU &amp; STAFF</p>
-            <p className="text-xs text-black mt-1">Hari: <strong>{hariIni}</strong>, Tanggal: <strong>{filterDate}</strong> • Sesi: <strong>{sesiTerpilih.nama}</strong> ({sesiTerpilih.jamMasuk} - {sesiTerpilih.jamPulang})</p>
+            <p className="text-xs text-black mt-1">Hari: <strong>{hariDisplay}</strong>, Tanggal: <strong>{filterDate}</strong> • Sesi: <strong>{sesiTerpilih.nama}</strong> ({sesiTerpilih.jamMasuk} - {sesiTerpilih.jamPulang})</p>
           </div>
 
           <div className="overflow-x-auto">
@@ -2646,7 +2884,7 @@ function AdminRekapPanel({
           <div className="hidden print:flex justify-between items-end p-8 text-xs font-bold text-black mt-8">
             <div className="text-center">
               <p className="mb-20">Mengetahui,<br/>Kepala Sekolah</p>
-              <p className="underline underline-offset-4 decoration-2">{schoolProfile?.kepalaSekolah || 'ILWANI, S.Pd.I'}</p>
+              <p className="underline underline-offset-4 decoration-2">{schoolProfile?.kepsek || schoolProfile?.kepalaSekolah || 'ILWANI, S.Pd.I'}</p>
             </div>
             <div className="text-center">
               <p className="mb-1">{schoolProfile?.alamat?.split(',')[0] || 'Kuala Pembuang'}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>

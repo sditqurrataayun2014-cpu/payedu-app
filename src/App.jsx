@@ -21,7 +21,8 @@ import {
   createTeacherPatchHandler,
   pushSingleLoginLog,
   flushPendingLoginLogs,
-  fetchLoginLogsOnly
+  fetchLoginLogsOnly,
+  mergePresensiArrays
 } from './services/dbService';
 import {
   safeStorageGet,
@@ -45,6 +46,8 @@ const sanitizeTeacherList = (list) => {
   const sanitized = list.map(sanitizeTeacherData);
   return sortTeachersById(deduplicateTeachers(sanitized));
 };
+
+const isTeacherRole = (role) => ['guru', 'staff'].includes(String(role || '').trim().toLowerCase());
 
 export default function App() {
   const [teachers, setTeachers] = useState(() => {
@@ -77,6 +80,9 @@ export default function App() {
   const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
 
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const fetchCloudDataRef = useRef(null);
+  const syncLatestPresensiRef = useRef(null);
+  const lastPresensiSyncAtRef = useRef(0);
 
   // 📡 Deteksi Koneksi Internet, Auto-Sync & Antrean Presensi Offline (IndexedDB + Background Sync API)
   useEffect(() => {
@@ -86,9 +92,17 @@ export default function App() {
     const handleOnline = () => {
       setIsOnline(true);
       // 🛡️ Flush antrian presensi & log login yang gagal saat offline
-      flushPendingPresensi().catch(e => console.warn('[Flush Queue] Warning:', e));
+      flushPendingPresensi()
+        .catch(e => console.warn('[Flush Queue] Warning:', e))
+        .finally(() => {
+          if (typeof syncLatestPresensiRef.current === 'function') {
+            syncLatestPresensiRef.current(true);
+          }
+        });
       flushPendingLoginLogs().catch(e => console.warn('[Flush LoginLogs] Warning:', e));
-      fetchCloudData(true);
+      if (typeof fetchCloudDataRef.current === 'function') {
+        fetchCloudDataRef.current(true);
+      }
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -248,7 +262,7 @@ export default function App() {
           const cleanArchives = deduplicateArchives(serverArchives);
 
           // 🪄 PERBAIKAN MUTLAK: Guru tidak pernah memicu banner konflik (Presensi & Slip Guru selalu berjalan mulus)
-          if (!user || user.role === 'guru') {
+          if (!user || isTeacherRole(user.role)) {
             setGeneralSettings(serverSettings);
             setTeachers(cleanTeachers);
             setArchives(cleanArchives);
@@ -302,7 +316,7 @@ export default function App() {
           let finalArchives = serverArchives;
 
           // 🛡️ ANTI-WIPEOUT: Hanya ADMIN yang boleh push SYNC_ALL ke cloud! Guru tidak pernah push SYNC_ALL!
-          if (user && user.role !== 'guru' && (isLocalNewer || isServerTeachersEmpty)) {
+          if (user && !isTeacherRole(user.role) && (isLocalNewer || isServerTeachersEmpty)) {
             console.log("🛡️ Proteksi Sinkronisasi: Mempertahankan data lokal Admin yang lebih baru & auto-push ke Supabase Cloud");
             if (isLocalNewer && localSettings) {
               finalSettings = { ...serverSettings, ...localSettings };
@@ -333,7 +347,7 @@ export default function App() {
           setTeachers(cleanTeachers); 
           setArchives(cleanArchives);
           setFeedbacks(serverFeedbacks);
-          if (user && user.role !== 'guru') {
+          if (user && !isTeacherRole(user.role)) {
             const sortedServerLogs = mergeLoginLogs(serverLogs, [], 500);
             setLoginHistory(sortedServerLogs);
             lastSavedLogsRef.current = JSON.stringify(sortedServerLogs);
@@ -369,6 +383,33 @@ export default function App() {
     }
   };
 
+  // 🔄 Sinkronisasi presensi mutakhir secara aman (merge dengan state lokal tanpa menimpa edit terbaru)
+  const syncLatestPresensi = useCallback(async (forceNow = false) => {
+    const nowTs = Date.now();
+    if (!forceNow && nowTs - lastPresensiSyncAtRef.current < 12000) return;
+    lastPresensiSyncAtRef.current = nowTs;
+    try {
+      const presensiRes = await fetchPresensiGuru();
+      if (presensiRes.status === 'success' && Array.isArray(presensiRes.data)) {
+        setPresensiGuru(prev => {
+          const merged = mergePresensiArrays(presensiRes.data, Array.isArray(prev) ? prev : []);
+          const nextStr = JSON.stringify(merged);
+          if (lastSavedPresensiRef.current === nextStr) return prev;
+          lastSavedPresensiRef.current = nextStr;
+          safeStorageSet('payedu_presensi_guru', merged);
+          return merged;
+        });
+      }
+    } catch (e) {
+      console.warn('[Presensi Catch-up] Warning:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCloudDataRef.current = fetchCloudData;
+    syncLatestPresensiRef.current = syncLatestPresensi;
+  });
+
   useEffect(() => {
     fetchCloudData();
   }, []);
@@ -387,6 +428,7 @@ export default function App() {
         setPresensiGuru(prev => {
           const currentList = Array.isArray(prev) ? prev : [];
           const nextList = currentList.filter(r => r.id !== singleRecord.id);
+          lastSavedPresensiRef.current = JSON.stringify(nextList);
           safeStorageSet('payedu_presensi_guru', nextList);
           return nextList;
         });
@@ -414,17 +456,21 @@ export default function App() {
         } else {
           nextList = [...currentList, singleRecord];
         }
+        lastSavedPresensiRef.current = JSON.stringify(nextList);
         safeStorageSet('payedu_presensi_guru', nextList);
         return nextList;
       });
+    }, () => {
+      // Catch-up otomatis bila koneksi WebSocket Realtime sempat terputus & tersambung kembali
+      syncLatestPresensi(true);
     });
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [syncLatestPresensi]);
 
   // 📡 Real-time Subscription: Menerima perubahan data spesifik via Supabase Realtime (Ultra Hemat Bandwidth)
-  const isManagementUser = Boolean(user && user.role !== 'guru');
+  const isManagementUser = Boolean(user && !isTeacherRole(user.role));
   useEffect(() => {
     let settingsTimer = null;
     let teachersTimer = null;
@@ -508,10 +554,13 @@ export default function App() {
     if (!user) return;
     flushPendingLoginLogs().catch(e => console.warn('[Flush LoginLogs] Warning:', e));
 
-    if (user.role === 'guru') {
+    if (isTeacherRole(user.role)) {
       if (isDataLoaded) {
-        syncPendingTeacherAttendance(user.id, presensiGuru);
-        flushPendingPresensi().catch(e => console.warn('[Flush Queue Login] Warning:', e));
+        flushPendingPresensi()
+          .catch(e => console.warn('[Flush Queue Login] Warning:', e))
+          .then(() => syncPendingTeacherAttendance(user.id, presensiGuru, user.name))
+          .then(() => syncLatestPresensi(true))
+          .catch(e => console.warn('[Sync Teacher Login] Warning:', e));
       }
     } else {
       fetchLoginLogsOnly(500).then(logs => {
@@ -521,19 +570,22 @@ export default function App() {
         }
       }).catch(e => console.warn('[Fetch Admin Logs] Warning:', e));
     }
-  }, [user, isDataLoaded]);
+  }, [user, isDataLoaded, syncLatestPresensi]);
 
   // 🔋 Radar Latar Belakang (Smart Polling Hemat Bandwidth)
-  // - Interval 5 menit (hanya sebagai cadangan jika WebSocket Realtime terputus)
-  // - Otomatis PAUSE jika tab berada di background / layar HP mati (hemat ribuan log ingestion)
-  // - Hanya fetch settings jika timestamp general settings berubah (~1 KB, bukan megabytes)
+  // - Interval 5 menit untuk settings, dan 60 detik khusus Admin (saat tab aktif) untuk catch-up presensi hari ini
+  // - Otomatis PAUSE jika tab berada di background / layar HP mati
   useEffect(() => {
     if (!isDataLoaded || hasConflict) return; 
 
-    const checkUpdate = async () => {
+    const checkUpdate = async (includePresensiCatchup = false) => {
       // 🛡️ Hemat Bandwidth: Lewati jika tab sedang diminimize / layar HP mati
       if (typeof document !== 'undefined' && document.hidden) return;
       if (isPushingDataRef.current) return;
+
+      if (includePresensiCatchup && isManagementUser) {
+        syncLatestPresensi();
+      }
 
       try {
         const cloudTs = await checkCloudTimestamp();
@@ -549,13 +601,25 @@ export default function App() {
       } catch (e) { /* skip jika gagal cek timestamp */ }
     };
 
-    // 1. Polling santai setiap 5 menit (300.000 ms) saat tab aktif
-    const pollInterval = setInterval(checkUpdate, 300000);
+    // 1. Cek presensi hari ini tiap 60 detik di portal Admin (saat tab aktif) + settings tiap 5 menit
+    let tickCount = 0;
+    const pollInterval = setInterval(() => {
+      tickCount += 1;
+      if (isManagementUser && typeof document !== 'undefined' && !document.hidden) {
+        syncLatestPresensi();
+      }
+      if (tickCount % 5 === 0) {
+        checkUpdate(false);
+      }
+    }, 60000);
 
     // 2. Cek seketika saat user membuka kembali tab PayEdu dari background
     const handleVisibilityChange = () => {
       if (typeof document !== 'undefined' && !document.hidden) {
-        checkUpdate();
+        if (user && isTeacherRole(user.role)) {
+          flushPendingPresensi().catch(() => {});
+        }
+        checkUpdate(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -564,7 +628,7 @@ export default function App() {
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isDataLoaded, hasConflict]);
+  }, [isDataLoaded, hasConflict, isManagementUser, user, syncLatestPresensi]);
 
   // 🪄 FUNGSI MUTLAK: Mengubah Status Mode Maintenance & Push Langsung ke Cloud Supabase
   const handleToggleMaintenanceMode = async (newVal) => {
@@ -599,7 +663,7 @@ export default function App() {
   // Akibatnya data hanya tersimpan di localStorage tapi TIDAK PERNAH sampai ke Supabase Cloud.
   // Saat refresh, app mengambil data lama dari Supabase → perubahan Admin hilang.
   useEffect(() => {
-    if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
+    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
 
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
     if (lastSavedSettingsRef.current === currentDataStr) return;
@@ -639,7 +703,7 @@ export default function App() {
   // Update lastModified dilakukan SETELAH push ke Supabase berhasil.
   useEffect(() => {
     // GEMBOK KEAMANAN: Cegah Tamu (Belum Login) dan Guru merusak data server!
-    if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
+    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
 
     const currentTeachersStr = JSON.stringify(teachers);
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
@@ -679,7 +743,7 @@ export default function App() {
   // 🪄 PERBAIKAN PERMANEN 3: Auto-Save Arsip dan Feedback (🔋 dengan Debounce untuk hemat bandwidth)
   useEffect(() => {
     // Hanya Admin yang boleh memanipulasi Arsip secara global
-    if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
+    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
     const currentStr = JSON.stringify(archives);
     if (lastSavedArchivesRef.current === currentStr) return;
     lastSavedArchivesRef.current = currentStr;
@@ -693,7 +757,7 @@ export default function App() {
 
   useEffect(() => {
     // Hanya Admin yang memanipulasi status Feedback secara global (Guru kirim via fungsi khusus, bukan auto-save)
-    if (!isDataLoaded || hasConflict || !user || user.role === 'guru') return;
+    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
     const currentStr = JSON.stringify(feedbacks);
     if (lastSavedFeedbacksRef.current === currentStr) return;
     lastSavedFeedbacksRef.current = currentStr;
@@ -720,18 +784,15 @@ export default function App() {
   // Ini adalah safety net: jika push langsung saat upsertRecord() gagal, auto-save ini akan mengirim ulang.
   useEffect(() => {
     if (!isDataLoaded || !user) return;
-    if (user.role === 'guru') return; // HP Guru bebas dari beban bulk upload!
+    if (isTeacherRole(user.role)) return; // HP Guru menggunakan push atomic + antrean WAL!
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
     lastSavedPresensiRef.current = currentStr;
     safeStorageSet('payedu_presensi_guru', presensiGuru);
-    // Guru menggunakan debounce lebih panjang (5 detik) agar push langsung di upsertRecord() selesai duluan
-    // Admin menggunakan debounce 3 detik (lebih cepat karena mengedit manual lewat portal)
-    const debounceMs = (user.role === 'guru') ? 5000 : 3000;
     const timeoutId = setTimeout(() => {
       pushPresensiGuru(presensiGuru).catch(e => console.warn('[Auto-Save Presensi] Warning:', e));
-    }, debounceMs);
+    }, 3000);
     return () => clearTimeout(timeoutId);
   }, [presensiGuru, isDataLoaded, user]);
 
