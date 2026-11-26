@@ -658,7 +658,7 @@ export default function PresensiGuruView({
 
       {/* HEADER PRESENSI GURU MODERN */}
       {isTeacher ? (
-        <div className="flex items-center justify-between gap-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs animate-in fade-in duration-500">
+        <div className="flex items-center justify-between gap-3 bg-slate-200/70 dark:bg-slate-800/90 backdrop-blur-md p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-300/75 dark:border-slate-700/80 shadow-xs animate-in fade-in duration-500">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-400/20 dark:text-teal-300 flex items-center justify-center shrink-0">
               <Fingerprint size={18} className="sm:size-5" />
@@ -1123,7 +1123,7 @@ function TeacherSelfService({
                     <CheckCircle2 size={14} className="text-emerald-300 shrink-0" /> Presensi Selesai
                   </span>
                 ) : sudahMasuk ? (
-                  <span className="inline-flex items-center gap-1 text-amber-200 font-extrabold text-xs sm:text-sm">
+                  <span className="inline-flex items-center gap-1 text-white font-extrabold text-xs sm:text-sm">
                     <Clock size={14} className="text-amber-300 shrink-0 animate-pulse" /> Belum Absen Pulang
                   </span>
                 ) : isIzinLike ? (
@@ -1158,7 +1158,7 @@ function TeacherSelfService({
                   <button
                     type="button"
                     onClick={() => handleMulaiVerifikasi('masuk')}
-                    className="flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-emerald-950 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
+                    className="flex-1 py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-emerald-50 active:scale-[0.98] text-emerald-700 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
                   >
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
                       <LogIn size={16} strokeWidth={2.5} />
@@ -1194,17 +1194,17 @@ function TeacherSelfService({
                       ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
                       : 'bg-emerald-500/30 text-emerald-100 border border-emerald-400/40'
                   }`}>
-                    {record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu 🎉'}
+                    {record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu'}
                   </span>
                 </div>
 
-                {/* TOMBOL ABSEN PULANG: WARM SUNSET AMBER / GOLDEN ORANGE (ERGO-FRIENDLY & HIGH-CONTRAST) */}
+                {/* TOMBOL ABSEN PULANG: PUTIH BERSIH DENGAN IKON & TEKS MERAH TEGAS */}
                 <button
                   type="button"
                   onClick={() => handleMulaiVerifikasi('pulang')}
-                  className="w-full py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:via-orange-400 hover:to-amber-400 active:scale-[0.98] text-slate-950 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-orange-950/30 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-amber-200/50 group"
+                  className="w-full py-2.5 sm:py-3.5 px-4 sm:px-6 rounded-xl sm:rounded-2xl bg-white hover:bg-red-50 active:scale-[0.98] text-red-600 font-black text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-950/25 transition-all flex items-center justify-center gap-2.5 cursor-pointer border border-white group"
                 >
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-950/15 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
                     <LogOut size={16} strokeWidth={2.5} />
                   </div>
                   <span>absen pulang sekarang ({getNamaSesiTombol(sesiAktif)})</span>
