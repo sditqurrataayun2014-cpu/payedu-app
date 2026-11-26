@@ -1,24 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Trash2, Archive, FileText, X, Printer, 
-  Download, FolderOpen, Info, Search, ChevronRight, 
+import {
+  Trash2, Archive, FileText, X, Printer,
+  Download, FolderOpen, Info, Search, ChevronRight,
   TrendingUp, Activity, FileSpreadsheet, Lock, Unlock,
   ShieldAlert, Scale, ArrowUpDown, CheckCircle2, AlertCircle,
   Clock, Award
 } from 'lucide-react';
 import SlipDocument from '../../components/SlipDocument';
-import { 
-  formatRp, safeStorageSet, calculatePayroll, 
-  exportToPDF, getFormattedPeriod 
+import {
+  formatRp, safeStorageSet, calculatePayroll,
+  exportToPDF, getFormattedPeriod, isReadOnlyUser
 } from '../../utils/payrollUtils';
-import { 
-  exportArchiveToExcel, 
-  exportArchiveComparisonToExcel 
+import {
+  exportArchiveToExcel,
+  exportArchiveComparisonToExcel
 } from '../../services/excelExportService';
 import { pushCloudData as pushToSupabase, deduplicateArchives } from '../../services/dbService';
 
 // --- MANAJEMEN ARSIP VIEW ---
-function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog, teachers }) {
+function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog, teachers, user, isReadOnly = false }) {
+  const readOnly = isReadOnly || isReadOnlyUser(user);
   // Mode Tampilan: 'arsip_tahunan' | 'komparasi'
   const [activeTab, setActiveTab] = useState('arsip_tahunan');
 
@@ -27,7 +28,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
   const [detailSearch, setDetailSearch] = useState('');
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [selectedSlip, setSelectedSlip] = useState(null);
-  
+
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null });
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -58,8 +59,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
   const availableYears = useMemo(() => {
     const ySet = new Set();
     cleanArchivesList.forEach(arc => {
-       const parts = (arc.periode || '').split(' ');
-       if (parts.length > 1) ySet.add(parts[1]);
+      const parts = (arc.periode || '').split(' ');
+      if (parts.length > 1) ySet.add(parts[1]);
     });
     const arr = Array.from(ySet).sort().reverse();
     return arr.length > 0 ? arr : [new Date().getFullYear().toString()];
@@ -92,10 +93,10 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
   // 🪄 METRIK DETAIL ARSIP YANG DITINGKATKAN: Termasuk Total Jam Mengajar & Rata-rata Absensi
   const archiveMetrics = useMemo(() => {
     if (!selectedArchive || !selectedArchive.dataGuru) {
-      return { 
-        totalPegawai: 0, 
-        totalKotor: 0, 
-        totalPotongan: 0, 
+      return {
+        totalPegawai: 0,
+        totalKotor: 0,
+        totalPotongan: 0,
         totalBersih: 0,
         totalJamMengajar: 0,
         avgJamMengajar: 0,
@@ -111,8 +112,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
       totalPotongan += slip.totalPotongan;
       totalBersih += slip.totalBersih;
 
-      const jam = slip.jamDihitung !== undefined 
-        ? slip.jamDihitung 
+      const jam = slip.jamDihitung !== undefined
+        ? slip.jamDihitung
         : (t.payroll?.jamMengajar?.realisasi || t.teachingHours || 0);
       totalJam += Number(jam) || 0;
 
@@ -289,15 +290,16 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
   const filteredComparisonRows = useMemo(() => {
     if (!compareSearch.trim()) return comparisonData.rows;
     const s = compareSearch.trim().toLowerCase();
-    return comparisonData.rows.filter(r => 
-      r.name.toLowerCase().includes(s) || 
-      (r.nipy || '').includes(s) || 
+    return comparisonData.rows.filter(r =>
+      r.name.toLowerCase().includes(s) ||
+      (r.nipy || '').includes(s) ||
       r.position.toLowerCase().includes(s)
     );
   }, [comparisonData.rows, compareSearch]);
 
   // Ekspor Excel Komparasi
   const handleExportComparisonExcel = () => {
+    if (readOnly) return;
     try {
       exportArchiveComparisonToExcel({
         periodA: comparePeriodA,
@@ -316,13 +318,14 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
 
   // 🪄 FITUR BARU: Rollback / Batalkan Tutup Buku Khusus Kepala Sekolah
   const executeRollbackArchive = async () => {
+    if (readOnly) return;
     if (!selectedArchive) return;
 
     // Verifikasi Otorisasi (Sandi Kepsek atau konfirmasi teks)
     const expectedPassword = settings?.principalPassword || 'kepsek123';
-    const isPassValid = rollbackPassword === expectedPassword || 
-                        rollbackPassword === 'admin123' || 
-                        rollbackPassword.trim().toUpperCase() === 'BATALKAN ARSIP';
+    const isPassValid = rollbackPassword === expectedPassword ||
+      rollbackPassword === 'admin123' ||
+      rollbackPassword.trim().toUpperCase() === 'BATALKAN ARSIP';
 
     if (!isPassValid) {
       setRollbackError('Sandi otorisasi Kepala Sekolah salah atau teks konfirmasi tidak sesuai.');
@@ -359,9 +362,9 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
       // 4. Catat Log Audit Sah
       if (saveAuditLog) {
         saveAuditLog(
-          null, 
-          'PEMBATALAN TUTUP BUKU (ROLLBACK)', 
-          targetPeriode, 
+          null,
+          'PEMBATALAN TUTUP BUKU (ROLLBACK)',
+          targetPeriode,
           'Arsip dibuka kembali ke status Draft oleh Kepala Sekolah'
         );
       }
@@ -380,73 +383,76 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
 
   // Hapus Arsip 1 Bulan Permanen
   const handleDeleteArchive = (id) => {
+    if (readOnly) return;
     setConfirmDelete({ isOpen: true, id });
   };
 
   const executeDeleteArchive = async () => {
+    if (readOnly) return;
     const targetId = confirmDelete.id;
     const updatedArchives = deduplicateArchives((archives || []).filter(arc => String(arc.id) !== String(targetId)));
     setArchives(updatedArchives);
     safeStorageSet('payedu_archives', updatedArchives);
-    if(selectedArchive?.id === targetId) setSelectedArchive(null);
+    if (selectedArchive?.id === targetId) setSelectedArchive(null);
     setConfirmDelete({ isOpen: false, id: null });
 
     try {
       await pushToSupabase('SAVE_ARCHIVES', updatedArchives);
       triggerNotification('success', 'Arsip buku gaji berhasil dihapus.');
-    } catch(err) {
+    } catch (err) {
       console.warn("Gagal sinkronisasi hapus arsip ke Cloud:", err);
     }
   };
 
   // Ekspor Full Database 1 Tahun ke JSON
   const handleBackupYearly = () => {
-     const yearData = cleanArchivesList.filter(arc => arc.periode && arc.periode.includes(activeYear));
-     if(yearData.length === 0) return triggerNotification('error', 'Tidak ada data arsip untuk tahun ini.');
+    if (readOnly) return;
+    const yearData = cleanArchivesList.filter(arc => arc.periode && arc.periode.includes(activeYear));
+    if (yearData.length === 0) return triggerNotification('error', 'Tidak ada data arsip untuk tahun ini.');
 
-     const backupData = {
-        appName: settings.appName,
-        timestamp: new Date().toISOString(),
-        type: 'YEARLY_DATABASE_ARCHIVE',
-        year: activeYear,
-        totalMonths: yearData.length,
-        archives: yearData
-     };
-     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-     const url = URL.createObjectURL(blob);
-     const link = document.createElement('a');
-     link.href = url;
-     link.setAttribute('download', `DB_ARSIP_GAJI_FULL_${activeYear}.json`);
-     document.body.appendChild(link);
-     link.click();
-     document.body.removeChild(link);
+    const backupData = {
+      appName: settings.appName,
+      timestamp: new Date().toISOString(),
+      type: 'YEARLY_DATABASE_ARCHIVE',
+      year: activeYear,
+      totalMonths: yearData.length,
+      archives: yearData
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `DB_ARSIP_GAJI_FULL_${activeYear}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-     triggerNotification('success', `Backup database tahun ${activeYear} berhasil diunduh!`);
+    triggerNotification('success', `Backup database tahun ${activeYear} berhasil diunduh!`);
   };
 
   // Tutup Buku Tahunan (Purge Server)
   const executePurgeYear = async () => {
-     const newArchives = deduplicateArchives((archives || []).filter(arc => !arc.periode || !arc.periode.includes(activeYear)));
-     setArchives(newArchives);
-     safeStorageSet('payedu_archives', newArchives);
-     setConfirmPurge(false);
-     try {
-        await pushToSupabase('SAVE_ARCHIVES', newArchives);
-        triggerNotification('success', `Pembersihan selesai! Data tahun ${activeYear} telah dikosongkan dari Cloud.`);
-     } catch (err) {
-        console.warn("Gagal tutup buku di Cloud:", err);
-     }
+    if (readOnly) return;
+    const newArchives = deduplicateArchives((archives || []).filter(arc => !arc.periode || !arc.periode.includes(activeYear)));
+    setArchives(newArchives);
+    safeStorageSet('payedu_archives', newArchives);
+    setConfirmPurge(false);
+    try {
+      await pushToSupabase('SAVE_ARCHIVES', newArchives);
+      triggerNotification('success', `Pembersihan selesai! Data tahun ${activeYear} telah dikosongkan dari Cloud.`);
+    } catch (err) {
+      console.warn("Gagal tutup buku di Cloud:", err);
+    }
   };
 
   return (
     <div className="flex flex-col gap-5 animate-in fade-in min-h-full relative pb-4">
-      
+
       {/* 🪄 TOAST NOTIFIKASI */}
       {notification.isOpen && (
         <div className="fixed top-6 right-6 z-[100] animate-in slide-in-from-top-4 duration-300">
-          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-white text-sm font-medium ${
-            notification.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
-          }`}>
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-white text-sm font-medium ${notification.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'
+            }`}>
             {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
             <span>{notification.message}</span>
             <button onClick={() => setNotification({ isOpen: false, type: '', message: '' })} className="ml-2 hover:opacity-80">
@@ -475,7 +481,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
             <div className="p-6 space-y-4">
               <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
-                  <Lock size={13} className="text-teal-600"/> Otorisasi Kepala Sekolah Diperlukan
+                  <Lock size={13} className="text-teal-600" /> Otorisasi Kepala Sekolah Diperlukan
                 </div>
                 <p>Masukkan sandi otorisasi Kepala Sekolah atau ketik <code className="bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded font-mono font-bold text-amber-600">BATALKAN ARSIP</code> untuk melanjutkan.</p>
               </div>
@@ -484,7 +490,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                 <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
                   Sandi Otorisasi / Kata Kunci
                 </label>
-                <input 
+                <input
                   type="password"
                   placeholder="Masukkan sandi..."
                   value={rollbackPassword}
@@ -504,18 +510,18 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
             </div>
 
             <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-end gap-2.5 shrink-0">
-              <button 
+              <button
                 onClick={() => {
                   setIsRollbackModalOpen(false);
                   setRollbackPassword('');
                   setRollbackError('');
-                }} 
+                }}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-xs"
               >
                 Batal
               </button>
-              <button 
-                onClick={executeRollbackArchive} 
+              <button
+                onClick={executeRollbackArchive}
                 disabled={isRollbacking || !rollbackPassword}
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-sm transition-colors text-xs flex items-center gap-1.5 disabled:opacity-50"
               >
@@ -583,32 +589,36 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
           <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-base sm:text-lg dark:text-white flex items-center gap-2 truncate">
-                <FileText className="text-teal-500 shrink-0"/> Arsip Slip Gaji ({selectedArchive.periode})
+                <FileText className="text-teal-500 shrink-0" /> Arsip Slip Gaji ({selectedArchive.periode})
               </h3>
-              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors shrink-0"><X size={20}/></button>
+              <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="p-2 hover:bg-slate-200 dark:bg-slate-800 rounded-full text-slate-500 transition-colors shrink-0"><X size={20} /></button>
             </div>
             <div className="overflow-y-auto overscroll-contain p-2 sm:p-4 md:p-8 bg-slate-200 dark:bg-slate-700/50 flex-1 touch-pan-y">
               <SlipDocument teacher={selectedSlip} bulan={selectedArchive.periode} settings={settings} />
             </div>
             <div className="p-3 sm:p-4 border-t border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-wrap justify-end gap-2 shrink-0">
-              <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors">
-                <Printer size={16}/> Print
-              </button>
-              <button 
-                onClick={async () => {
-                  setIsExportingPDF(true);
-                  try {
-                    await exportToPDF('printable-area', `Arsip_Slip_${selectedSlip.name.replace(/\s+/g, '_')}_${selectedArchive.periode}.pdf`);
-                  } finally {
-                    setIsExportingPDF(false);
-                  }
-                }} 
-                disabled={isExportingPDF}
-                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16}/>}
-                {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
-              </button>
+              {!readOnly && (
+                <>
+                  <button onClick={() => window.print()} className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors">
+                    <Printer size={16} /> Print
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsExportingPDF(true);
+                      try {
+                        await exportToPDF('printable-area', `Arsip_Slip_${selectedSlip.name.replace(/\s+/g, '_')}_${selectedArchive.periode}.pdf`);
+                      } finally {
+                        setIsExportingPDF(false);
+                      }
+                    }}
+                    disabled={isExportingPDF}
+                    className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {isExportingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Download size={16} />}
+                    {isExportingPDF ? 'Memproses...' : 'Unduh PDF'}
+                  </button>
+                </>
+              )}
               <button onClick={() => { setIsSlipModalOpen(false); setSelectedSlip(null); }} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm font-medium transition-colors">
                 Tutup
               </button>
@@ -634,28 +644,25 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
         <button
           onClick={() => { setActiveTab('arsip_tahunan'); setSelectedArchive(null); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
-            activeTab === 'arsip_tahunan'
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${activeTab === 'arsip_tahunan'
               ? 'bg-teal-600 text-white shadow-teal-500/20 shadow-md'
               : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
+            }`}
         >
           <FolderOpen size={15} />
           <span>Buku Arsip Penggajian</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-            activeTab === 'arsip_tahunan' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300'
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'arsip_tahunan' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300'
+            }`}>
             {cleanArchivesList.length}
           </span>
         </button>
 
         <button
           onClick={() => { setActiveTab('komparasi'); setSelectedArchive(null); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${
-            activeTab === 'komparasi'
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs ${activeTab === 'komparasi'
               ? 'bg-blue-600 text-white shadow-blue-500/20 shadow-md'
               : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-          }`}
+            }`}
         >
           <Scale size={15} />
           <span>Komparasi Dua Periode (Audit)</span>
@@ -667,7 +674,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
       {/* ========================================================================= */}
       {activeTab === 'komparasi' && (
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col min-h-full animate-in fade-in duration-200">
-          
+
           {/* Header Kontrol Pemilihan Periode */}
           <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
@@ -711,13 +718,15 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                 </select>
               </div>
 
-              <button
-                onClick={handleExportComparisonExcel}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-                title="Unduh Hasil Audit Format Excel (.xlsx)"
-              >
-                <FileSpreadsheet size={15} /> <span>Excel (.xlsx)</span>
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={handleExportComparisonExcel}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                  title="Unduh Hasil Audit Format Excel (.xlsx)"
+                >
+                  <FileSpreadsheet size={15} /> <span>Excel (.xlsx)</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -742,14 +751,12 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
             <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Selisih Beban Sekolah</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`text-sm sm:text-lg font-black ${
-                  comparisonData.summary.selisihTotal > 0 ? 'text-rose-600 dark:text-rose-400' : comparisonData.summary.selisihTotal < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600'
-                }`}>
+                <span className={`text-sm sm:text-lg font-black ${comparisonData.summary.selisihTotal > 0 ? 'text-rose-600 dark:text-rose-400' : comparisonData.summary.selisihTotal < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600'
+                  }`}>
                   {comparisonData.summary.selisihTotal > 0 ? '+' : ''}{formatRp(comparisonData.summary.selisihTotal)}
                 </span>
-                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
-                  comparisonData.summary.selisihTotal > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                }`}>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${comparisonData.summary.selisihTotal > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  }`}>
                   {comparisonData.summary.persentaseTotal > 0 ? '+' : ''}{comparisonData.summary.persentaseTotal}%
                 </span>
               </div>
@@ -827,9 +834,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                     </td>
                     <td className="p-3.5 text-center">
                       {row.hasA && row.hasB ? (
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          row.pct > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : row.pct < 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${row.pct > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : row.pct < 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}>
                           {row.pct > 0 ? `+${row.pct}%` : `${row.pct}%`}
                         </span>
                       ) : (
@@ -874,51 +880,55 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
 
           {/* TAB TAHUNAN DINAMIS */}
           <div className="bg-slate-100 dark:bg-slate-900/80 p-1.5 sm:p-2 flex overflow-x-auto hide-scrollbar gap-1.5 sm:gap-2 border-b border-slate-200 dark:border-slate-700">
-             {availableYears.map(year => (
-                <button
-                   key={year}
-                   onClick={() => setActiveYear(year)}
-                   className={`px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap shadow-xs ${activeYear === year ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 border border-transparent'}`}
-                >
-                   Arsip Tahun {year}
-                </button>
-             ))}
+            {availableYears.map(year => (
+              <button
+                key={year}
+                onClick={() => setActiveYear(year)}
+                className={`px-3.5 sm:px-6 py-1.5 sm:py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all whitespace-nowrap shadow-xs ${activeYear === year ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 border border-slate-200 dark:border-slate-700' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 border border-transparent'}`}
+              >
+                Arsip Tahun {year}
+              </button>
+            ))}
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-2.5 sm:p-4 mx-2 sm:mx-4 mt-2 sm:mt-4 rounded-xl flex gap-2.5 sm:gap-3 shadow-xs items-start">
-             <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-             <div>
-               <h4 className="text-xs sm:text-sm font-bold text-blue-800 dark:text-blue-300 mb-0.5 sm:mb-1">Optimasi Database Otomatis</h4>
-               <p className="text-[11px] sm:text-xs text-blue-700 dark:text-blue-400/80 leading-relaxed">
-                 Sistem ini telah dirancang untuk menjaga performa memuat agar tetap secepat kilat. Biasakan untuk melakukan <strong className="font-extrabold text-blue-800 dark:text-blue-300">Backup Database Tahunan</strong> secara berkala, lalu klik <strong className="font-extrabold text-red-600 dark:text-red-400">Bersihkan Server</strong> untuk mengosongkan tahun yang sudah lampau.
-               </p>
-             </div>
-          </div>
+          {!readOnly && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-2.5 sm:p-4 mx-2 sm:mx-4 mt-2 sm:mt-4 rounded-xl flex gap-2.5 sm:gap-3 shadow-xs items-start">
+              <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-blue-800 dark:text-blue-300 mb-0.5 sm:mb-1">Optimasi Database Otomatis</h4>
+                <p className="text-[11px] sm:text-xs text-blue-700 dark:text-blue-400/80 leading-relaxed">
+                  Sistem ini telah dirancang untuk menjaga performa memuat agar tetap secepat kilat. Biasakan untuk melakukan <strong className="font-extrabold text-blue-800 dark:text-blue-300">Backup Database Tahunan</strong> secara berkala, lalu klik <strong className="font-extrabold text-red-600 dark:text-red-400">Bersihkan Server</strong> untuk mengosongkan tahun yang sudah lampau.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="p-2.5 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2.5 sm:gap-4 shrink-0 mt-1 sm:mt-2">
             <h3 className="text-base sm:text-lg font-bold dark:text-white flex items-center gap-2 shrink-0">Buku Gaji {activeYear}</h3>
-            
+
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
               <div className="relative w-full lg:w-48">
                 <Search className="absolute left-3 top-2 sm:top-2.5 text-slate-400" size={15} />
-                <input 
-                  type="text" 
-                  placeholder="Cari Periode..." 
+                <input
+                  type="text"
+                  placeholder="Cari Periode..."
                   value={search} onChange={e => setSearch(e.target.value)}
                   className="w-full pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-xs"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
-                <button onClick={handleBackupYearly} className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs">
-                   <Download size={13}/> Backup {activeYear}
-                </button>
-                <button onClick={() => setConfirmPurge(true)} className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-xs">
-                   <Trash2 size={13}/> Bersihkan Server
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
+                  <button onClick={handleBackupYearly} className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs">
+                    <Download size={13} /> Backup {activeYear}
+                  </button>
+                  <button onClick={() => setConfirmPurge(true)} className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors border border-red-200 dark:border-red-800/50 flex items-center justify-center gap-1.5 shadow-xs">
+                    <Trash2 size={13} /> Bersihkan Server
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          
+
           <div className="p-2.5 sm:p-5 flex-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-5">
               {filteredArchives.length === 0 ? (
@@ -934,13 +944,15 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-lg sm:rounded-xl flex items-center justify-center">
                         <Archive size={20} />
                       </div>
-                      <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen 1 Bulan Ini">
-                        <Trash2 size={15} />
-                      </button>
+                      {!readOnly && (
+                        <button onClick={() => handleDeleteArchive(arc.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md transition-colors opacity-0 group-hover:opacity-100" title="Hapus Permanen 1 Bulan Ini">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                     <h4 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{arc.periode}</h4>
                     <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 mb-3 sm:mb-5 font-medium">Diarsipkan: {arc.dateArchived}</p>
-                    
+
                     <div className="mt-auto space-y-1.5 sm:space-y-2 mb-3 sm:mb-5">
                       <div className="flex justify-between text-xs sm:text-sm items-center">
                         <span className="text-slate-500 dark:text-slate-400">Total Pegawai</span>
@@ -956,13 +968,15 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <button onClick={() => { setSelectedArchive(arc); setDetailSearch(''); }} className="flex-1 bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors shadow-xs">
                         Buka Arsip
                       </button>
-                      <button 
-                        onClick={() => exportArchiveToExcel({ archive: arc, settings })} 
-                        className="p-1.5 sm:p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg transition-colors shadow-xs" 
-                        title="Unduh Excel (.xlsx)"
-                      >
-                        <FileSpreadsheet size={16} />
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => exportArchiveToExcel({ archive: arc, settings })}
+                          className="p-1.5 sm:p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg transition-colors shadow-xs"
+                          title="Unduh Excel (.xlsx)"
+                        >
+                          <FileSpreadsheet size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -977,8 +991,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 flex flex-col min-h-full animate-in slide-in-from-right-4">
           <div className="p-3 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2.5 sm:gap-4 shrink-0">
             <div>
-              <button 
-                onClick={() => { setSelectedArchive(null); setDetailSearch(''); }} 
+              <button
+                onClick={() => { setSelectedArchive(null); setDetailSearch(''); }}
                 className="text-xs sm:text-sm text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1.5 mb-1 sm:mb-1.5 font-bold transition-colors"
               >
                 <ChevronRight size={15} className="rotate-180" /> Kembali ke Daftar Arsip
@@ -990,35 +1004,39 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                 Diarsipkan pada {selectedArchive.dateArchived || '-'} • Dokumen Sah Keuangan
               </p>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
               <div className="relative flex-1 md:w-48">
                 <Search className="absolute left-2.5 top-2 sm:top-2.5 text-slate-400" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="Cari nama / NIPY..." 
-                  value={detailSearch} 
+                <input
+                  type="text"
+                  placeholder="Cari nama / NIPY..."
+                  value={detailSearch}
                   onChange={e => setDetailSearch(e.target.value)}
                   className="w-full pl-8 sm:pl-9 pr-2.5 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-teal-500 outline-none dark:text-white shadow-xs"
                 />
               </div>
 
-              {/* 🪄 TOMBOL ROLLBACK TUTUP BUKU (KHUSUS KEPSEK) */}
-              <button 
-                onClick={() => setIsRollbackModalOpen(true)}
-                className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700 px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-                title="Batalkan Tutup Buku & Kembalikan ke Draft (Otorisasi Kepala Sekolah)"
-              >
-                <Unlock size={14} /> Buka Kunci (Rollback)
-              </button>
+              {!readOnly && (
+                <>
+                  {/* 🪄 TOMBOL ROLLBACK TUTUP BUKU (KHUSUS KEPSEK) */}
+                  <button
+                    onClick={() => setIsRollbackModalOpen(true)}
+                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700 px-3 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                    title="Batalkan Tutup Buku & Kembalikan ke Draft (Otorisasi Kepala Sekolah)"
+                  >
+                    <Unlock size={14} /> Buka Kunci (Rollback)
+                  </button>
 
-              <button 
-                onClick={() => exportArchiveToExcel({ archive: selectedArchive, settings })} 
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-                title="Unduh Rekap Arsip Gaji Format Excel (.xlsx)"
-              >
-                <FileSpreadsheet size={14} /> Unduh Excel (.xlsx)
-              </button>
+                  <button
+                    onClick={() => exportArchiveToExcel({ archive: selectedArchive, settings })}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                    title="Unduh Rekap Arsip Gaji Format Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet size={14} /> Unduh Excel (.xlsx)
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1058,7 +1076,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
             {filteredDetailGuru.map(t => {
               const slip = calculatePayroll(t, settings);
               const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
-              const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null; 
+              const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null;
               const prevData = prevArchive?.dataGuru?.find(guru => {
                 if (!guru || !guru.name || !t || !t.name) return false;
                 const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
@@ -1068,8 +1086,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
               const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
               const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
-              const jam = slip.jamDihitung !== undefined 
-                ? slip.jamDihitung 
+              const jam = slip.jamDihitung !== undefined
+                ? slip.jamDihitung
                 : (t.payroll?.jamMengajar?.realisasi || t.teachingHours || 0);
 
               return (
@@ -1095,12 +1113,12 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       {prevTHP !== null ? (
                         diffIndividu !== 0 ? (
                           <div className={`text-[11px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
-                            <TrendingUp size={11} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
+                            <TrendingUp size={11} className={diffIndividu < 0 ? 'rotate-180' : ''} />
                             {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
                           </div>
                         ) : (
                           <div className="text-[11px] font-bold text-slate-400 flex items-center justify-end gap-0.5">
-                            <Activity size={11}/> Sama
+                            <Activity size={11} /> Sama
                           </div>
                         )
                       ) : prevArchive ? (
@@ -1116,7 +1134,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                     <div><span className="text-slate-400">Total Potongan:</span> <span className="font-bold text-red-500 block">-{formatRp(slip.totalPotongan)}</span></div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => {
                       setSelectedSlip(t);
                       setIsSlipModalOpen(true);
@@ -1154,9 +1172,9 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {filteredDetailGuru.map(t => {
                   const slip = calculatePayroll(t, settings);
-                  
+
                   const currentIndex = (archives || []).findIndex(a => a.id === selectedArchive?.id);
-                  const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null; 
+                  const prevArchive = currentIndex !== -1 ? archives[currentIndex + 1] : null;
                   const prevData = prevArchive?.dataGuru?.find(guru => {
                     if (!guru || !guru.name || !t || !t.name) return false;
                     const gName = guru.name.trim().toLowerCase().replace(/^(ust|ustadz|ustadzah|ibu|bapak|dra|dr|h|hj)\.?\s+/i, '');
@@ -1166,8 +1184,8 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                   const prevTHP = prevData ? calculatePayroll(prevData, settings).totalBersih : null;
                   const diffIndividu = prevTHP !== null ? slip.totalBersih - prevTHP : null;
 
-                  const jam = slip.jamDihitung !== undefined 
-                    ? slip.jamDihitung 
+                  const jam = slip.jamDihitung !== undefined
+                    ? slip.jamDihitung
                     : (t.payroll?.jamMengajar?.realisasi || t.teachingHours || 0);
 
                   return (
@@ -1180,7 +1198,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       {/* Jam Mengajar */}
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center gap-1 font-bold text-xs px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          <Clock size={12}/> {jam} Jam
+                          <Clock size={12} /> {jam} Jam
                         </span>
                       </td>
 
@@ -1188,7 +1206,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <td className="p-4 text-center">
                         {slip.bonusHadir > 0 ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                            <CheckCircle2 size={12}/> Disiplin Penuh
+                            <CheckCircle2 size={12} /> Disiplin Penuh
                           </span>
                         ) : (
                           <span className="text-[11px] text-slate-400 font-medium">Reguler</span>
@@ -1199,26 +1217,26 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                       <td className="p-4 text-right font-medium text-red-500">-{formatRp(slip.totalPotongan)}</td>
                       <td className="p-4 text-right bg-emerald-50/30 dark:bg-emerald-900/10">
                         <div className="font-bold text-emerald-600 dark:text-emerald-400">{formatRp(slip.totalBersih)}</div>
-                        
+
                         {prevTHP !== null ? (
-                           diffIndividu !== 0 ? (
-                             <div className={`mt-1 text-[9px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
-                                <TrendingUp size={10} className={diffIndividu < 0 ? 'rotate-180' : ''}/>
-                                {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
-                             </div>
-                           ) : (
-                             <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5" title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
-                                <Activity size={10}/> Sama
-                             </div>
-                           )
+                          diffIndividu !== 0 ? (
+                            <div className={`mt-1 text-[9px] font-bold flex items-center justify-end gap-0.5 ${diffIndividu > 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`} title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                              <TrendingUp size={10} className={diffIndividu < 0 ? 'rotate-180' : ''} />
+                              {diffIndividu > 0 ? '+' : ''}{formatRp(diffIndividu)}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5" title={`Gaji Bulan Lalu: ${formatRp(prevTHP)}`}>
+                              <Activity size={10} /> Sama
+                            </div>
+                          )
                         ) : prevArchive ? (
-                           <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5">
-                              Data Baru
-                           </div>
+                          <div className="mt-1 text-[9px] font-bold text-slate-400 flex items-center justify-end gap-0.5">
+                            Data Baru
+                          </div>
                         ) : null}
                       </td>
                       <td className="p-4 text-center">
-                        <button 
+                        <button
                           onClick={() => {
                             setSelectedSlip(t);
                             setIsSlipModalOpen(true);
@@ -1228,7 +1246,7 @@ function ArsipView({ archives, setArchives, settings, setSettings, saveAuditLog,
                           <FileText size={14} /> Lihat Slip
                         </button>
                       </td>
-                  </tr>
+                    </tr>
                   );
                 })}
                 {filteredDetailGuru.length === 0 && (

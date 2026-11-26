@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Calculator, Download } from 'lucide-react';
-import { 
-  fetchCloudData as fetchFromSupabase, 
+import {
+  fetchCloudData as fetchFromSupabase,
   pushCloudData as pushToSupabase,
   fetchPresensiGuru,
   pushPresensiGuru,
@@ -32,7 +32,8 @@ import {
   sortLoginLogs,
   mergeLoginLogs,
   getWibDateString,
-  defaultGeneralSettings
+  defaultGeneralSettings,
+  isYayasanRole
 } from './utils/payrollUtils';
 import LoginView from './components/LoginView';
 import MainLayout from './components/MainLayout';
@@ -48,6 +49,8 @@ const sanitizeTeacherList = (list) => {
 };
 
 const isTeacherRole = (role) => ['guru', 'staff'].includes(String(role || '').trim().toLowerCase());
+const isReadOnlyRole = (role) => isYayasanRole(role);
+const canMutateCloud = (u) => Boolean(u && !isTeacherRole(u.role) && !isReadOnlyRole(u.role));
 
 export default function App() {
   const [teachers, setTeachers] = useState(() => {
@@ -77,7 +80,11 @@ export default function App() {
   });
 
   // 📱 Handler Pembaruan Data Guru Ringkas (cth: ikat perangkat HP otomatis)
-  const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
+  const rawUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
+  const handleUpdateTeacherPatch = useCallback((...args) => {
+    if (isReadOnlyRole(user?.role)) return;
+    return rawUpdateTeacherPatch(...args);
+  }, [rawUpdateTeacherPatch, user?.role]);
 
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
   const fetchCloudDataRef = useRef(null);
@@ -118,6 +125,7 @@ export default function App() {
 
   // 🛡️ Fungsi Universal Pencatat Jejak Audit (Audit Trail)
   const saveAuditLog = useCallback((param1, param2, param3, param4, param5) => {
+    if (isReadOnlyRole(user?.role)) return;
     let entry = {};
     // Signature 1: saveAuditLog(teacherObj, fieldLabel, oldVal, newVal)
     if (param1 && typeof param1 === 'object' && param1.name) {
@@ -130,7 +138,7 @@ export default function App() {
         detail: `Mengubah ${param2} dari Rp ${Number(param3 || 0).toLocaleString('id-ID')} menjadi Rp ${Number(param4 || 0).toLocaleString('id-ID')}`,
         category: 'finansial',
       };
-    } 
+    }
     // Signature 2: saveAuditLog(actor, action, target, detail, category)
     else {
       entry = {
@@ -198,8 +206,8 @@ export default function App() {
     // kita paksa banner custom tetap muncul sebagai panduan shortcut.
     const fallbackTimer = setTimeout(() => {
       setShowInstallBanner(prev => {
-         if (!prev) return true;
-         return prev;
+        if (!prev) return true;
+        return prev;
       });
     }, 3500);
 
@@ -216,8 +224,8 @@ export default function App() {
       const { outcome } = await deferredPrompt.userChoice;
       setDeferredPrompt(null);
       if (outcome === 'accepted') {
-         setShowInstallBanner(false);
-         localStorage.setItem('payedu_dismiss_install', 'true');
+        setShowInstallBanner(false);
+        localStorage.setItem('payedu_dismiss_install', 'true');
       }
     } else {
       // TAMBALAN CERDAS: Jika prompt native tidak tersedia (iOS / Error config), 
@@ -236,33 +244,33 @@ export default function App() {
   const fetchCloudData = async (isBackgroundSync = false) => {
     try {
       if (!isBackgroundSync) setIsLoadingDb(true);
-      
+
       const res = await fetchFromSupabase({ isBackground: isBackgroundSync, role: user?.role });
-      
+
       if (res.status === 'success' && res.data) {
         const serverSettings = res.data.settings && Object.keys(res.data.settings).length > 0 ? res.data.settings : defaultGeneralSettings;
         const serverTeachers = Array.isArray(res.data.teachers) ? res.data.teachers : [];
         const serverArchives = Array.isArray(res.data.archives) ? res.data.archives : [];
         const serverFeedbacks = Array.isArray(res.data.feedbacks) ? res.data.feedbacks : [];
         const serverLogs = Array.isArray(res.data.loginHistory) ? res.data.loginHistory : [];
-        
+
         if (isBackgroundSync) {
           if (serverSettings.maintenanceMode !== undefined) {
-             setGeneralSettings(prev => {
-                if (prev.maintenanceMode !== serverSettings.maintenanceMode) {
-                   const updated = { ...prev, maintenanceMode: serverSettings.maintenanceMode };
-                   safeStorageSet('payedu_settings', updated);
-                   return updated;
-                }
-                return prev;
-             });
+            setGeneralSettings(prev => {
+              if (prev.maintenanceMode !== serverSettings.maintenanceMode) {
+                const updated = { ...prev, maintenanceMode: serverSettings.maintenanceMode };
+                safeStorageSet('payedu_settings', updated);
+                return updated;
+              }
+              return prev;
+            });
           }
-          
+
           const cleanTeachers = sanitizeTeacherList(serverTeachers);
           const cleanArchives = deduplicateArchives(serverArchives);
 
-          // 🪄 PERBAIKAN MUTLAK: Guru tidak pernah memicu banner konflik (Presensi & Slip Guru selalu berjalan mulus)
-          if (!user || isTeacherRole(user.role)) {
+          // 🪄 PERBAIKAN MUTLAK: Guru & akun Read-Only (Yayasan) tidak pernah memicu banner konflik
+          if (!user || isTeacherRole(user.role) || isReadOnlyRole(user.role)) {
             setGeneralSettings(serverSettings);
             setTeachers(cleanTeachers);
             setArchives(cleanArchives);
@@ -282,19 +290,19 @@ export default function App() {
             }
             // Selama Admin tidak sedang mem-push perubahan, terapkan update cloud secara halus
             if (serverSettings.lastModified > (generalSettings.lastModified + 3000) && !isPushingDataRef.current) {
-               lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
-               lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
-               lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
-               
-               setGeneralSettings(serverSettings);
-               setTeachers(cleanTeachers);
-               setArchives(cleanArchives);
-               setFeedbacks(serverFeedbacks);
-               safeStorageSet('payedu_settings', serverSettings);
-               safeStorageSet('payedu_teachers', cleanTeachers);
-               safeStorageSet('payedu_archives', cleanArchives);
-               safeStorageSet('payedu_feedbacks', serverFeedbacks);
-               setHasConflict(false);
+              lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
+              lastSavedTeachersRef.current = JSON.stringify(cleanTeachers);
+              lastSavedArchivesRef.current = JSON.stringify(cleanArchives);
+
+              setGeneralSettings(serverSettings);
+              setTeachers(cleanTeachers);
+              setArchives(cleanArchives);
+              setFeedbacks(serverFeedbacks);
+              safeStorageSet('payedu_settings', serverSettings);
+              safeStorageSet('payedu_teachers', cleanTeachers);
+              safeStorageSet('payedu_archives', cleanArchives);
+              safeStorageSet('payedu_feedbacks', serverFeedbacks);
+              setHasConflict(false);
             }
           }
         } else {
@@ -315,8 +323,8 @@ export default function App() {
           let finalTeachers = serverTeachers;
           let finalArchives = serverArchives;
 
-          // 🛡️ ANTI-WIPEOUT: Hanya ADMIN yang boleh push SYNC_ALL ke cloud! Guru tidak pernah push SYNC_ALL!
-          if (user && !isTeacherRole(user.role) && (isLocalNewer || isServerTeachersEmpty)) {
+          // 🛡️ ANTI-WIPEOUT: Hanya ADMIN/KEPSEK yang boleh push SYNC_ALL ke cloud! Guru & Yayasan Read-Only tidak pernah push SYNC_ALL!
+          if (canMutateCloud(user) && (isLocalNewer || isServerTeachersEmpty)) {
             console.log("🛡️ Proteksi Sinkronisasi: Mempertahankan data lokal Admin yang lebih baru & auto-push ke Supabase Cloud");
             if (isLocalNewer && localSettings) {
               finalSettings = { ...serverSettings, ...localSettings };
@@ -344,22 +352,22 @@ export default function App() {
           lastKnownCloudTimestampRef.current = String(finalSettings?.lastModified || serverSettings?.lastModified || Date.now());
 
           setGeneralSettings(finalSettings);
-          setTeachers(cleanTeachers); 
+          setTeachers(cleanTeachers);
           setArchives(cleanArchives);
           setFeedbacks(serverFeedbacks);
-          if (user && !isTeacherRole(user.role)) {
+          if (canMutateCloud(user)) {
             const sortedServerLogs = mergeLoginLogs(serverLogs, [], 500);
             setLoginHistory(sortedServerLogs);
             lastSavedLogsRef.current = JSON.stringify(sortedServerLogs);
             safeStorageSet('payedu_loginHistory', sortedServerLogs);
           }
-          
+
           safeStorageSet('payedu_settings', finalSettings);
           safeStorageSet('payedu_teachers', cleanTeachers);
           safeStorageSet('payedu_archives', cleanArchives);
           safeStorageSet('payedu_feedbacks', serverFeedbacks);
-          
-          setHasConflict(false); 
+
+          setHasConflict(false);
         }
       }
 
@@ -376,7 +384,7 @@ export default function App() {
       }
     } catch (err) {
       console.warn("[Info Cloud] Gagal menjangkau Supabase/Cloud. Menggunakan data sisa di LocalStorage.", err);
-      setHasConflict(false); 
+      setHasConflict(false);
     } finally {
       if (!isBackgroundSync) setIsLoadingDb(false);
       setIsDataLoaded(true);
@@ -525,8 +533,8 @@ export default function App() {
           }
         }, 1500);
       },
-      // 4. Login Logs berubah (Hanya aktif di Admin/Kepsek/Yayasan agar real-time memantau akses hari ini)
-      isManagementUser ? () => {
+      // 4. Login Logs berubah (Hanya aktif di Admin/Kepsek agar real-time memantau akses hari ini)
+      canMutateCloud(user) ? () => {
         if (logsTimer) return;
         logsTimer = setTimeout(() => {
           logsTimer = null;
@@ -562,7 +570,7 @@ export default function App() {
           .then(() => syncLatestPresensi(true))
           .catch(e => console.warn('[Sync Teacher Login] Warning:', e));
       }
-    } else {
+    } else if (canMutateCloud(user)) {
       fetchLoginLogsOnly(500).then(logs => {
         if (Array.isArray(logs)) {
           setLoginHistory(logs);
@@ -576,7 +584,7 @@ export default function App() {
   // - Interval 5 menit untuk settings, dan 60 detik khusus Admin (saat tab aktif) untuk catch-up presensi hari ini
   // - Otomatis PAUSE jika tab berada di background / layar HP mati
   useEffect(() => {
-    if (!isDataLoaded || hasConflict) return; 
+    if (!isDataLoaded || hasConflict) return;
 
     const checkUpdate = async (includePresensiCatchup = false) => {
       // 🛡️ Hemat Bandwidth: Lewati jika tab sedang diminimize / layar HP mati
@@ -617,7 +625,7 @@ export default function App() {
     const handleVisibilityChange = () => {
       if (typeof document !== 'undefined' && !document.hidden) {
         if (user && isTeacherRole(user.role)) {
-          flushPendingPresensi().catch(() => {});
+          flushPendingPresensi().catch(() => { });
         }
         checkUpdate(true);
       }
@@ -632,9 +640,10 @@ export default function App() {
 
   // 🪄 FUNGSI MUTLAK: Mengubah Status Mode Maintenance & Push Langsung ke Cloud Supabase
   const handleToggleMaintenanceMode = async (newVal) => {
+    if (isReadOnlyRole(user?.role)) return;
     const newTimestamp = Date.now();
     const updatedSettings = { ...generalSettings, maintenanceMode: newVal, lastModified: newTimestamp };
-    
+
     lastSavedSettingsRef.current = JSON.stringify({ ...updatedSettings, lastModified: 0 });
     isPushingDataRef.current = true;
 
@@ -642,18 +651,18 @@ export default function App() {
     safeStorageSet('payedu_settings', updatedSettings);
 
     try {
-       await pushToSupabase('SAVE_SETTINGS', updatedSettings);
-       setSyncStatus('synced');
-       if (newVal) {
-          showAlert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
-       } else {
-          showAlert("✅ MODE MAINTENANCE DIMATIKAN!\n\nStatus telah tersimpan ke Cloud. Portal Guru kini dibuka kembali di seluruh perangkat.");
-       }
+      await pushToSupabase('SAVE_SETTINGS', updatedSettings);
+      setSyncStatus('synced');
+      if (newVal) {
+        showAlert("🛠️ MODE MAINTENANCE AKTIF BERHASIL DISIMPAN KE CLOUD!\n\nSeluruh perangkat HP & Komputer Guru di manapun berada kini langsung terintegrasi dan diblokir oleh Layar Perbaikan.");
+      } else {
+        showAlert("✅ MODE MAINTENANCE DIMATIKAN!\n\nStatus telah tersimpan ke Cloud. Portal Guru kini dibuka kembali di seluruh perangkat.");
+      }
     } catch (err) {
-       console.error("Gagal update maintenance mode di cloud:", err);
-       setSyncStatus('error');
+      console.error("Gagal update maintenance mode di cloud:", err);
+      setSyncStatus('error');
     } finally {
-       setTimeout(() => { isPushingDataRef.current = false; }, 2000);
+      setTimeout(() => { isPushingDataRef.current = false; }, 2000);
     }
   };
 
@@ -663,7 +672,7 @@ export default function App() {
   // Akibatnya data hanya tersimpan di localStorage tapi TIDAK PERNAH sampai ke Supabase Cloud.
   // Saat refresh, app mengambil data lama dari Supabase → perubahan Admin hilang.
   useEffect(() => {
-    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
+    if (!isDataLoaded || hasConflict || !canMutateCloud(user)) return;
 
     const currentDataStr = JSON.stringify({ ...generalSettings, lastModified: 0 });
     if (lastSavedSettingsRef.current === currentDataStr) return;
@@ -680,20 +689,20 @@ export default function App() {
 
     const timeoutId = setTimeout(() => {
       pushToSupabase('SAVE_SETTINGS', payloadWithTime)
-      .then(() => {
-         setSyncStatus('synced');
-         // Update lastModified di state SETELAH push berhasil
-         // Pre-update ref agar effect tidak re-trigger secara sia-sia
-         lastSavedSettingsRef.current = JSON.stringify({ ...payloadWithTime, lastModified: 0 });
-         setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
-      })
-      .catch(err => {
-         console.warn("Info Sync:", err.message);
-         setSyncStatus('error');
-      })
-      .finally(() => {
-         setTimeout(() => { isPushingDataRef.current = false; }, 3000);
-      });
+        .then(() => {
+          setSyncStatus('synced');
+          // Update lastModified di state SETELAH push berhasil
+          // Pre-update ref agar effect tidak re-trigger secara sia-sia
+          lastSavedSettingsRef.current = JSON.stringify({ ...payloadWithTime, lastModified: 0 });
+          setGeneralSettings(prev => ({ ...prev, lastModified: payloadWithTime.lastModified }));
+        })
+        .catch(err => {
+          console.warn("Info Sync:", err.message);
+          setSyncStatus('error');
+        })
+        .finally(() => {
+          setTimeout(() => { isPushingDataRef.current = false; }, 3000);
+        });
     }, 1500);
     return () => clearTimeout(timeoutId);
   }, [generalSettings, isDataLoaded, hasConflict, user]);
@@ -702,8 +711,8 @@ export default function App() {
   // PERBAIKAN KRITIKAL: Jangan panggil setGeneralSettings sebelum push!
   // Update lastModified dilakukan SETELAH push ke Supabase berhasil.
   useEffect(() => {
-    // GEMBOK KEAMANAN: Cegah Tamu (Belum Login) dan Guru merusak data server!
-    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
+    // GEMBOK KEAMANAN: Cegah Tamu (Belum Login), Guru, dan Akun Read-Only (Yayasan) merusak data server!
+    if (!isDataLoaded || hasConflict || !canMutateCloud(user)) return;
 
     const currentTeachersStr = JSON.stringify(teachers);
     if (lastSavedTeachersRef.current === currentTeachersStr) return;
@@ -717,25 +726,25 @@ export default function App() {
 
     const timeoutId = setTimeout(() => {
       pushToSupabase('SAVE_TEACHERS', teachers)
-      .then(() => {
-         setSyncStatus('synced');
-         // Update lastModified SETELAH push berhasil
-         const newTimestamp = Date.now();
-         setGeneralSettings(prev => {
-           const updated = { ...prev, lastModified: newTimestamp };
-           // Pre-update ref agar settings auto-save tidak re-trigger
-           lastSavedSettingsRef.current = JSON.stringify({ ...updated, lastModified: 0 });
-           safeStorageSet('payedu_settings', updated);
-           return updated;
-         });
-      })
-      .catch(err => {
-         console.warn("Info Sync:", err.message);
-         setSyncStatus('error');
-      })
-      .finally(() => {
-         setTimeout(() => { isPushingDataRef.current = false; }, 3000);
-      });
+        .then(() => {
+          setSyncStatus('synced');
+          // Update lastModified SETELAH push berhasil
+          const newTimestamp = Date.now();
+          setGeneralSettings(prev => {
+            const updated = { ...prev, lastModified: newTimestamp };
+            // Pre-update ref agar settings auto-save tidak re-trigger
+            lastSavedSettingsRef.current = JSON.stringify({ ...updated, lastModified: 0 });
+            safeStorageSet('payedu_settings', updated);
+            return updated;
+          });
+        })
+        .catch(err => {
+          console.warn("Info Sync:", err.message);
+          setSyncStatus('error');
+        })
+        .finally(() => {
+          setTimeout(() => { isPushingDataRef.current = false; }, 3000);
+        });
     }, 2000);
     return () => clearTimeout(timeoutId);
   }, [teachers, isDataLoaded, hasConflict, user]);
@@ -743,7 +752,7 @@ export default function App() {
   // 🪄 PERBAIKAN PERMANEN 3: Auto-Save Arsip dan Feedback (🔋 dengan Debounce untuk hemat bandwidth)
   useEffect(() => {
     // Hanya Admin yang boleh memanipulasi Arsip secara global
-    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
+    if (!isDataLoaded || hasConflict || !canMutateCloud(user)) return;
     const currentStr = JSON.stringify(archives);
     if (lastSavedArchivesRef.current === currentStr) return;
     lastSavedArchivesRef.current = currentStr;
@@ -757,7 +766,7 @@ export default function App() {
 
   useEffect(() => {
     // Hanya Admin yang memanipulasi status Feedback secara global (Guru kirim via fungsi khusus, bukan auto-save)
-    if (!isDataLoaded || hasConflict || !user || isTeacherRole(user.role)) return;
+    if (!isDataLoaded || hasConflict || !canMutateCloud(user)) return;
     const currentStr = JSON.stringify(feedbacks);
     if (lastSavedFeedbacksRef.current === currentStr) return;
     lastSavedFeedbacksRef.current = currentStr;
@@ -784,7 +793,7 @@ export default function App() {
   // Ini adalah safety net: jika push langsung saat upsertRecord() gagal, auto-save ini akan mengirim ulang.
   useEffect(() => {
     if (!isDataLoaded || !user) return;
-    if (isTeacherRole(user.role)) return; // HP Guru menggunakan push atomic + antrean WAL!
+    if (isTeacherRole(user.role) || isReadOnlyRole(user.role)) return; // HP Guru pakai WAL; Yayasan Read-Only tidak push!
     const currentStr = JSON.stringify(presensiGuru);
     if (lastSavedPresensiRef.current === currentStr) return;
 
@@ -814,7 +823,7 @@ export default function App() {
 
     let timeoutId;
     // Waktu tunggu batas sesi (15 Menit = 15 * 60 * 1000 milidetik)
-    const SESSION_TIMEOUT = 15 * 60 * 1000; 
+    const SESSION_TIMEOUT = 15 * 60 * 1000;
 
     const resetTimer = () => {
       clearTimeout(timeoutId);
@@ -929,6 +938,18 @@ export default function App() {
           size: A4 portrait; /* Ukuran Standar Resmi Cetak Slip A4 Presisi */
           margin: 4mm 6mm 4mm 6mm;
         }
+        body.yayasan-no-print #root > * {
+          display: none !important;
+        }
+        body.yayasan-no-print::before {
+          content: "Akses cetak (Print) dinonaktifkan untuk akun Yayasan (Read-Only).";
+          display: block;
+          padding: 24px;
+          font-size: 14px;
+          font-weight: 700;
+          text-align: center;
+          color: #000;
+        }
         body, html, #root { 
           background: white !important; 
           color: black !important; 
@@ -991,24 +1012,44 @@ export default function App() {
     return () => document.head.removeChild(style);
   }, []);
 
+  // Blokir cetak (Ctrl+P / Cmd+P & CSS print) untuk akun Yayasan Read-Only
+  useEffect(() => {
+    const readOnly = isReadOnlyRole(user?.role);
+    document.body.classList.toggle('yayasan-no-print', readOnly);
+    if (!readOnly) return () => document.body.classList.remove('yayasan-no-print');
+
+    const blockPrintShortcut = (e) => {
+      if ((e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        showAlert('Akses cetak (Print) tidak diizinkan untuk akun Yayasan (Read-Only).');
+      }
+    };
+    window.addEventListener('keydown', blockPrintShortcut, true);
+    return () => {
+      window.removeEventListener('keydown', blockPrintShortcut, true);
+      document.body.classList.remove('yayasan-no-print');
+    };
+  }, [user]);
+
   if (isLoadingDb) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden text-white font-sans transition-colors duration-500">
-        
+
         {/* 1. Latar Belakang Bercahaya (Ambient Glow) */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/30 rounded-full blur-[120px] animate-pulse pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/30 rounded-full blur-[120px] animate-pulse pointer-events-none" style={{ animationDelay: '1s' }}></div>
-        
+
         {/* 2. Kartu Kaca Transparan (Glass Card) */}
         <div className="relative z-10 bg-white/10 backdrop-blur-2xl border border-white/20 p-10 rounded-[2.5rem] shadow-[0_25px_65px_rgba(0,0,0,0.5),inset_0_2px_4px_rgba(255,255,255,0.2)] flex flex-col items-center max-w-sm w-full mx-4 animate-in zoom-in-95 duration-700 ease-out">
-          
+
           {/* 3. Indikator Spinner Dinamis & Logo Berkedip */}
           <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
             {/* Cincin Luar (Biru) */}
             <div className="absolute inset-0 border-4 border-white/5 border-t-blue-400 rounded-full animate-spin shadow-[0_0_25px_rgba(59,130,246,0.5)]"></div>
             {/* Cincin Dalam (Ungu/Pink) */}
             <div className="absolute inset-3 border-4 border-white/5 border-b-purple-400 rounded-full animate-spin shadow-[0_0_20px_rgba(168,85,247,0.4)]" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-            
+
             {/* Pusat Logo Sekolah */}
             <div className="absolute inset-0 flex items-center justify-center animate-pulse duration-1000">
               {generalSettings?.logoUrl ? (
@@ -1026,7 +1067,7 @@ export default function App() {
           <p className="text-blue-100/70 text-sm font-medium text-center animate-pulse leading-relaxed">
             Menyiapkan data kepegawaian dan sinkronisasi Cloud, mohon tunggu sebentar.
           </p>
-          
+
           {/* Loading Bar Bawah (Progress Simulasi) */}
           <div className="w-full h-1.5 bg-black/40 rounded-full mt-8 overflow-hidden shadow-inner border border-white/5 relative">
             <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 w-1/2 rounded-full animate-[loading-bar_1.5s_ease-in-out_infinite]" style={{ backgroundSize: '200% 100%' }}></div>
@@ -1046,24 +1087,24 @@ export default function App() {
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-200 ${isDarkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
-      
+
       {/* BANNER NOTIFIKASI INSTAL PWA (DIBUAT DINAMIS) */}
       {showInstallBanner && (
         <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-[0_10px_40px_-10px_rgba(59,130,246,0.6)] z-[100] flex items-center justify-between animate-in slide-in-from-bottom-5 border border-white/20">
           <div className="flex items-center gap-3">
-             <div className="bg-white/20 p-2 rounded-xl shadow-inner shrink-0 flex items-center justify-center">
-               {/* Membaca logo dari pengaturan secara otomatis */}
-               {generalSettings?.logoUrl ? (
-                 <img src={generalSettings.logoUrl} alt="Logo" className="w-7 h-7 object-contain drop-shadow-md" />
-               ) : (
-                 <Download size={24} />
-               )}
-             </div>
-             <div>
-               {/* Membaca nama aplikasi dari pengaturan secara otomatis */}
-               <p className="font-bold text-sm leading-tight">Instal {generalSettings?.appName || 'Aplikasi'}</p>
-               <p className="text-[11px] text-blue-100 mt-0.5">Akses lebih cepat dan lancar dari layar utama perangkat Anda.</p>
-             </div>
+            <div className="bg-white/20 p-2 rounded-xl shadow-inner shrink-0 flex items-center justify-center">
+              {/* Membaca logo dari pengaturan secara otomatis */}
+              {generalSettings?.logoUrl ? (
+                <img src={generalSettings.logoUrl} alt="Logo" className="w-7 h-7 object-contain drop-shadow-md" />
+              ) : (
+                <Download size={24} />
+              )}
+            </div>
+            <div>
+              {/* Membaca nama aplikasi dari pengaturan secara otomatis */}
+              <p className="font-bold text-sm leading-tight">Instal {generalSettings?.appName || 'Aplikasi'}</p>
+              <p className="text-[11px] text-blue-100 mt-0.5">Akses lebih cepat dan lancar dari layar utama perangkat Anda.</p>
+            </div>
           </div>
           <div className="flex flex-col gap-1.5 shrink-0 ml-3">
             <button onClick={handleInstallClick} className="px-4 py-1.5 text-xs font-bold bg-white text-indigo-700 hover:bg-blue-50 rounded-lg transition-transform hover:scale-105 shadow-sm text-center">Instal</button>
@@ -1075,51 +1116,51 @@ export default function App() {
       {/* TAMBALAN CERDAS: MODAL PANDUAN INSTAL MANUAL (DIBUAT DINAMIS) */}
       {showInstallGuide && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 border border-slate-200 dark:border-slate-700">
-              <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4">
-                {/* Membaca logo dari pengaturan secara otomatis */}
-                {generalSettings?.logoUrl ? (
-                  <img src={generalSettings.logoUrl} alt="Logo" className="w-10 h-10 object-contain drop-shadow-sm" />
-                ) : (
-                  <Download size={32} />
-                )}
-              </div>
-              <h3 className="text-xl font-bold dark:text-white mb-2">Cara Instal Manual</h3>
-              <div className="text-sm text-slate-600 dark:text-slate-400 mb-6 space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                <p>
-                  <strong>📱 Pengguna iPhone / Safari:</strong><br/>
-                  1. Tekan ikon <strong>Share (Bagikan)</strong> di menu bawah.<br/>
-                  2. Geser ke bawah, pilih <strong>"Add to Home Screen"</strong>.
-                </p>
-                <div className="h-px bg-slate-200 dark:bg-slate-700 w-full"></div>
-                <p>
-                  <strong>🤖 Pengguna Android / Chrome:</strong><br/>
-                  1. Tekan ikon <strong>Titik Tiga</strong> di pojok kanan atas.<br/>
-                  2. Pilih <strong>"Install App"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.
-                </p>
-              </div>
-              <button onClick={() => setShowInstallGuide(false)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-sm">
-                Mengerti, Tutup
-              </button>
-           </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95 border border-slate-200 dark:border-slate-700">
+            <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mx-auto mb-4">
+              {/* Membaca logo dari pengaturan secara otomatis */}
+              {generalSettings?.logoUrl ? (
+                <img src={generalSettings.logoUrl} alt="Logo" className="w-10 h-10 object-contain drop-shadow-sm" />
+              ) : (
+                <Download size={32} />
+              )}
+            </div>
+            <h3 className="text-xl font-bold dark:text-white mb-2">Cara Instal Manual</h3>
+            <div className="text-sm text-slate-600 dark:text-slate-400 mb-6 space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+              <p>
+                <strong>📱 Pengguna iPhone / Safari:</strong><br />
+                1. Tekan ikon <strong>Share (Bagikan)</strong> di menu bawah.<br />
+                2. Geser ke bawah, pilih <strong>"Add to Home Screen"</strong>.
+              </p>
+              <div className="h-px bg-slate-200 dark:bg-slate-700 w-full"></div>
+              <p>
+                <strong>🤖 Pengguna Android / Chrome:</strong><br />
+                1. Tekan ikon <strong>Titik Tiga</strong> di pojok kanan atas.<br />
+                2. Pilih <strong>"Install App"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.
+              </p>
+            </div>
+            <button onClick={() => setShowInstallGuide(false)} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-sm">
+              Mengerti, Tutup
+            </button>
+          </div>
         </div>
       )}
 
       {!user ? (
-        <LoginView 
-          onLogin={(u) => { setUser(u); safeStorageSet('payedu_session', u); }} 
-          isDarkMode={isDarkMode} 
-          toggleTheme={() => setIsDarkMode(!isDarkMode)} 
-          settings={generalSettings} 
-          recordLogin={recordLogin} 
-          teachers={teachers} 
-          setTeachers={setTeachers} 
+        <LoginView
+          onLogin={(u) => { setUser(u); safeStorageSet('payedu_session', u); }}
+          isDarkMode={isDarkMode}
+          toggleTheme={() => setIsDarkMode(!isDarkMode)}
+          settings={generalSettings}
+          recordLogin={recordLogin}
+          teachers={teachers}
+          setTeachers={setTeachers}
         />
       ) : (
-        <MainLayout 
-          user={user} 
-          onLogout={() => { setUser(null); localStorage.removeItem('payedu_session'); }} 
-          isDarkMode={isDarkMode} 
+        <MainLayout
+          user={user}
+          onLogout={() => { setUser(null); localStorage.removeItem('payedu_session'); }}
+          isDarkMode={isDarkMode}
           toggleTheme={() => setIsDarkMode(!isDarkMode)}
           teachers={teachers}
           setTeachers={setTeachers}
@@ -1137,9 +1178,9 @@ export default function App() {
           setAuditLogs={setAuditLogs}
           saveAuditLog={saveAuditLog}
           isOnline={isOnline}
-          syncStatus={syncStatus} 
-          hasConflict={hasConflict} 
-          resolveConflict={() => fetchCloudData(false)} 
+          syncStatus={syncStatus}
+          hasConflict={hasConflict}
+          resolveConflict={() => fetchCloudData(false)}
         />
       )}
       <GlobalDialogHost appName={generalSettings?.appName || 'PayEdu'} />

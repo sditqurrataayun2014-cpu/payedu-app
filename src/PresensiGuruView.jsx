@@ -121,24 +121,24 @@ const hitungJarakMeter = (lat1, lon1, lat2, lon2) => {
 const getLokasiList = (settings) => {
   const list = Array.isArray(settings?.lokasiList)
     ? settings.lokasiList
-        .filter(l => l && (l.latitude != null || l.lat != null) && (l.longitude != null || l.lng != null || l.long != null))
-        .map(l => {
-          const rawLat = l.latitude ?? l.lat;
-          const rawLon = l.longitude ?? l.lng ?? l.long;
-          const lat = Number(rawLat);
-          const lon = Number(rawLon);
-          const radius = Number(l.radiusMeter ?? l.radius) || 150;
-          return {
-            ...l,
-            id: l.id || 'loc_' + Math.random().toString(36).slice(2, 7),
-            nama: l.nama || 'Lokasi Presensi',
-            latitude: lat,
-            longitude: lon,
-            radiusMeter: radius,
-            radius: radius
-          };
-        })
-        .filter(l => !isNaN(l.latitude) && !isNaN(l.longitude))
+      .filter(l => l && (l.latitude != null || l.lat != null) && (l.longitude != null || l.lng != null || l.long != null))
+      .map(l => {
+        const rawLat = l.latitude ?? l.lat;
+        const rawLon = l.longitude ?? l.lng ?? l.long;
+        const lat = Number(rawLat);
+        const lon = Number(rawLon);
+        const radius = Number(l.radiusMeter ?? l.radius) || 150;
+        return {
+          ...l,
+          id: l.id || 'loc_' + Math.random().toString(36).slice(2, 7),
+          nama: l.nama || 'Lokasi Presensi',
+          latitude: lat,
+          longitude: lon,
+          radiusMeter: radius,
+          radius: radius
+        };
+      })
+      .filter(l => !isNaN(l.latitude) && !isNaN(l.longitude))
     : [];
   if (list.length > 0) return list;
 
@@ -256,7 +256,7 @@ const ambilPosisiSekarang = () =>
           resolveWithBest();
         }
       },
-      () => {}, // Diabaikan — bacaan ke-2 yang fresh akan menjadi fallback
+      () => { }, // Diabaikan — bacaan ke-2 yang fresh akan menjadi fallback
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 3000 }
     );
 
@@ -415,9 +415,8 @@ const StatCard = ({ icon: Icon, label, value, gradient, iconBg, onClick, isClick
   <button
     type="button"
     onClick={onClick}
-    className={`w-full text-left rounded-2xl shadow-sm p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden transition-all group ${
-      isClickable ? 'cursor-pointer hover:scale-[1.03] hover:shadow-md active:scale-[0.98]' : ''
-    }`}
+    className={`w-full text-left rounded-2xl shadow-sm p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3 bg-gradient-to-br ${gradient} relative overflow-hidden transition-all group ${isClickable ? 'cursor-pointer hover:scale-[1.03] hover:shadow-md active:scale-[0.98]' : ''
+      }`}
   >
     <div className="absolute -right-4 -bottom-6 w-20 h-20 bg-white/10 rounded-full pointer-events-none group-hover:scale-125 transition-transform" />
     <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10 ${iconBg} group-hover:rotate-6 transition-transform shadow-xs`}>
@@ -446,7 +445,8 @@ export default function PresensiGuruView({
   currentUser, schoolProfile, setSchoolProfile,
   showCsvPreview, triggerPrint, addAuditLog,
   initialSesiId, onUpdateTeacher,
-  initialAction = null, onActionConsumed
+  initialAction = null, onActionConsumed,
+  isReadOnly = false, onPullPresensiCloud
 }) {
   // Toast & Confirm state
   const [toastMessage, setToastMessage] = useState(null);
@@ -484,19 +484,20 @@ export default function PresensiGuruView({
     }
   }, [showToast]);
 
-  const effectiveShowCsvPreview = showCsvPreview || defaultShowCsvPreview;
-  const effectiveTriggerPrint = triggerPrint || (() => window.print());
+  const isYayasan = String(currentUser?.role || '').trim().toLowerCase() === 'yayasan';
+  const readOnly = Boolean(isReadOnly) || currentUser?.portal === 'Monitoring' || isYayasan;
+  const effectiveShowCsvPreview = readOnly ? (() => {}) : (showCsvPreview || defaultShowCsvPreview);
+  const effectiveTriggerPrint = readOnly ? (() => {}) : (triggerPrint || (() => window.print()));
 
-  const isTeacher = currentUser?.portal === 'Teacher' || currentUser?.role === 'Guru' || currentUser?.role === 'Staff';
-  const isAdmin = currentUser?.portal === 'Admin' || String(currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.role === 'Kepala Sekolah' || currentUser?.role === 'Yayasan';
-  const readOnly = currentUser?.portal === 'Monitoring';
+  const isTeacher = !readOnly && (currentUser?.portal === 'Teacher' || currentUser?.role === 'Guru' || currentUser?.role === 'Staff');
+  const isAdmin = !readOnly && (currentUser?.portal === 'Admin' || String(currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.role === 'Kepala Sekolah');
 
   const settings = useMemo(() => {
     let localSaved = {};
     try {
       const raw = localStorage.getItem('payedu_presensi_guru_settings');
       if (raw) localSaved = JSON.parse(raw);
-    } catch (e) {}
+    } catch (e) { }
 
     const merged = {
       ...DEFAULT_SETTINGS,
@@ -546,6 +547,7 @@ export default function PresensiGuruView({
   const sesiRecord = (r, sesiId) => (r.sesiId || sesiUtamaId) === sesiId;
 
   const upsertRecord = async (teacherId, teacherName, date, sesiId, patch) => {
+    if (readOnly) return { status: 'blocked', message: 'Akses Read-Only.' };
     const targetTId = teacherId != null ? String(teacherId).trim() : '';
     const normTName = teacherName ? String(teacherName).trim().toLowerCase().replace(/[^a-z0-9]/g, '') : '';
 
@@ -568,21 +570,21 @@ export default function PresensiGuruView({
 
     const targetRecord = existingRec
       ? {
-          ...existingRec,
-          ...patch,
-          teacherId: teacherId != null ? teacherId : existingRec.teacherId,
-          teacherName: teacherName || existingRec.teacherName,
-          sesiId,
-          updatedAt: nowIso,
-          updatedBy: currentUser?.name || 'Sistem'
-        }
+        ...existingRec,
+        ...patch,
+        teacherId: teacherId != null ? teacherId : existingRec.teacherId,
+        teacherName: teacherName || existingRec.teacherName,
+        sesiId,
+        updatedAt: nowIso,
+        updatedBy: currentUser?.name || 'Sistem'
+      }
       : {
-          id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-          teacherId, teacherName, date, sesiId,
-          jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
-          ...patch,
-          updatedAt: nowIso, updatedBy: currentUser?.name || 'Sistem',
-        };
+        id: 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        teacherId, teacherName, date, sesiId,
+        jamMasuk: null, jamPulang: null, status: 'Alpa', terlambatMenit: 0, keterangan: '',
+        ...patch,
+        updatedAt: nowIso, updatedBy: currentUser?.name || 'Sistem',
+      };
 
     if (typeof setPresensiGuru === 'function') {
       setPresensiGuru(prev => {
@@ -597,7 +599,7 @@ export default function PresensiGuruView({
         }
         try {
           localStorage.setItem('payedu_presensi_guru', JSON.stringify(nextList));
-        } catch (e) {}
+        } catch (e) { }
         return nextList;
       });
     } else {
@@ -607,7 +609,7 @@ export default function PresensiGuruView({
           ? list.map((item, i) => i === idx ? targetRecord : item)
           : [...list, targetRecord];
         localStorage.setItem('payedu_presensi_guru', JSON.stringify(fallbackUpdated));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 🚀 ULTRA CEPAT & ATOMIK (~96ms): Await push 1 record ini ke Supabase presensi_records
@@ -675,13 +677,12 @@ export default function PresensiGuruView({
       {/* TOAST POPUP NOTIFIKASI */}
       {toastMessage && (
         <div className="fixed top-6 right-6 z-[1000] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-2.5 text-sm font-bold ${
-            toastMessage.type === 'error'
-              ? 'bg-rose-600 text-white border-rose-700 shadow-rose-500/20'
-              : toastMessage.type === 'success'
+          <div className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-2.5 text-sm font-bold ${toastMessage.type === 'error'
+            ? 'bg-rose-600 text-white border-rose-700 shadow-rose-500/20'
+            : toastMessage.type === 'success'
               ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20'
               : 'bg-slate-900 text-white border-slate-800 shadow-slate-900/20'
-          }`}>
+            }`}>
             {toastMessage.type === 'error' ? <AlertTriangle size={18} /> : toastMessage.type === 'success' ? <CheckCircle2 size={18} /> : <Clock size={18} />}
             <span>{toastMessage.text}</span>
           </div>
@@ -796,6 +797,7 @@ export default function PresensiGuruView({
           currentUser={currentUser}
           schoolProfile={schoolProfile}
           initialSesiId={initialSesiId}
+          onPullPresensiCloud={onPullPresensiCloud}
         />
       )}
     </div>
@@ -1194,11 +1196,10 @@ function TeacherSelfService({
                 key={s.id}
                 type="button"
                 onClick={() => setSelectedSesiId(s.id)}
-                className={`flex-1 sm:flex-initial px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 select-none active:scale-95 ${
-                  isSel
-                    ? `${theme.bgActive} shadow-md scale-[1.02]`
-                    : `${theme.bgInactive}`
-                }`}
+                className={`flex-1 sm:flex-initial px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 select-none active:scale-95 ${isSel
+                  ? `${theme.bgActive} shadow-md scale-[1.02]`
+                  : `${theme.bgInactive}`
+                  }`}
               >
                 <span className="text-sm sm:text-base leading-none">{theme.iconEmoji}</span>
                 <span className="hidden sm:inline">{s.nama}</span>
@@ -1326,11 +1327,10 @@ function TeacherSelfService({
                     <CheckCircle2 size={14} className="text-emerald-300 shrink-0" />
                     <span className="truncate">Masuk tercatat: <b className="text-white">{formatJam(record.jamMasuk)} WIB</b></span>
                   </div>
-                  <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
-                    record.status === 'Terlambat'
-                      ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
-                      : 'bg-emerald-500/30 text-emerald-100 border border-emerald-400/40'
-                  }`}>
+                  <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0 ${record.status === 'Terlambat'
+                    ? 'bg-amber-500/30 text-amber-100 border border-amber-400/40'
+                    : 'bg-emerald-500/30 text-emerald-100 border border-emerald-400/40'
+                    }`}>
                     {record.status}{record.terlambatMenit ? ` — Telat ${record.terlambatMenit} mnt` : ' — Tepat Waktu'}
                   </span>
                 </div>
@@ -1412,12 +1412,12 @@ function TeacherSelfService({
               Riwayat Presensi Saya
             </h3>
             <p className="text-[11px] sm:text-xs text-slate-400 font-bold mt-0.5">
-              {historyMonthFilter === 'all' 
-                ? 'Menampilkan seluruh riwayat presensi' 
+              {historyMonthFilter === 'all'
+                ? 'Menampilkan seluruh riwayat presensi'
                 : `Periode ${formatMonthOption(historyMonthFilter)}`}
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2 self-start sm:self-center">
             {/* Filter Dropdown Bulan */}
             <div className="relative">
@@ -1465,7 +1465,7 @@ function TeacherSelfService({
                       {r.status}{r.status === 'Terlambat' ? ` ${r.terlambatMenit}m` : ''}
                     </Badge>
                   </div>
-                  
+
                   <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 px-3 py-2 rounded-xl text-xs font-mono border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-1.5">
                       <LogIn size={13} className="text-emerald-500 shrink-0" />
@@ -1754,7 +1754,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
     } else {
       navigator.geolocation.getCurrentPosition(
         handleHighAccuracyReading,
-        () => {},
+        () => { },
         { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
       );
     }
@@ -1816,7 +1816,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
             if (typeof navigator !== 'undefined' && navigator.vibrate) {
               navigator.vibrate([100, 50, 100]);
             }
-          } catch(e) {}
+          } catch (e) { }
 
           // 🛡️ BUKTI OTENTIK FISIK: Memindai QR Code resmi yang tertempel di dinding sekolah
           // adalah bukti fisik 100% otentik bahwa guru berada di sekolah.
@@ -2011,7 +2011,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
                 <button
                   type="button"
                   onClick={startScan}
-                  
+
                   className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-black py-2.5 rounded-xl text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                 >
                   <Camera size={16} /> Mulai Scan Barcode QR
@@ -2025,20 +2025,19 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
           type="button"
           disabled={!canConfirm}
           onClick={handleConfirm}
-          className={`w-full flex items-center justify-center gap-2 font-black py-3 rounded-xl shadow-md transition-all ${
-            canConfirm
-              ? 'bg-teal-600 hover:bg-teal-700 text-white active:scale-95'
-              : 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
-          }`}
+          className={`w-full flex items-center justify-center gap-2 font-black py-3 rounded-xl shadow-md transition-all ${canConfirm
+            ? 'bg-teal-600 hover:bg-teal-700 text-white active:scale-95'
+            : 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+            }`}
         >
           <ShieldCheck size={16} />
           {lokasiAktif && gpsStatus === 'fail'
             ? '❌ Presensi Gagal (Di Luar Radius Sekolah)'
             : lokasiAktif && gpsStatus === 'checking'
-            ? '⏳ Mendeteksi Posisi GPS...'
-            : qrAktif && qrStatus !== 'ok'
-            ? '📷 Scan Barcode Terlebih Dahulu'
-            : `Konfirmasi ${mode === 'pulang' ? 'Absen Pulang' : 'Absen Masuk'}`}
+              ? '⏳ Mendeteksi Posisi GPS...'
+              : qrAktif && qrStatus !== 'ok'
+                ? '📷 Scan Barcode Terlebih Dahulu'
+                : `Konfirmasi ${mode === 'pulang' ? 'Absen Pulang' : 'Absen Masuk'}`}
         </button>
       </div>
     </Modal>
@@ -2051,6 +2050,7 @@ function VerifikasiKehadiranModal({ isOpen, mode, settings, schoolProfile, onClo
 function AdminRekapPanel({
   settings, setSchoolProfile, teachers, presensiGuru, upsertRecord, setPresensiGuru,
   readOnly, isAdmin, showToast, showConfirm, showCsvPreview, triggerPrint, addAuditLog, currentUser, schoolProfile,
+  onPullPresensiCloud
 }) {
   const [viewMode, setViewMode] = useState('harian'); // 'harian' | 'rekap'
   const [searchQuery, setSearchQuery] = useState('');
@@ -2085,7 +2085,7 @@ function AdminRekapPanel({
       if (!filterDate) return new Date();
       const [y, m, d] = filterDate.split('-').map(Number);
       return new Date(y, m - 1, d);
-    } catch(e) {
+    } catch (e) {
       return new Date();
     }
   }, [filterDate]);
@@ -2100,7 +2100,9 @@ function AdminRekapPanel({
     try {
       const res = await fetchPresensiGuru({ force: true });
       if (res.status === 'success' && Array.isArray(res.data)) {
-        if (typeof setPresensiGuru === 'function') {
+        if (typeof onPullPresensiCloud === 'function') {
+          onPullPresensiCloud(res.data);
+        } else if (typeof setPresensiGuru === 'function') {
           setPresensiGuru(res.data);
         }
         showToast(`Sinkronisasi sukses! ${res.data.length} catatan presensi termutakhir dimuat dari Cloud.`, 'success');
@@ -2128,10 +2130,10 @@ function AdminRekapPanel({
 
       // Pencocokan sesi: jika filterSesiId diset, cocokkan id atau nama sesi
       const rSesi = r.sesiId || sesiUtamaId;
-      const isSesiMatch = rSesi === filterSesiId || 
+      const isSesiMatch = rSesi === filterSesiId ||
         (!filterSesiId && rSesi === sesiUtamaId) ||
         (r.sesiNama && sesiTerpilih?.nama && r.sesiNama.trim().toLowerCase() === sesiTerpilih.nama.trim().toLowerCase());
-      
+
       if (!isSesiMatch) return false;
 
       // 1. Cocokkan ID
@@ -2255,9 +2257,10 @@ function AdminRekapPanel({
   };
 
   const handleSaveSettings = () => {
+    if (readOnly) return;
     try {
       localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(settingsForm));
-    } catch (e) {}
+    } catch (e) { }
     setSchoolProfile(prev => ({ ...prev, presensiGuruSettings: settingsForm }));
     showToast('Pengaturan presensi guru berhasil disimpan.', 'success');
     const jumlahHariDiatur = Object.keys(settingsForm.jadwalGuru || {}).length;
@@ -2266,6 +2269,7 @@ function AdminRekapPanel({
   };
 
   const openEdit = (teacher) => {
+    if (readOnly) return;
     const rec = getRecord(teacher);
     setEditRow(teacher);
     setEditForm({
@@ -2277,6 +2281,7 @@ function AdminRekapPanel({
   };
 
   const handleSaveEdit = () => {
+    if (readOnly) return;
     if (!editRow) return;
     let terlambatMenit = 0;
     let jamMasuk = editForm.jamMasuk ? `${editForm.jamMasuk}:00` : null;
@@ -2300,12 +2305,14 @@ function AdminRekapPanel({
   };
 
   const handleQuickStatus = (teacher, status) => {
+    if (readOnly) return;
     upsertRecord(teacher.id, teacher.name, filterDate, filterSesiId, { status, jamMasuk: null, jamPulang: null, terlambatMenit: 0, sesiNama: sesiTerpilih.nama });
     showToast(`${teacher.name} ditandai ${status} pada tanggal ${filterDate}.`, 'success');
     addAuditLog?.(currentUser?.name, `Tandai ${status}`, teacher.name, `${filterDate} (Sesi ${sesiTerpilih.nama})`, 'presensi_guru');
   };
 
   const handleDeleteRecord = (teacher) => {
+    if (readOnly) return;
     const rec = getRecord(teacher);
     if (!rec) return;
     showConfirm(`Hapus catatan presensi ${teacher.name} pada tanggal ${filterDate}? Tindakan ini tidak bisa dibatalkan.`, () => {
@@ -2313,7 +2320,7 @@ function AdminRekapPanel({
       setPresensiGuru(updated);
       try {
         localStorage.setItem('payedu_presensi_guru', JSON.stringify(updated));
-      } catch (e) {}
+      } catch (e) { }
       deleteSinglePresensiRecord(rec.id).catch(e => console.warn('[Presensi] Delete single warning:', e));
       showToast('Catatan presensi berhasil dihapus.', 'success');
     });
@@ -2321,6 +2328,7 @@ function AdminRekapPanel({
 
   // 📥 EKSPOR LAPORAN HARIAN (CSV/EXCEL)
   const handleExportHarianCSV = () => {
+    if (readOnly) return;
     const headers = ['No', 'Nama Guru / Staff', 'NIP / NIPY', 'Jabatan', 'Sesi', 'Jam Masuk', 'Jam Pulang', 'Status Kehadiran', 'Keterlambatan (Menit)', 'Verifikasi Masuk', 'Verifikasi Pulang', 'Keterangan'];
     const rows = filteredTeachersHarian.map((t, idx) => {
       const rec = getRecord(t);
@@ -2390,7 +2398,7 @@ function AdminRekapPanel({
 
       // Hitung Khusus Rata-rata Masuk Pagi & Masuk Sore
       const allMonthRecs = presensiGuru.filter(r => (String(r.teacherId) === String(t.id) || (r.teacherName && t.name && r.teacherName.trim().toLowerCase() === t.name.trim().toLowerCase())) && r.date.startsWith(prefix));
-      
+
       const pagiRecs = allMonthRecs.filter(r => (r.sesiId === sesiPagi?.id || (!r.sesiId && sesiUtamaId === sesiPagi?.id) || (r.sesiNama || '').toLowerCase().includes('pagi')) && r.jamMasuk);
       const avgPagiMin = pagiRecs.length > 0
         ? Math.round(pagiRecs.reduce((sum, r) => sum + toMinutes(r.jamMasuk.slice(0, 5)), 0) / pagiRecs.length)
@@ -2414,6 +2422,7 @@ function AdminRekapPanel({
   }, [filteredTeachers, presensiGuru, filterMonth, filterYear, filterSesiId, sesiUtamaId, sesiList]);
 
   const handleExportRekap = () => {
+    if (readOnly) return;
     const headers = ['Nama', 'NIP / NIPY', 'Jabatan', 'Hadir', 'Jumlah Kali Terlambat', 'Sakit', 'Izin', 'Alpa', 'Cuti/Dinas Luar', 'Rata-rata Masuk (Pagi)', 'Rata-rata Masuk (Sore)', 'Persentase Hadir'];
     const rows = rekapData.map(r => [r.name, r.nip, r.position, r.hadir, r.terlambat, r.sakit, r.izin, r.alpa, r.cuti, r.avgMasukPagi, r.avgMasukSore, `${r.persentase}%`]);
     const csv = [headers, ...rows].map(row => row.map(formatCSVField).join(',')).join('\n');
@@ -2452,6 +2461,7 @@ function AdminRekapPanel({
   }, [targetTeacher, presensiGuru, filterMonth, filterYear, filterSesiId, sesiUtamaId]);
 
   const handleExportDetailGuruCSV = () => {
+    if (readOnly) return;
     if (!detailGuruData || !targetTeacher) return;
     const headers = ['Tanggal', 'Sesi', 'Jam Masuk', 'Jam Pulang', 'Status', 'Terlambat (Menit)', 'Verifikasi GPS/QR', 'Keterangan'];
     const rows = detailGuruData.logs.map(r => [
@@ -2487,36 +2497,36 @@ function AdminRekapPanel({
     <div className="space-y-6">
       {/* STAT HARI INI (DAPAT DIKLIK UNTUK MELIHAT DAFTAR GURU) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard 
-          icon={CheckCircle2} 
-          label="Hadir Tepat Waktu" 
-          value={totalHadir} 
-          gradient="from-emerald-500 to-teal-600" 
-          iconBg="bg-white/20" 
+        <StatCard
+          icon={CheckCircle2}
+          label="Hadir Tepat Waktu"
+          value={totalHadir}
+          gradient="from-emerald-500 to-teal-600"
+          iconBg="bg-white/20"
           onClick={() => { setStatDrilldown('Hadir'); setDrilldownSearch(''); }}
         />
-        <StatCard 
-          icon={AlertTriangle} 
-          label="Terlambat" 
-          value={totalTerlambat} 
-          gradient="from-amber-500 to-orange-600" 
-          iconBg="bg-white/20" 
+        <StatCard
+          icon={AlertTriangle}
+          label="Terlambat"
+          value={totalTerlambat}
+          gradient="from-amber-500 to-orange-600"
+          iconBg="bg-white/20"
           onClick={() => { setStatDrilldown('Terlambat'); setDrilldownSearch(''); }}
         />
-        <StatCard 
-          icon={CalendarClock} 
-          label="Sakit/Izin/Cuti" 
-          value={totalIzinSakit} 
-          gradient="from-violet-500 to-purple-600" 
-          iconBg="bg-white/20" 
+        <StatCard
+          icon={CalendarClock}
+          label="Sakit/Izin/Cuti"
+          value={totalIzinSakit}
+          gradient="from-violet-500 to-purple-600"
+          iconBg="bg-white/20"
           onClick={() => { setStatDrilldown('IzinSakit'); setDrilldownSearch(''); }}
         />
-        <StatCard 
-          icon={AlertCircle} 
-          label="Belum Absen" 
-          value={Math.max(0, totalBelumAbsen)} 
-          gradient="from-rose-500 to-red-600" 
-          iconBg="bg-white/20" 
+        <StatCard
+          icon={AlertCircle}
+          label="Belum Absen"
+          value={Math.max(0, totalBelumAbsen)}
+          gradient="from-rose-500 to-red-600"
+          iconBg="bg-white/20"
           onClick={() => { setStatDrilldown('BelumAbsen'); setDrilldownSearch(''); }}
         />
       </div>
@@ -2527,9 +2537,9 @@ function AdminRekapPanel({
         onClose={() => setStatDrilldown(null)}
         title={
           statDrilldown === 'Hadir' ? `Daftar Guru: Hadir Tepat Waktu (${drilldownTeachers.length})` :
-          statDrilldown === 'Terlambat' ? `Daftar Guru: Terlambat (${drilldownTeachers.length})` :
-          statDrilldown === 'IzinSakit' ? `Daftar Guru: Sakit / Izin / Cuti (${drilldownTeachers.length})` :
-          `Daftar Guru: Belum Absen (${drilldownTeachers.length})`
+            statDrilldown === 'Terlambat' ? `Daftar Guru: Terlambat (${drilldownTeachers.length})` :
+              statDrilldown === 'IzinSakit' ? `Daftar Guru: Sakit / Izin / Cuti (${drilldownTeachers.length})` :
+                `Daftar Guru: Belum Absen (${drilldownTeachers.length})`
         }
         maxWidth="max-w-2xl"
       >
@@ -2640,15 +2650,17 @@ function AdminRekapPanel({
                           <span className="hidden sm:inline-block text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
                             Belum Hadir
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleSendTeacherWAReminder(t)}
-                            className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-800 flex items-center justify-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                            title={`Kirim Pesan Pengingat Presensi ke WhatsApp ${t.name}`}
-                          >
-                            <MessageCircle size={11} className="text-emerald-600 dark:text-emerald-400" />
-                            <span>Ingatkan WA</span>
-                          </button>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendTeacherWAReminder(t)}
+                              className="flex-1 sm:flex-initial px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-bold border border-emerald-300 dark:border-emerald-800 flex items-center justify-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                              title={`Kirim Pesan Pengingat Presensi ke WhatsApp ${t.name}`}
+                            >
+                              <MessageCircle size={11} className="text-emerald-600 dark:text-emerald-400" />
+                              <span>Ingatkan WA</span>
+                            </button>
+                          )}
                           {!readOnly && (
                             <button
                               type="button"
@@ -2699,16 +2711,16 @@ function AdminRekapPanel({
             <>
               <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 shadow-inner">
                 <CalendarDays size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                <input 
-                  type="date" 
-                  value={filterDate} 
-                  onChange={e => setFilterDate(e.target.value)} 
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={e => setFilterDate(e.target.value)}
                   className="bg-transparent text-sm font-bold dark:text-white outline-none cursor-pointer"
                 />
                 {filterDate !== todayStr() && (
-                  <button 
-                    type="button" 
-                    onClick={() => setFilterDate(todayStr())} 
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate(todayStr())}
                     className="text-[10px] bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 font-black px-2 py-0.5 rounded-md hover:bg-teal-200 transition-colors shrink-0"
                     title="Kembali ke Hari Ini"
                   >
@@ -2723,11 +2735,10 @@ function AdminRekapPanel({
               <button
                 type="button"
                 onClick={() => setShowAllTeachersHarian(!showAllTeachersHarian)}
-                className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                  showAllTeachersHarian
-                    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                }`}
+                className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${showAllTeachersHarian
+                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  }`}
                 title={showAllTeachersHarian ? 'Klik untuk membatasi hanya guru yang dijadwalkan' : 'Klik untuk menampilkan semua guru'}
               >
                 <Users size={14} />
@@ -2745,11 +2756,10 @@ function AdminRekapPanel({
                     key={s.id}
                     type="button"
                     onClick={() => setFilterSesiId(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
-                      isSel
-                        ? `${theme.bgActive} shadow-xs`
-                        : `${theme.bgInactive}`
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${isSel
+                      ? `${theme.bgActive} shadow-xs`
+                      : `${theme.bgInactive}`
+                      }`}
                   >
                     <span>{theme.iconEmoji}</span>
                     <span>{s.nama}</span>
@@ -2758,7 +2768,7 @@ function AdminRekapPanel({
               })}
             </div>
           )}
-          {viewMode === 'harian' && (
+          {!readOnly && viewMode === 'harian' && (
             <>
               <button type="button" onClick={handleExportHarianCSV} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors" title="Download Rekap Harian CSV/Excel"><Download size={14} /> CSV</button>
               <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors" title="Cetak Presensi Harian"><Printer size={14} /> Cetak</button>
@@ -2772,16 +2782,20 @@ function AdminRekapPanel({
               <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold dark:text-white cursor-pointer">
                 {[filterYear - 1, filterYear, filterYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              <button type="button" onClick={viewMode === 'detail_guru' ? handleExportDetailGuruCSV : handleExportRekap} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors"><Download size={14} /> CSV</button>
-              <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors"><Printer size={14} /> Cetak</button>
+              {!readOnly && (
+                <>
+                  <button type="button" onClick={viewMode === 'detail_guru' ? handleExportDetailGuruCSV : handleExportRekap} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-emerald-100 transition-colors"><Download size={14} /> CSV</button>
+                  <button type="button" onClick={triggerPrint} className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors"><Printer size={14} /> Cetak</button>
+                </>
+              )}
             </>
           )}
-          {isAdmin && (
+          {!readOnly && isAdmin && (
             <button type="button" onClick={() => { setSettingsForm(settings); setShowSettings(true); }} className="flex items-center gap-1.5 px-3 py-2 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-teal-100 transition-colors"><Settings size={14} /> Pengaturan</button>
           )}
-          <button 
-            type="button" 
-            onClick={handleSyncCloud} 
+          <button
+            type="button"
+            onClick={handleSyncCloud}
             disabled={isSyncingCloud}
             className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
             title="Sinkronkan data presensi dari Cloud Supabase sekarang"
@@ -2883,7 +2897,7 @@ function AdminRekapPanel({
           {/* Lembar Tanda Tangan Cetak */}
           <div className="hidden print:flex justify-between items-end p-8 text-xs font-bold text-black mt-8">
             <div className="text-center">
-              <p className="mb-20">Mengetahui,<br/>Kepala Sekolah</p>
+              <p className="mb-20">Mengetahui,<br />Kepala Sekolah</p>
               <p className="underline underline-offset-4 decoration-2">{schoolProfile?.kepsek || schoolProfile?.kepalaSekolah || 'ILWANI, S.Pd.I'}</p>
             </div>
             <div className="text-center">
@@ -2985,13 +2999,12 @@ function AdminRekapPanel({
                   <h2 className="text-xl font-black text-slate-800 dark:text-white leading-tight">{targetTeacher?.name}</h2>
                   <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">{targetTeacher?.position || 'Guru & Staff'} • NIP: {targetTeacher?.nip || '-'}</p>
                   <div className="mt-2 flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      (detailGuruData?.persentase || 0) >= 90
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : (detailGuruData?.persentase || 0) >= 75
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${(detailGuruData?.persentase || 0) >= 90
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : (detailGuruData?.persentase || 0) >= 75
                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                         : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-                    }`}>
+                      }`}>
                       Tingkat Kehadiran: {detailGuruData?.persentase || 0}%
                     </span>
                   </div>
@@ -3077,7 +3090,7 @@ function AdminRekapPanel({
           </div>
         </div>
       )}
-      <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="Pengaturan Presensi Guru" maxWidth="max-w-lg">
+      <Modal isOpen={!readOnly && showSettings} onClose={() => setShowSettings(false)} title="Pengaturan Presensi Guru" maxWidth="max-w-lg">
         <div className="space-y-5">
           <div>
             <p className={cx.sectionHeader}>Sesi Jam Kerja</p>
@@ -3116,7 +3129,7 @@ function AdminRekapPanel({
       </Modal>
 
       {/* MODAL EDIT MANUAL */}
-      <Modal isOpen={!!editRow} onClose={() => setEditRow(null)} title={`Edit Presensi — ${editRow?.name || ''}`}>
+      <Modal isOpen={!readOnly && !!editRow} onClose={() => setEditRow(null)} title={`Edit Presensi — ${editRow?.name || ''}`}>
         {editForm && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

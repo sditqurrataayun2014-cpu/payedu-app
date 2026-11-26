@@ -1,27 +1,28 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Settings, X, Trash, PlusCircle, Save, BarChart3, 
+import {
+  Settings, X, Trash, PlusCircle, Save, BarChart3,
   Calendar, Printer, Download, History, TrendingUp, TrendingDown,
-  Activity, Users, Trash2, CheckCircle, PieChart as PieChartIcon, 
-  Wallet, Edit, ChevronDown, Table, Layers, ArrowUpRight, ArrowDownRight, 
-  Award, Info, AlertCircle, CalendarDays, Check 
+  Activity, Users, Trash2, CheckCircle, PieChart as PieChartIcon,
+  Wallet, Edit, ChevronDown, Table, Layers, ArrowUpRight, ArrowDownRight,
+  Award, Info, AlertCircle, CalendarDays, Check
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
+import {
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
-import { 
-  formatRp, getFormattedPeriod, calculatePayroll, 
-  exportToPDF, generateUniqueId, isTeacherActive, parsePeriodToDate 
+import {
+  formatRp, getFormattedPeriod, calculatePayroll,
+  exportToPDF, generateUniqueId, isReadOnlyUser, isTeacherActive, parsePeriodToDate
 } from '../../utils/payrollUtils';
 import { deduplicateArchives } from '../../services/dbService';
 
 // --- LAPORAN VIEW ---
-function LaporanView({ teachers, fundingSources, setFundingSources, settings, archives = [] }) {
+function LaporanView({ teachers, fundingSources, setFundingSources, settings, archives = [], user, isReadOnly = false }) {
+  const readOnly = isReadOnly || isReadOnlyUser(user);
   const bulan = getFormattedPeriod(settings?.payrollPeriod);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [tempFunding, setTempFunding] = useState([]);
-  
+
   // FITUR BARU: Sub-Tab Pembedahan Arus Pemotongan ('berjalan' | 'riwayat')
   const [potonganTab, setPotonganTab] = useState('berjalan');
 
@@ -30,7 +31,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
 
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // State Loading PDF
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
@@ -45,20 +46,24 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
   ];
 
   const handleOpenEdit = () => {
+    if (readOnly) return;
     setTempFunding(JSON.parse(JSON.stringify(fundingSources)));
     setIsEditModalOpen(true);
   };
 
   const handleAddFunding = () => {
+    if (readOnly) return;
     const colorObj = FUNDING_COLORS[tempFunding.length % FUNDING_COLORS.length];
     setTempFunding([...tempFunding, { id: generateUniqueId('fund-'), nama: '', nominal: 0, warna: colorObj.bg, hex: colorObj.hex }]);
   };
 
   const handleRemoveFunding = (idx) => {
+    if (readOnly) return;
     setTempFunding(tempFunding.filter((_, i) => i !== idx));
   };
 
   const handleUpdateFunding = (idx, field, value) => {
+    if (readOnly) return;
     const newData = [...tempFunding];
     newData[idx][field] = value;
     setTempFunding(newData);
@@ -67,6 +72,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
   const totalTempNominal = tempFunding.reduce((sum, item) => sum + Number(item.nominal), 0);
 
   const handleSaveFunding = () => {
+    if (readOnly) return;
     setIsSaving(true);
     setTimeout(() => {
       setFundingSources(tempFunding);
@@ -80,7 +86,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
   // 🪄 KALKULASI LAPORAN UTAMA: KOMPOSISI 8 PILAR KOMPONEN SECARA DETAIL
   const reportData = useMemo(() => {
     let totalKotor = 0, totalPotongan = 0, totalBersih = 0;
-    
+
     // Rincian Akumulasi Masing-masing Komponen Gaji
     let sumMasaKerja = 0, countMasaKerja = 0;
     let sumJabatan = 0, countJabatan = 0;
@@ -178,7 +184,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
   // 🪄 FITUR BARU 2: PEMBEDAHAN ARUS PEMOTONGAN LINTAS BULAN (MONITORING & EVALUASI)
   const monthlyDeductions = useMemo(() => {
     const cleanArchivesList = deduplicateArchives(archives || []);
-    
+
     // Urutkan arsip dari yang terlama ke terbaru
     const sortedArchives = [...cleanArchivesList].sort((a, b) => {
       const dateA = parsePeriodToDate(a.periode || '');
@@ -303,9 +309,9 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in relative">
-      
+
       {/* Modal Edit Sumber Dana */}
-      {isEditModalOpen && (
+      {!readOnly && isEditModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 shrink-0">
@@ -316,34 +322,34 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                 Atur rincian nominal sumber pendanaan gaji bulan ini. Total pengeluaran gaji kotor saat ini adalah <span className="font-bold text-indigo-600 dark:text-indigo-400">{formatRp(reportData.totalKotor)}</span>.
               </p>
-              
+
               <div className="space-y-3">
                 {tempFunding.map((item, idx) => (
                   <div key={item.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                     <div className="flex-1">
-                      <input 
-                        type="text" 
-                        placeholder="Nama Sumber Dana (misal: Yayasan, BOS)" 
+                      <input
+                        type="text"
+                        placeholder="Nama Sumber Dana (misal: Yayasan, BOS)"
                         value={item.nama}
                         onChange={(e) => handleUpdateFunding(idx, 'nama', e.target.value)}
                         className="w-full text-sm font-semibold p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
                     </div>
                     <div className="w-40">
-                      <input 
-                        type="number" 
-                        placeholder="Nominal" 
+                      <input
+                        type="number"
+                        placeholder="Nominal"
                         value={item.nominal || ''}
                         onChange={(e) => handleUpdateFunding(idx, 'nominal', Number(e.target.value))}
                         className="w-full text-sm font-bold p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none text-right"
                       />
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleRemoveFunding(idx)}
                       className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
                       title="Hapus Sumber"
@@ -354,7 +360,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
                 ))}
               </div>
 
-              <button 
+              <button
                 onClick={handleAddFunding}
                 className="mt-4 flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 transition-colors"
               >
@@ -367,13 +373,13 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
                 Total Terinput: <strong className="text-slate-800 dark:text-slate-200">{formatRp(totalTempNominal)}</strong>
               </div>
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => setIsEditModalOpen(false)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors"
                 >
                   Batal
                 </button>
-                <button 
+                <button
                   onClick={handleSaveFunding}
                   disabled={isSaving}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
@@ -400,20 +406,22 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
             Pembedahan komprehensif struktur pengeluaran gaji sekolah, komposisi komponen tunjangan, arus pemotongan, dan riwayat evaluasi lintas periode.
           </p>
         </div>
-        <div className="flex items-center gap-2 relative z-10 w-full md:w-auto justify-end no-print">
-          <button 
-            type="button" 
-            onClick={() => window.print()}
-            className="flex-1 md:flex-initial bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-          >
-            <Printer size={16} /> <span>Cetak Laporan</span>
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-2 relative z-10 w-full md:w-auto justify-end no-print">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex-1 md:flex-initial bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Printer size={16} /> <span>Cetak Laporan</span>
+            </button>
+          </div>
+        )}
         <BarChart3 size={140} className="absolute -right-8 -bottom-8 text-white/5 transform rotate-12 pointer-events-none hidden sm:block" />
       </div>
 
       <div id="printable-report" className="space-y-6">
-        
+
         {/* RINGKASAN METRIK FINANSIAL KUNCI */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
@@ -455,7 +463,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
           <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold dark:text-white flex items-center gap-2">
-                <PieChartIcon size={18} className="text-indigo-600 dark:text-indigo-400"/> Komposisi Komponen Gaji (8 Komponen Lengkap)
+                <PieChartIcon size={18} className="text-indigo-600 dark:text-indigo-400" /> Komposisi Komponen Gaji (8 Komponen Lengkap)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">Pembedahan transparan setiap tunjangan dan insentif pembentuk total gaji kotor.</p>
             </div>
@@ -465,22 +473,20 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
               <button
                 type="button"
                 onClick={() => setKomposisiView('visual')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  komposisiView === 'visual'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${komposisiView === 'visual'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <PieChartIcon size={13} /> Visual Grafik
               </button>
               <button
                 type="button"
                 onClick={() => setKomposisiView('tabel')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  komposisiView === 'tabel'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${komposisiView === 'tabel'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Table size={13} /> Tabel Rincian
               </button>
@@ -539,7 +545,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
                       <RechartsTooltip content={<CustomPieTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
-                  
+
                   {/* Center Stat Inside Donut */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
                     <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Total Gaji Kotor</span>
@@ -628,22 +634,20 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
               <button
                 type="button"
                 onClick={() => setPotonganTab('berjalan')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  potonganTab === 'berjalan'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${potonganTab === 'berjalan'
                     ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Activity size={13} /> Periode Berjalan
               </button>
               <button
                 type="button"
                 onClick={() => setPotonganTab('riwayat')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  potonganTab === 'riwayat'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${potonganTab === 'riwayat'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <History size={13} /> Riwayat Lintas Bulan
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 font-extrabold ml-1">
@@ -707,7 +711,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
               ) : (
                 <div className="flex flex-col items-center justify-center text-center p-8">
                   <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 flex items-center justify-center mb-3">
-                    <CheckCircle size={32}/>
+                    <CheckCircle size={32} />
                   </div>
                   <p className="font-bold text-sm text-slate-800 dark:text-slate-200 mb-0.5">Kedisiplinan Sempurna!</p>
                   <p className="text-xs text-slate-500 max-w-sm">Tidak ada pemotongan denda kedisiplinan maupun pinjaman kasbon pada periode {bulan}.</p>
@@ -717,7 +721,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
           ) : (
             /* Konten Tab 2: Riwayat Lintas Bulan (Monitoring & Evaluasi) */
             <div className="p-4 sm:p-6 space-y-6">
-              
+
               {/* Statistik Ringkasan Evaluasi */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -844,7 +848,7 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xs border border-slate-200 dark:border-slate-700 p-4 sm:p-6 print:break-inside-avoid">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Users size={18}/>
+              <Users size={18} />
             </div>
             <div>
               <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">Alokasi Gaji Berdasarkan Status Pegawai</h3>
@@ -873,49 +877,51 @@ function LaporanView({ teachers, fundingSources, setFundingSources, settings, ar
             <h3 className="text-xs sm:text-base font-bold dark:text-white flex items-center gap-2">
               <Wallet size={18} className="text-emerald-500" /> Sumber Alokasi Dana Penggajian
             </h3>
-            <button onClick={handleOpenEdit} className="no-print text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer">
-              <Edit size={13} /> Atur Sumber Dana
-            </button>
+            {!readOnly && (
+              <button onClick={handleOpenEdit} className="no-print text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 px-3.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer">
+                <Edit size={13} /> Atur Sumber Dana
+              </button>
+            )}
           </div>
           <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-             <div className="space-y-3.5">
-               {reportData.sumberDana.map((sumber, idx) => (
-                 <div key={idx} className="bg-slate-50 dark:bg-slate-900/30 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                   <div className="flex justify-between items-center mb-1">
-                     <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{sumber.nama}</span>
-                     <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">{formatRp(sumber.nominal)}</span>
-                   </div>
-                   <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                     <div className={`${sumber.warna} h-full rounded-full`} style={{ width: `${sumber.persentase}%` }}></div>
-                   </div>
-                   <p className="text-[10px] text-slate-400 text-right mt-1 font-medium">{sumber.persentase}% dari total anggaran</p>
-                 </div>
-               ))}
-             </div>
-             <div className="flex justify-center">
-                 <div className="relative w-48 h-48 sm:w-60 sm:h-60">
-                     <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={reportData.sumberDana}
-                            cx="50%" cy="50%"
-                            innerRadius={55} outerRadius={80}
-                            paddingAngle={3} dataKey="nominal"
-                            nameKey="nama"
-                          >
-                            {reportData.sumberDana.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.hex} stroke="none" />
-                            ))}
-                          </Pie>
-                          <RechartsTooltip formatter={(value) => formatRp(value)} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Dana</span>
-                         <span className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalPendanaan)}</span>
-                      </div>
-                 </div>
-             </div>
+            <div className="space-y-3.5">
+              {reportData.sumberDana.map((sumber, idx) => (
+                <div key={idx} className="bg-slate-50 dark:bg-slate-900/30 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">{sumber.nama}</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">{formatRp(sumber.nominal)}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                    <div className={`${sumber.warna} h-full rounded-full`} style={{ width: `${sumber.persentase}%` }}></div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 text-right mt-1 font-medium">{sumber.persentase}% dari total anggaran</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-center">
+              <div className="relative w-48 h-48 sm:w-60 sm:h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={reportData.sumberDana}
+                      cx="50%" cy="50%"
+                      innerRadius={55} outerRadius={80}
+                      paddingAngle={3} dataKey="nominal"
+                      nameKey="nama"
+                    >
+                      {reportData.sumberDana.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.hex} stroke="none" />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value) => formatRp(value)} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Dana</span>
+                  <span className="text-sm sm:text-base font-extrabold text-slate-800 dark:text-white">{formatRp(reportData.totalPendanaan)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

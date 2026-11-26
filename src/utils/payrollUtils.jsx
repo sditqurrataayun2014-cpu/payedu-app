@@ -117,6 +117,7 @@ export function FormattedRupiahInput({ value, onChange, className = "", placehol
   }, [value]);
 
   const handleChange = (e) => {
+    if (props.disabled || props.readOnly) return;
     const raw = e.target.value;
     const cleanNumber = raw.replace(/\D/g, '');
     const formatted = cleanNumber ? new Intl.NumberFormat('id-ID').format(cleanNumber) : '';
@@ -1009,6 +1010,16 @@ export const syncTeacherJurnalKbm = (teacher, newJurnalList, saldoAwalOverride) 
     }
   };
 };
+
+/**
+ * Memeriksa apakah role / user termasuk akun Yayasan dengan akses Read-Only.
+ */
+export const isYayasanRole = (role) => String(role || '').trim().toLowerCase() === 'yayasan';
+
+/**
+ * Memeriksa apakah pengguna yang sedang login berstatus Read-Only.
+ */
+export const isReadOnlyUser = (user) => isYayasanRole(user?.role);
 
 
 

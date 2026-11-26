@@ -6,13 +6,14 @@ import {
 } from 'lucide-react';
 
 import {
-  getFormattedPeriod, isTeacherActive, safeStorageSet
+  getFormattedPeriod, isTeacherActive, safeStorageSet, isReadOnlyUser
 } from '../../utils/payrollUtils';
 import { exportTeachingHoursToExcel } from '../../services/excelExportService';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
 import { showAlert } from '../../utils/dialogService';
 
-export default function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFilter, settings, presensiGuru = [], saveAuditLog, user }) {
+export default function RekapAbsensiView({ teachers, setTeachers, externalFilter, setExternalFilter, settings, presensiGuru = [], saveAuditLog, user, isReadOnly = false }) {
+  const readOnly = isReadOnly || isReadOnlyUser(user);
   const [search, setSearch] = useState('');
   const fileInputRef = useRef(null);
   const mesinInputRef = useRef(null); // TAMBAHAN: Ref khusus untuk mesin absen
@@ -22,10 +23,10 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingData, setEditingData] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
-  
+
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // TAMBAHAN: Modal Konfirmasi Reset (Pengganti window.confirm)
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -46,7 +47,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   const teacherPresensiMap = useMemo(() => {
     const map = {};
     if (!Array.isArray(presensiGuru) || presensiGuru.length === 0) return map;
-    
+
     activeTeachers.forEach(t => {
       const tIdStr = String(t.id).trim();
       const tNameClean = (t.name || '').trim().toLowerCase();
@@ -129,6 +130,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // Buka modal sinkronisasi dan pre-select guru yang berbeda / terlambat
   const handleOpenSyncModal = () => {
+    if (readOnly) return;
     const diffIds = syncComparisonList
       .filter(item => item.isDiff || item.presensiLate > 0)
       .map(item => item.id);
@@ -138,6 +140,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // Terapkan sinkronisasi massal dari Presensi Guru ke tabel Rekap Jam Mengajar
   const handleApplySync = () => {
+    if (readOnly) return;
     if (selectedSyncIds.length === 0) {
       showAlert("Silakan pilih minimal 1 pegawai untuk disinkronkan.");
       return;
@@ -193,7 +196,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   const filtered = activeTeachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
-    
+
     let matchFilter = true;
     if (activeFilter === 'kurang_jam') {
       const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
@@ -203,7 +206,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const telat = t.payroll?.disiplin?.telat || 0;
       if (telat < 3) matchFilter = false;
     }
-    
+
     return matchSearch && matchFilter;
   });
 
@@ -231,25 +234,27 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   const getDailyHours = (total, teacherId) => {
     const days = Array(31).fill('');
     if (total > 0) {
-       let remaining = total;
-       let dayIdx = teacherId.charCodeAt(teacherId.length - 1) % 7; // Mulai di hari acak
-       while (remaining > 0 && dayIdx < 31) {
-          const hoursToday = Math.min(4, remaining); // Maksimal 4 JPL per hari
-          days[dayIdx] = hoursToday;
-          remaining -= hoursToday;
-          dayIdx += 2; // Lompat 1 hari
-          if (dayIdx >= 31 && remaining > 0) dayIdx = 1; // Ulang ke awal jika masih ada sisa
-       }
+      let remaining = total;
+      let dayIdx = teacherId.charCodeAt(teacherId.length - 1) % 7; // Mulai di hari acak
+      while (remaining > 0 && dayIdx < 31) {
+        const hoursToday = Math.min(4, remaining); // Maksimal 4 JPL per hari
+        days[dayIdx] = hoursToday;
+        remaining -= hoursToday;
+        dayIdx += 2; // Lompat 1 hari
+        if (dayIdx >= 31 && remaining > 0) dayIdx = 1; // Ulang ke awal jika masih ada sisa
+      }
     }
     return days;
   };
 
   // TAMBAHAN: Fungsi Reset Data Bulan Baru dengan Custom Modal
   const handleResetBulan = () => {
+    if (readOnly) return;
     setConfirmReset(true);
   };
 
   const executeResetBulan = () => {
+    if (readOnly) return;
     setTeachers(prev => prev.map(t => ({
       ...t,
       payroll: {
@@ -271,6 +276,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   };
 
   const handleExportExcel = () => {
+    if (readOnly) return;
     try {
       exportTeachingHoursToExcel({
         teachers: filtered,
@@ -284,10 +290,10 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
     }
     const daysHeaders = Array.from({ length: 31 }, (_, i) => `Tgl ${i + 1}`);
     const headers = ['Nama Guru', ...daysHeaders, 'Jam +', 'Total', 'Wajib', 'JSJM', 'Selisih', 'Telat', 'Tepat Waktu'];
-    
+
     // Menggunakan pemisah titik koma (;) agar lebih rapi saat dibuka di Microsoft Excel region Indonesia
     const csvRows = [headers.join(';')];
-    
+
     filtered.forEach(t => {
       const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
       const real = t.payroll?.jamMengajar?.realisasi || 0;
@@ -296,14 +302,14 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const selisih = (real + jsjm) - wajib + jamPlus;
       const telat = t.payroll?.disiplin?.telat || 0;
       const tepatWaktu = Math.max(0, real - telat);
-      
+
       const dailyData = t.payroll?.jamMengajar?.harian || getDailyHours(real, t.id);
       const dailyString = dailyData.map(d => d || '').join(';');
-      
+
       const row = [`"${t.name}"`, dailyString, jamPlus, real, wajib, jsjm, selisih, telat, tepatWaktu];
       csvRows.push(row.join(';'));
     });
-    
+
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -316,6 +322,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // PERBAIKAN: Fungsi Import sekarang menyerap data Tgl 1 sampai Tgl 31 secara presisi
   const handleImportExcel = (e) => {
+    if (readOnly) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -324,76 +331,76 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const text = evt.target.result;
       const lines = text.split('\n');
       if (lines.length < 2) {
-         showAlert('Format CSV tidak valid atau kosong.');
-         return;
+        showAlert('Format CSV tidak valid atau kosong.');
+        return;
       }
 
       // Deteksi pemisah cerdas (, atau ;)
       const separator = lines[0].includes(';') ? ';' : ',';
       const headers = lines[0].split(separator).map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
-      
+
       const nameIdx = headers.findIndex(h => h.includes('nama'));
       const totalIdx = headers.findIndex(h => h === 'total' || h.includes('realisasi'));
 
       // Deteksi indeks untuk kolom Tgl 1 sampai Tgl 31
       const dailyIndices = [];
       for (let i = 1; i <= 31; i++) {
-         dailyIndices.push(headers.findIndex(h => h === `tgl ${i}`));
+        dailyIndices.push(headers.findIndex(h => h === `tgl ${i}`));
       }
 
       if (nameIdx === -1 || totalIdx === -1) {
-         showAlert('Format kolom tidak dikenali. Pastikan ada judul kolom "Nama Guru" dan "Total".');
-         return;
+        showAlert('Format kolom tidak dikenali. Pastikan ada judul kolom "Nama Guru" dan "Total".');
+        return;
       }
 
       let updatedCount = 0;
       const updatedTeachers = [...teachers];
 
       for (let i = 1; i < lines.length; i++) {
-         if (!lines[i].trim()) continue;
-         
-         const regex = new RegExp(`${separator}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
-         const values = lines[i].split(regex).map(v => v.replace(/^"|"$/g, '').trim());
+        if (!lines[i].trim()) continue;
 
-         const teacherName = values[nameIdx];
-         const jamVal = parseInt(values[totalIdx], 10);
+        const regex = new RegExp(`${separator}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
+        const values = lines[i].split(regex).map(v => v.replace(/^"|"$/g, '').trim());
 
-         // Ekstrak data harian (Tgl 1 - 31) dari baris ini
-         const harianData = Array(31).fill('');
-         for (let d = 0; d < 31; d++) {
-            if (dailyIndices[d] !== -1 && values[dailyIndices[d]]) {
-               harianData[d] = values[dailyIndices[d]].toUpperCase();
-            }
-         }
+        const teacherName = values[nameIdx];
+        const jamVal = parseInt(values[totalIdx], 10);
 
-         if (teacherName && !isNaN(jamVal)) {
-            // Pencarian cerdas berdasarkan nama guru
-            const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
-            if (teacherIndex !== -1) {
-               // 🪄 Hitung otomatis Hari Hadir dari data impor
-               let autoHadir = 0;
-               harianData.forEach(val => {
-                 if (!isNaN(val) && Number(val) > 0) autoHadir++;
-               });
+        // Ekstrak data harian (Tgl 1 - 31) dari baris ini
+        const harianData = Array(31).fill('');
+        for (let d = 0; d < 31; d++) {
+          if (dailyIndices[d] !== -1 && values[dailyIndices[d]]) {
+            harianData[d] = values[dailyIndices[d]].toUpperCase();
+          }
+        }
 
-               updatedTeachers[teacherIndex] = {
-                  ...updatedTeachers[teacherIndex],
-                  payroll: {
-                     ...updatedTeachers[teacherIndex].payroll,
-                     jamMengajar: {
-                        ...updatedTeachers[teacherIndex].payroll.jamMengajar,
-                        realisasi: jamVal,
-                        harian: harianData // <- Menyimpan rincian harian
-                     },
-                     disiplin: {
-                        ...(updatedTeachers[teacherIndex].payroll?.disiplin || {}),
-                        hadir: autoHadir // Disimpan otomatis
-                     }
-                  }
-               };
-               updatedCount++;
-            }
-         }
+        if (teacherName && !isNaN(jamVal)) {
+          // Pencarian cerdas berdasarkan nama guru
+          const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
+          if (teacherIndex !== -1) {
+            // 🪄 Hitung otomatis Hari Hadir dari data impor
+            let autoHadir = 0;
+            harianData.forEach(val => {
+              if (!isNaN(val) && Number(val) > 0) autoHadir++;
+            });
+
+            updatedTeachers[teacherIndex] = {
+              ...updatedTeachers[teacherIndex],
+              payroll: {
+                ...updatedTeachers[teacherIndex].payroll,
+                jamMengajar: {
+                  ...updatedTeachers[teacherIndex].payroll.jamMengajar,
+                  realisasi: jamVal,
+                  harian: harianData // <- Menyimpan rincian harian
+                },
+                disiplin: {
+                  ...(updatedTeachers[teacherIndex].payroll?.disiplin || {}),
+                  hadir: autoHadir // Disimpan otomatis
+                }
+              }
+            };
+            updatedCount++;
+          }
+        }
       }
 
       if (updatedCount > 0) {
@@ -409,6 +416,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // FITUR BARU 1: Integrasi Mesin Absensi (Fingerprint/FaceID seperti Solution)
   const handleImportMesinAbsen = (e) => {
+    if (readOnly) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -418,58 +426,58 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       const text = evt.target.result;
       const lines = text.split('\n');
       if (lines.length < 2) {
-         setIsSaving(false);
-         showAlert('Format file mesin tidak valid atau kosong.');
-         return;
+        setIsSaving(false);
+        showAlert('Format file mesin tidak valid atau kosong.');
+        return;
       }
 
       // Deteksi pemisah cerdas (Tab, Titik Koma, atau Koma)
       const separator = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
       const headers = lines[0].split(separator).map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
-      
+
       // Deteksi Kolom Pintar untuk format mesin
       const nameIdx = headers.findIndex(h => h.includes('nama') || h === 'name');
       const hadirIdx = headers.findIndex(h => h.includes('hadir') || h.includes('normal') || h.includes('hk') || h.includes('kehadiran'));
       const telatIdx = headers.findIndex(h => h.includes('telat') || h.includes('terlambat') || h.includes('late'));
 
       if (nameIdx === -1 || hadirIdx === -1) {
-         setIsSaving(false);
-         showAlert('Gagal mendeteksi kolom. Pastikan file export dari mesin memiliki kolom "Nama" dan "Hadir/Normal".');
-         return;
+        setIsSaving(false);
+        showAlert('Gagal mendeteksi kolom. Pastikan file export dari mesin memiliki kolom "Nama" dan "Hadir/Normal".');
+        return;
       }
 
       let updatedCount = 0;
       const updatedTeachers = [...teachers];
 
       for (let i = 1; i < lines.length; i++) {
-         if (!lines[i].trim()) continue;
-         
-         const values = lines[i].split(separator).map(v => v.replace(/^"|"$/g, '').trim());
-         const teacherName = values[nameIdx];
-         const hadirVal = parseInt(values[hadirIdx], 10);
-         const telatVal = telatIdx !== -1 ? parseInt(values[telatIdx], 10) : 0;
+        if (!lines[i].trim()) continue;
 
-         if (teacherName && !isNaN(hadirVal)) {
-            // Pencocokan cerdas berdasarkan nama guru
-            const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
-            if (teacherIndex !== -1) {
-               updatedTeachers[teacherIndex] = {
-                  ...updatedTeachers[teacherIndex],
-                  payroll: {
-                     ...updatedTeachers[teacherIndex].payroll,
-                     jamMengajar: {
-                        ...updatedTeachers[teacherIndex].payroll.jamMengajar,
-                        realisasi: hadirVal // Asumsi hadir harian = realisasi (Bisa disesuaikan dengan rule sekolah)
-                     },
-                     disiplin: {
-                        ...updatedTeachers[teacherIndex].payroll.disiplin,
-                        telat: isNaN(telatVal) ? 0 : telatVal
-                     }
-                  }
-               };
-               updatedCount++;
-            }
-         }
+        const values = lines[i].split(separator).map(v => v.replace(/^"|"$/g, '').trim());
+        const teacherName = values[nameIdx];
+        const hadirVal = parseInt(values[hadirIdx], 10);
+        const telatVal = telatIdx !== -1 ? parseInt(values[telatIdx], 10) : 0;
+
+        if (teacherName && !isNaN(hadirVal)) {
+          // Pencocokan cerdas berdasarkan nama guru
+          const teacherIndex = updatedTeachers.findIndex(t => t.name.toLowerCase() === teacherName.toLowerCase());
+          if (teacherIndex !== -1) {
+            updatedTeachers[teacherIndex] = {
+              ...updatedTeachers[teacherIndex],
+              payroll: {
+                ...updatedTeachers[teacherIndex].payroll,
+                jamMengajar: {
+                  ...updatedTeachers[teacherIndex].payroll.jamMengajar,
+                  realisasi: hadirVal // Asumsi hadir harian = realisasi (Bisa disesuaikan dengan rule sekolah)
+                },
+                disiplin: {
+                  ...updatedTeachers[teacherIndex].payroll.disiplin,
+                  telat: isNaN(telatVal) ? 0 : telatVal
+                }
+              }
+            };
+            updatedCount++;
+          }
+        }
       }
 
       setIsSaving(false);
@@ -486,12 +494,13 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // FUNGSI HANDLER UNTUK EDIT MANUAL
   const handleOpenEdit = (t) => {
+    if (readOnly) return;
     const real = t.payroll?.jamMengajar?.realisasi || 0;
     // Ambil data harian yang ada, atau buat simulasi jika belum ada
     const dailyData = t.payroll?.jamMengajar?.harian || getDailyHours(real, t.id);
-    
+
     // Pastikan array selalu berisi 31 elemen untuk tanggal 1-31
-    const safeData = Array.from({length: 31}, (_, i) => dailyData[i] !== undefined ? dailyData[i] : '');
+    const safeData = Array.from({ length: 31 }, (_, i) => dailyData[i] !== undefined ? dailyData[i] : '');
 
     setEditingData({
       id: t.id,
@@ -506,7 +515,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   const handleHarianChange = (index, value) => {
     // Ubah input menjadi huruf besar otomatis dan batasi 2 karakter (cth: 4, S, I, A)
     let cleanVal = value.toUpperCase().slice(0, 2);
-    
+
     setEditingData(prev => {
       const newHarian = [...prev.harian];
       newHarian[index] = cleanVal;
@@ -515,15 +524,16 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
   };
 
   const handleSaveEdit = () => {
+    if (readOnly) return;
     setIsSaving(true); // Aktifkan animasi loading
-    
+
     // Hitung ulang total realisasi berdasarkan input 31 hari (Hanya menjumlahkan angka)
     const totalRealisasi = editingData.harian.reduce((sum, val) => sum + (Number(val) || 0), 0);
-    
+
     // 🪄 TAMBALAN CERDAS: Hitung otomatis Hari Hadir untuk disimpan
     let autoHadir = 0;
     editingData.harian.forEach(val => {
-       if (!isNaN(val) && Number(val) > 0) autoHadir++;
+      if (!isNaN(val) && Number(val) > 0) autoHadir++;
     });
 
     const newTelat = editingData.telat !== '' && editingData.telat !== undefined ? Math.max(0, Number(editingData.telat)) : 0;
@@ -555,7 +565,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       setTeachers(updated);
       safeStorageSet('payedu_teachers', updated);
       pushToSupabase('SAVE_TEACHERS', updated).catch(e => console.warn(e));
-      
+
       setIsSaving(false); // Matikan loading
       setIsEditModalOpen(false);
       setEditingData(null);
@@ -564,6 +574,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // FUNGSI BARU: Untuk mengubah jam wajib langsung di tabel
   const handleInlineWajibChange = (teacherId, newValue) => {
+    if (readOnly) return;
     const wajibVal = newValue === '' ? '' : Math.max(0, Number(newValue));
     setTeachers(prev => prev.map(t => {
       if (t.id === teacherId) {
@@ -584,6 +595,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // FUNGSI BARU: Untuk mengubah JSJM (Jabatan Setara Jam Mengajar)
   const handleInlineJsjmChange = (teacherId, newValue) => {
+    if (readOnly) return;
     const jsjmVal = newValue === '' ? '' : Math.max(0, Number(newValue));
     setTeachers(prev => prev.map(t => {
       if (t.id === teacherId) {
@@ -604,6 +616,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // FUNGSI BARU: Untuk mengubah Jam Plus (Tambahan Jam) langsung di tabel
   const handleInlineJamPlusChange = (teacherId, newValue) => {
+    if (readOnly) return;
     const jamPlusVal = newValue === '' ? '' : Math.max(0, Number(newValue));
     setTeachers(prev => prev.map(t => {
       if (t.id === teacherId) {
@@ -624,6 +637,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // 🪄 TAMBALAN CERDAS: Fungsi untuk mengubah jumlah telat langsung di tabel (Manual/Quick-Sync)
   const handleInlineTelatChange = (teacherId, newValue) => {
+    if (readOnly) return;
     const telatVal = newValue === '' ? '' : Math.max(0, Number(newValue));
     const target = teachers.find(t => t.id === teacherId);
     const oldVal = target?.payroll?.disiplin?.telat || 0;
@@ -660,16 +674,17 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   // 🪄 FUNGSI BARU: Mengubah TMT langsung di tabel Gaji dan mereset override nominal
   const handleInlineTmtChange = (teacherId, newYear) => {
+    if (readOnly) return;
     const targetTeacher = teachers.find(t => t.id === teacherId);
     if (!targetTeacher) return;
-    
+
     const oldDate = new Date(targetTeacher.tmt || new Date());
     const oldYear = oldDate.getFullYear();
     oldDate.setFullYear(newYear);
     const newTmt = oldDate.toISOString().split('T')[0];
 
     if (saveAuditLog) {
-       saveAuditLog(targetTeacher, 'Tahun Masuk (TMT)', oldYear, newYear);
+      saveAuditLog(targetTeacher, 'Tahun Masuk (TMT)', oldYear, newYear);
     }
 
     setTeachers(prev => prev.map(t => {
@@ -689,9 +704,9 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative pb-4 min-h-0">
-      
+
       {/* MODAL KONFIRMASI RESET ABSEN */}
-      {confirmReset && (
+      {!readOnly && confirmReset && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
@@ -717,32 +732,32 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       )}
 
       {/* MODAL EDIT MANUAL REKAP ABSEN */}
-      {isEditModalOpen && editingData && (
+      {!readOnly && isEditModalOpen && editingData && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                <Edit className="text-emerald-500"/> Edit Rekap Manual - {editingData.name}
+                <Edit className="text-emerald-500" /> Edit Rekap Manual - {editingData.name}
               </h3>
-              <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[70vh]">
-              
+
               {/* Input Jam Mengajar 1-31 */}
               <div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-3 gap-2">
                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rincian Jam Mengajar (Tanggal 1 - 31)</label>
-                  
+
                   {/* 🪄 TAMBALAN CERDAS: Hitungan Live S/I/A/Hadir untuk memudahkan Admin */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                     <div className="flex gap-2 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-                      <span className="text-emerald-600 dark:text-emerald-400">Hadir: {editingData.harian.filter(v => !isNaN(v) && Number(v)>0).length}</span>
-                      <span className="text-amber-500 border-l border-slate-300 dark:border-slate-600 pl-2">S: {editingData.harian.filter(v => String(v).toUpperCase()==='S').length}</span>
-                      <span className="text-blue-500 border-l border-slate-300 dark:border-slate-600 pl-2">I: {editingData.harian.filter(v => String(v).toUpperCase()==='I').length}</span>
-                      <span className="text-red-500 border-l border-slate-300 dark:border-slate-600 pl-2">A: {editingData.harian.filter(v => String(v).toUpperCase()==='A').length}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">Hadir: {editingData.harian.filter(v => !isNaN(v) && Number(v) > 0).length}</span>
+                      <span className="text-amber-500 border-l border-slate-300 dark:border-slate-600 pl-2">S: {editingData.harian.filter(v => String(v).toUpperCase() === 'S').length}</span>
+                      <span className="text-blue-500 border-l border-slate-300 dark:border-slate-600 pl-2">I: {editingData.harian.filter(v => String(v).toUpperCase() === 'I').length}</span>
+                      <span className="text-red-500 border-l border-slate-300 dark:border-slate-600 pl-2">A: {editingData.harian.filter(v => String(v).toUpperCase() === 'A').length}</span>
                     </div>
-                    
+
                     <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
                       Total: {editingData.harian.reduce((sum, val) => sum + (Number(val) || 0), 0)} JPL
                     </div>
@@ -775,7 +790,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                       <div className="flex items-center gap-1.5">
-                        <input 
+                        <input
                           type="number"
                           min="0"
                           value={editingData.telat !== undefined ? editingData.telat : 0}
@@ -806,8 +821,8 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
               <button onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors text-sm">
                 Batal
               </button>
-              <button 
-                onClick={handleSaveEdit} 
+              <button
+                onClick={handleSaveEdit}
                 disabled={isSaving}
                 className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-sm transition-colors text-sm flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
@@ -820,7 +835,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
       )}
 
       {/* 🪄 MODAL BARU: SINKRONISASI KETERLAMBATAN DARI PRESENSI GURU & STAFF */}
-      {isSyncModalOpen && (
+      {!readOnly && isSyncModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 animate-in zoom-in-95 duration-200">
             {/* Header Modal */}
@@ -839,12 +854,12 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                   </p>
                 </div>
               </div>
-              <button 
+              <button
                 type="button"
-                onClick={() => setIsSyncModalOpen(false)} 
+                onClick={() => setIsSyncModalOpen(false)}
                 className="p-1.5 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer"
               >
-                <X size={20}/>
+                <X size={20} />
               </button>
             </div>
 
@@ -946,7 +961,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                 <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-bold sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="p-3 w-10 text-center">
-                      <input 
+                      <input
                         type="checkbox"
                         checked={filteredSyncList.length > 0 && filteredSyncList.every(item => selectedSyncIds.includes(item.id))}
                         onChange={(e) => {
@@ -971,16 +986,16 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                   {filteredSyncList.map(item => {
                     const isChecked = selectedSyncIds.includes(item.id);
                     return (
-                      <tr 
-                        key={item.id} 
+                      <tr
+                        key={item.id}
                         className={`transition-colors cursor-pointer ${isChecked ? 'bg-teal-50/40 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}
                         onClick={() => {
                           setSelectedSyncIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]);
                         }}
                       >
                         <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={isChecked}
                             onChange={() => {
                               setSelectedSyncIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]);
@@ -1121,9 +1136,9 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
             <span className="text-[10px] sm:text-sm font-bold text-blue-500">JPL</span>
           </div>
           <div className="absolute -right-4 -bottom-4 bg-blue-50 dark:bg-blue-900/30 w-16 h-16 sm:w-20 sm:h-20 rounded-full blur-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors"></div>
-          {activeFilter === 'all' && <div className="absolute top-2 right-2 sm:top-4 sm:right-4"><CheckCircle size={14} className="text-blue-500"/></div>}
+          {activeFilter === 'all' && <div className="absolute top-2 right-2 sm:top-4 sm:right-4"><CheckCircle size={14} className="text-blue-500" /></div>}
         </div>
-        
+
         <div onClick={() => setActiveFilter(activeFilter === 'kurang_jam' ? 'all' : 'kurang_jam')} className={`cursor-pointer transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 p-2 sm:p-5 rounded-xl sm:rounded-2xl shadow-sm border ${activeFilter === 'kurang_jam' ? 'border-amber-500 ring-2 sm:ring-4 ring-amber-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-amber-300'} flex flex-col justify-center relative group`}>
           <div className="flex items-start justify-between relative z-10">
             <div>
@@ -1158,8 +1173,8 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
           <div className="relative w-full max-w-md flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="relative flex-1 min-w-[160px]">
               <Search className="absolute left-2.5 top-2 text-slate-400" size={15} />
-              <input 
-                type="text" placeholder="Cari Nama Guru..." 
+              <input
+                type="text" placeholder="Cari Nama Guru..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-8 pr-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 outline-none dark:text-white"
               />
@@ -1168,115 +1183,119 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
             {activeFilter !== 'all' && (
               <span className={`px-2 py-1 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1 ${activeFilter === 'kurang_jam' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400' : 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:border-red-800 dark:text-red-400'}`}>
                 Filter: {activeFilter === 'kurang_jam' ? 'Kurang Jam' : 'Sering Telat'}
-                <button onClick={() => setActiveFilter('all')} className="ml-0.5 hover:text-black dark:hover:text-white"><X size={11}/></button>
+                <button onClick={() => setActiveFilter('all')} className="ml-0.5 hover:text-black dark:hover:text-white"><X size={11} /></button>
               </span>
             )}
           </div>
-          
+
           {/* Action Buttons: 5 Tombol Grid Presisi di Mobile */}
-          <div className="grid grid-cols-5 gap-1 w-full xl:w-auto sm:flex sm:flex-wrap justify-end">
-            {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
-            <button 
-              type="button"
-              onClick={handleOpenSyncModal} 
-              className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-2 py-1.5 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs cursor-pointer hover:shadow-md"
-              title="Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff"
-            >
-              <UserCheck size={14} /> 
-              <span className="hidden sm:inline">Presensi</span>
-              <span className="sm:hidden">Absen</span>
-              {totalGuruTelatPresensi > 0 && (
-                <span className="ml-0.5 px-1 bg-white/25 text-white text-[9px] rounded-full font-black">
-                  {totalGuruTelatPresensi}
-                </span>
-              )}
-            </button>
+          {!readOnly && (
+            <div className="grid grid-cols-5 gap-1 w-full xl:w-auto sm:flex sm:flex-wrap justify-end">
+              {/* 🪄 FITUR BARU: Tombol Tarik Telat dari Presensi Guru & Staff */}
+              <button
+                type="button"
+                onClick={handleOpenSyncModal}
+                className="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white px-2 py-1.5 rounded-lg transition-all shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs cursor-pointer hover:shadow-md"
+                title="Tarik dan sinkronkan data keterlambatan langsung dari menu Presensi Guru & Staff"
+              >
+                <UserCheck size={14} />
+                <span className="hidden sm:inline">Presensi</span>
+                <span className="sm:hidden">Absen</span>
+                {totalGuruTelatPresensi > 0 && (
+                  <span className="ml-0.5 px-1 bg-white/25 text-white text-[9px] rounded-full font-black">
+                    {totalGuruTelatPresensi}
+                  </span>
+                )}
+              </button>
 
-            {/* TAMBAHAN: Tombol Reset Bulan */}
-            <button onClick={handleResetBulan} className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
-              <Trash2 size={14} /> <span>Reset</span>
-            </button>
+              {/* TAMBAHAN: Tombol Reset Bulan */}
+              <button onClick={handleResetBulan} className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/40 px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
+                <Trash2 size={14} /> <span>Reset</span>
+              </button>
 
-            {/* TAMBAHAN: Tombol Import Mesin Absen */}
-            <input type="file" accept=".csv, .txt, .xls, .xlsx" ref={mesinInputRef} onChange={handleImportMesinAbsen} className="hidden" />
-            <button onClick={() => mesinInputRef.current?.click()} className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-blue-700 dark:text-blue-400 text-[11px] sm:text-xs">
-              <Fingerprint size={14} /> <span>Mesin</span>
-            </button>
+              {/* TAMBAHAN: Tombol Import Mesin Absen */}
+              <input type="file" accept=".csv, .txt, .xls, .xlsx" ref={mesinInputRef} onChange={handleImportMesinAbsen} className="hidden" />
+              <button onClick={() => mesinInputRef.current?.click()} className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 px-2 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-blue-700 dark:text-blue-400 text-[11px] sm:text-xs">
+                <Fingerprint size={14} /> <span>Mesin</span>
+              </button>
 
-            <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
-            <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs">
-              <Upload size={14} /> <span>Impor</span>
-            </button>
-            <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
-              <Download size={14} /> <span>Ekspor</span>
-            </button>
-          </div>
+              <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleImportExcel} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs">
+                <Upload size={14} /> <span>Impor</span>
+              </button>
+              <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 font-bold text-[11px] sm:text-xs">
+                <Download size={14} /> <span>Ekspor</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* FITUR BARU: Tampilan Kartu Mobile Rekap Absensi (< md) */}
         <div className="md:hidden space-y-2.5 p-2.5 sm:p-4 no-print">
           {filtered.map((t, idx) => {
-             const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
-             const real = t.payroll?.jamMengajar?.realisasi || 0;
-             const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
-             const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
-             const tInsidentalJam = (t.payroll?.kegiatanInsidental || []).reduce((sum, item) => sum + (Number(item.jam) || 0), 0);
-             const selisih = (real + jsjm) - wajib + jamPlus + tInsidentalJam; 
-             const telat = t.payroll?.disiplin?.telat || 0;
-             const tepatWaktu = Math.max(0, real - telat);
+            const wajib = t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? Number(t.payroll.jamMengajar.wajib) : (t.status === 'Tetap' ? 60 : 0);
+            const real = t.payroll?.jamMengajar?.realisasi || 0;
+            const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
+            const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
+            const tInsidentalJam = (t.payroll?.kegiatanInsidental || []).reduce((sum, item) => sum + (Number(item.jam) || 0), 0);
+            const selisih = (real + jsjm) - wajib + jamPlus + tInsidentalJam;
+            const telat = t.payroll?.disiplin?.telat || 0;
+            const tepatWaktu = Math.max(0, real - telat);
 
-             const isUnderperforming = selisih < 0;
-             const isLateOften = telat >= 3;
+            const isUnderperforming = selisih < 0;
+            const isLateOften = telat >= 3;
 
-             return (
-               <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
-                 <div className="flex justify-between items-start">
-                   <div>
-                     <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
-                       <span className="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{idx + 1}</span>
-                       {isLateOften && <Clock size={14} className="text-red-500 shrink-0" title="Sering Telat" />}
-                       {isUnderperforming && !isLateOften && <AlertCircle size={14} className="text-amber-500 shrink-0" title="Kurang Jam" />}
-                       <span>{t.name}</span>
-                     </h4>
-                     <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || t.status}</div>
-                   </div>
-                   <button 
-                     onClick={() => handleOpenEdit(t)} 
-                     className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
-                   >
-                     <Edit size={14}/> Edit Jam
-                   </button>
-                 </div>
+            return (
+              <div key={t.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col gap-2.5">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">#{idx + 1}</span>
+                      {isLateOften && <Clock size={14} className="text-red-500 shrink-0" title="Sering Telat" />}
+                      {isUnderperforming && !isLateOften && <AlertCircle size={14} className="text-amber-500 shrink-0" title="Kurang Jam" />}
+                      <span>{t.name}</span>
+                    </h4>
+                    <div className="text-xs text-slate-500 mt-0.5">{t.nipy} • {t.position || t.status}</div>
+                  </div>
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleOpenEdit(t)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <Edit size={14} /> Edit Jam
+                    </button>
+                  )}
+                </div>
 
-                 <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                    <div><span className="text-slate-400">Total Realisasi:</span> <span className="font-black text-blue-600 dark:text-blue-400 block text-sm">{real} JPL</span></div>
-                    <div><span className="text-slate-400">Tepat Waktu:</span> <span className="font-black text-emerald-600 dark:text-emerald-400 block text-sm">{tepatWaktu} JPL</span></div>
-                    <div><span className="text-slate-400">Jam Wajib Target:</span> <span className="font-bold block dark:text-slate-200">{wajib} JPL</span></div>
-                    <div><span className="text-slate-400">Jam Plus & Insidental:</span> <span className="font-bold text-emerald-600 block">+{jamPlus + tInsidentalJam} JPL</span></div>
-                    <div>
-                      <span className="text-slate-400">Jumlah Telat:</span> 
-                      <span className={`font-bold block ${isLateOften ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{telat} Kali</span>
-                      {(() => {
-                        const pInfo = teacherPresensiMap[t.id];
-                        const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
-                        if (pLate > 0 && pLate !== telat) {
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => handleInlineTelatChange(t.id, pLate)}
-                              className="mt-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              ⚡ Tarik Presensi ({pLate}x)
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    <div><span className="text-slate-400">Selisih Target:</span> <span className={`font-bold block ${selisih < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{selisih > 0 ? `+${selisih}` : selisih} JPL</span></div>
-                 </div>
-               </div>
-             );
+                <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                  <div><span className="text-slate-400">Total Realisasi:</span> <span className="font-black text-blue-600 dark:text-blue-400 block text-sm">{real} JPL</span></div>
+                  <div><span className="text-slate-400">Tepat Waktu:</span> <span className="font-black text-emerald-600 dark:text-emerald-400 block text-sm">{tepatWaktu} JPL</span></div>
+                  <div><span className="text-slate-400">Jam Wajib Target:</span> <span className="font-bold block dark:text-slate-200">{wajib} JPL</span></div>
+                  <div><span className="text-slate-400">Jam Plus & Insidental:</span> <span className="font-bold text-emerald-600 block">+{jamPlus + tInsidentalJam} JPL</span></div>
+                  <div>
+                    <span className="text-slate-400">Jumlah Telat:</span>
+                    <span className={`font-bold block ${isLateOften ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>{telat} Kali</span>
+                    {(() => {
+                      const pInfo = teacherPresensiMap[t.id];
+                      const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
+                      if (!readOnly && pLate > 0 && pLate !== telat) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleInlineTelatChange(t.id, pLate)}
+                            className="mt-1 text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer shadow-xs"
+                          >
+                            ⚡ Tarik Presensi ({pLate}x)
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <div><span className="text-slate-400">Selisih Target:</span> <span className={`font-bold block ${selisih < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{selisih > 0 ? `+${selisih}` : selisih} JPL</span></div>
+                </div>
+              </div>
+            );
           })}
         </div>
 
@@ -1304,7 +1323,9 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800">Selisih</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-red-600 dark:text-red-400">Telat</th>
                 <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center bg-slate-200 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400">Tepat Waktu</th>
-                <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center md:sticky md:right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
+                {!readOnly && (
+                  <th className="p-3 font-bold border border-slate-400 dark:border-slate-500 text-center md:sticky md:right-0 bg-slate-200 dark:bg-slate-800 z-30 shadow-[-1px_0_0_rgba(0,0,0,0.1)] no-print">Aksi</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 dark:divide-slate-600">
@@ -1313,30 +1334,30 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                 const real = t.payroll?.jamMengajar?.realisasi || 0;
                 const jsjm = t.payroll?.jamMengajar?.jsjm || 0;
                 const jamPlus = t.payroll?.jamMengajar?.jamPlus || 0;
-                
+
                 // 🪄 TAMBALAN: Mengambil total jam insidental untuk dikalkulasikan
                 const tInsidentalJam = (t.payroll?.kegiatanInsidental || []).reduce((sum, item) => sum + (Number(item.jam) || 0), 0);
-                
-                const selisih = (real + jsjm) - wajib + jamPlus + tInsidentalJam; 
+
+                const selisih = (real + jsjm) - wajib + jamPlus + tInsidentalJam;
                 const telat = t.payroll?.disiplin?.telat || 0;
                 const tepatWaktu = Math.max(0, real - telat); // Total jam dikurangi telat
-                
+
                 // Ambil data array 31 hari dari profil, atau buat simulasi jika belum ada
                 const dailyData = t.payroll?.jamMengajar?.harian || getDailyHours(real, t.id);
-                
+
                 // TAMBAHAN: Logika Penanda Visual (Row Highlight)
                 const isUnderperforming = selisih < 0;
                 const isLateOften = telat >= 3;
-                
+
                 let rowBgClass = "bg-white dark:bg-slate-800 hover:bg-blue-50/50 dark:hover:bg-slate-700/60";
                 let stickyBgClass = "bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/60";
-                
+
                 if (isLateOften) {
-                   rowBgClass = "bg-red-50/40 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20";
-                   stickyBgClass = "bg-red-50 dark:bg-red-900/20 group-hover:bg-red-100/50 dark:group-hover:bg-red-900/30";
+                  rowBgClass = "bg-red-50/40 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20";
+                  stickyBgClass = "bg-red-50 dark:bg-red-900/20 group-hover:bg-red-100/50 dark:group-hover:bg-red-900/30";
                 } else if (isUnderperforming) {
-                   rowBgClass = "bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-100/50 dark:hover:bg-amber-900/20";
-                   stickyBgClass = "bg-amber-50 dark:bg-amber-900/20 group-hover:bg-amber-100/50 dark:group-hover:bg-amber-900/30";
+                  rowBgClass = "bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-100/50 dark:hover:bg-amber-900/20";
+                  stickyBgClass = "bg-amber-50 dark:bg-amber-900/20 group-hover:bg-amber-100/50 dark:group-hover:bg-amber-900/30";
                 }
 
                 return (
@@ -1352,7 +1373,7 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5 ml-4">{t.nipy}</div>
                     </td>
-                    
+
                     {/* Render Kolom Harian 1-31 */}
                     {dailyData.map((jam, i) => (
                       <td key={i} className={`p-1 text-center font-bold border border-slate-400 dark:border-slate-500 text-[11px] ${jam === 'S' ? 'text-amber-600 bg-amber-50/50 dark:bg-amber-900/20' : jam === 'I' ? 'text-blue-600 bg-blue-50/50 dark:bg-blue-900/20' : jam === 'A' ? 'text-red-600 bg-red-50/50 dark:bg-red-900/20' : 'text-slate-700 dark:text-slate-300'}`}>
@@ -1361,15 +1382,21 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     ))}
 
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-emerald-50/30 dark:bg-emerald-900/10 align-middle">
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={t.payroll?.jamMengajar?.jamPlus !== undefined ? t.payroll?.jamMengajar?.jamPlus : ''} 
-                        onChange={(e) => handleInlineJamPlusChange(t.id, e.target.value)}
-                        className="w-12 p-1.5 text-center border border-emerald-300 dark:border-emerald-600 rounded-lg bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold focus:ring-2 focus:ring-emerald-500 outline-none m-auto block shadow-sm transition-all"
-                        title="Tambahan Jam Mengajar"
-                        placeholder="0"
-                      />
+                      {readOnly ? (
+                        <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                          {t.payroll?.jamMengajar?.jamPlus !== undefined && t.payroll?.jamMengajar?.jamPlus !== '' ? t.payroll.jamMengajar.jamPlus : 0}
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          value={t.payroll?.jamMengajar?.jamPlus !== undefined ? t.payroll?.jamMengajar?.jamPlus : ''}
+                          onChange={(e) => handleInlineJamPlusChange(t.id, e.target.value)}
+                          className="w-12 p-1.5 text-center border border-emerald-300 dark:border-emerald-600 rounded-lg bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-bold focus:ring-2 focus:ring-emerald-500 outline-none m-auto block shadow-sm transition-all"
+                          title="Tambahan Jam Mengajar"
+                          placeholder="0"
+                        />
+                      )}
                     </td>
 
                     <td className="p-3 text-center font-bold text-base border border-slate-400 dark:border-slate-500 text-blue-700 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10" title="Total Jam dari Kegiatan Insidental">
@@ -1380,48 +1407,73 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                       {real}
                     </td>
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-white/50 dark:bg-slate-800/50 align-middle">
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={t.payroll?.jamMengajar?.wajib !== undefined ? t.payroll?.jamMengajar?.wajib : (t.status === 'Tetap' ? 60 : 0)} 
-                        onChange={(e) => handleInlineWajibChange(t.id, e.target.value)}
-                        className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-blue-500 outline-none m-auto block shadow-sm transition-all"
-                        title="Edit jumlah target wajib secara langsung"
-                        placeholder="0"
-                      />
+                      {readOnly ? (
+                        <span className="font-bold text-slate-700 dark:text-slate-300">
+                          {t.payroll?.jamMengajar?.wajib !== undefined && t.payroll?.jamMengajar?.wajib !== '' ? t.payroll.jamMengajar.wajib : (t.status === 'Tetap' ? 60 : 0)}
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          value={t.payroll?.jamMengajar?.wajib !== undefined ? t.payroll?.jamMengajar?.wajib : (t.status === 'Tetap' ? 60 : 0)}
+                          onChange={(e) => handleInlineWajibChange(t.id, e.target.value)}
+                          className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-blue-500 outline-none m-auto block shadow-sm transition-all"
+                          title="Edit jumlah target wajib secara langsung"
+                          placeholder="0"
+                        />
+                      )}
                     </td>
                     <td className="p-1.5 text-center border border-slate-400 dark:border-slate-500 bg-purple-50/30 dark:bg-purple-900/10 align-middle">
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={t.payroll?.jamMengajar?.jsjm !== undefined ? t.payroll?.jamMengajar?.jsjm : ''} 
-                        onChange={(e) => handleInlineJsjmChange(t.id, e.target.value)}
-                        className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 font-bold focus:ring-2 focus:ring-purple-500 outline-none m-auto block shadow-sm transition-all"
-                        title="Jabatan Setara Jam Mengajar"
-                        placeholder="0"
-                      />
+                      {readOnly ? (
+                        <span className="font-bold text-purple-700 dark:text-purple-400">
+                          {t.payroll?.jamMengajar?.jsjm !== undefined && t.payroll?.jamMengajar?.jsjm !== '' ? t.payroll.jamMengajar.jsjm : 0}
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          value={t.payroll?.jamMengajar?.jsjm !== undefined ? t.payroll?.jamMengajar?.jsjm : ''}
+                          onChange={(e) => handleInlineJsjmChange(t.id, e.target.value)}
+                          className="w-14 p-1.5 text-center border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 font-bold focus:ring-2 focus:ring-purple-500 outline-none m-auto block shadow-sm transition-all"
+                          title="Jabatan Setara Jam Mengajar"
+                          placeholder="0"
+                        />
+                      )}
                     </td>
                     <td className={`p-3 text-center font-bold text-base border border-slate-400 dark:border-slate-500 ${selisih < 0 ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {selisih > 0 ? `+${selisih}` : selisih}
                     </td>
                     <td className={`p-1.5 text-center border border-slate-400 dark:border-slate-500 align-middle ${isLateOften ? 'bg-red-100/50 dark:bg-red-900/30' : 'bg-red-50/30 dark:bg-red-900/10'}`}>
                       <div className="flex flex-col items-center justify-center gap-1 py-0.5">
-                        <input 
-                          type="number" 
-                          min="0"
-                          value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0} 
-                          onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
-                          className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
-                          title="Edit manual jumlah keterlambatan (dapat diubah bebas oleh Admin)"
-                          placeholder="0"
-                        />
+                        {readOnly ? (
+                          <span className={`font-bold ${isLateOften ? 'text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {t.payroll?.disiplin?.telat !== undefined && t.payroll?.disiplin?.telat !== '' ? t.payroll.disiplin.telat : 0}
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={t.payroll?.disiplin?.telat !== undefined ? t.payroll?.disiplin?.telat : 0}
+                            onChange={(e) => handleInlineTelatChange(t.id, e.target.value)}
+                            className={`w-14 p-1.5 text-center border rounded-lg bg-white dark:bg-slate-800 font-bold focus:ring-2 focus:ring-red-500 outline-none m-auto block shadow-sm transition-all ${isLateOften ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400'}`}
+                            title="Edit manual jumlah keterlambatan (dapat diubah bebas oleh Admin)"
+                            placeholder="0"
+                          />
+                        )}
                         {(() => {
                           const pInfo = teacherPresensiMap[t.id];
                           const pLate = pInfo ? (syncMethod === 'hari' ? pInfo.uniqueDaysLate : pInfo.totalSessionsLate) : 0;
                           const curLate = Number(t.payroll?.disiplin?.telat) || 0;
-                          
+
                           if (pLate > 0) {
                             if (pLate !== curLate) {
+                              if (readOnly) {
+                                return (
+                                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-bold whitespace-nowrap">
+                                    Presensi: {pLate}x
+                                  </span>
+                                );
+                              }
                               return (
                                 <button
                                   type="button"
@@ -1453,20 +1505,22 @@ export default function RekapAbsensiView({ teachers, setTeachers, externalFilter
                     <td className="p-3 text-center font-black text-emerald-700 dark:text-emerald-400 border border-slate-400 dark:border-slate-500 bg-emerald-50/50 dark:bg-emerald-900/20 text-lg">
                       {tepatWaktu}
                     </td>
-                    <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 md:sticky md:right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] no-print ${stickyBgClass}`}>
-                       <button 
-                          onClick={() => handleOpenEdit(t)} 
-                          className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto" 
+                    {!readOnly && (
+                      <td className={`p-2 text-center border border-slate-400 dark:border-slate-500 md:sticky md:right-0 z-10 shadow-[-1px_0_0_rgba(0,0,0,0.05)] no-print ${stickyBgClass}`}>
+                        <button
+                          onClick={() => handleOpenEdit(t)}
+                          className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 dark:bg-slate-800 dark:hover:bg-blue-900/30 dark:text-blue-400 rounded-md transition-colors shadow-sm border border-slate-300 dark:border-slate-600 flex items-center justify-center mx-auto"
                           title="Edit Manual Jam & Telat"
-                       >
+                        >
                           <Edit size={16} />
-                       </button>
-                    </td>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan="39" className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
+                <tr><td colSpan={readOnly ? 38 : 39} className="p-8 text-center text-slate-500 border border-slate-400 dark:border-slate-500">Tidak ada data pegawai ditemukan.</td></tr>
               )}
             </tbody>
           </table>

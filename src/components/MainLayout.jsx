@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   AlertCircle, Archive, BarChart3, Calculator, CalendarDays,
-  CheckCircle, ChevronDown, ChevronUp, Clock, CreditCard, FileText,
+  CheckCircle, ChevronDown, ChevronUp, Clock, CreditCard, Eye, FileText,
   Fingerprint, History, Info, LayoutDashboard, LogOut, Menu,
   MessageSquare, Moon, RefreshCw, Settings, Sun, UserCheck,
   UserCircle, Users, Wallet, WifiOff, Wrench, X
@@ -24,16 +24,26 @@ const GajiView = React.lazy(() => import('../features/admin/GajiView'));
 const RekapGajiView = React.lazy(() => import('../features/admin/RekapGajiView'));
 const PortalGuruView = React.lazy(() => import('../features/portal/PortalGuruView'));
 
-import { calculatePayroll, safeStorageSet } from '../utils/payrollUtils';
+import { calculatePayroll, isReadOnlyUser, safeStorageSet } from '../utils/payrollUtils';
 import { showAlert } from '../utils/dialogService';
 import { createTeacherPatchHandler, pushCloudData as pushToSupabase } from '../services/dbService';
 import { popAndCloseTopBackModal } from '../services/navigationService';
 
 export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, loginHistory, setLoginHistory, archives, setArchives, presensiGuru, setPresensiGuru, auditLogs, setAuditLogs, saveAuditLog, isOnline, syncStatus, hasConflict, resolveConflict, onToggleMaintenance }) {
-  const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
-  const isManagementRole = String(user?.role || '').toLowerCase() === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan';
+  const isReadOnly = isReadOnlyUser(user);
+  const noop = useCallback(() => {}, []);
+  const safeSetTeachers = isReadOnly ? noop : setTeachers;
+  const safeSetSettings = isReadOnly ? noop : setSettings;
+  const safeSetFeedbacks = isReadOnly ? noop : setFeedbacks;
+  const safeSetArchives = isReadOnly ? noop : setArchives;
+  const safeSetPresensiGuru = isReadOnly ? noop : setPresensiGuru;
+  const safeSaveAuditLog = isReadOnly ? noop : saveAuditLog;
+  const rawUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
+  const handleUpdateTeacherPatch = isReadOnly ? noop : rawUpdateTeacherPatch;
+  const isManagementRole = String(user?.role || '').toLowerCase() === 'admin' || user?.role === 'Kepala Sekolah' || isReadOnly;
   const rootInitialTab = isManagementRole ? 'dashboard' : 'portal_dashboard';
-  const [activeTab, setActiveTab] = useState(rootInitialTab);
+  const [rawActiveTab, setActiveTab] = useState(rootInitialTab);
+  const activeTab = (isReadOnly && rawActiveTab === 'pengaturan') ? 'dashboard' : rawActiveTab;
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [selectedGajiId, setSelectedGajiId] = useState(null);
   const [selectedGajiTab, setSelectedGajiTab] = useState(null); // 🪄 TAMBAHAN: Menyimpan tab spesifik form gaji
@@ -59,14 +69,15 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
   // Handler navigasi tab yang sinkron dengan History Stack Browser/Android
   const handleNavigateTab = useCallback((targetTabOrUpdater) => {
     setActiveTab(prev => {
-      const nextTab = typeof targetTabOrUpdater === 'function' ? targetTabOrUpdater(prev) : targetTabOrUpdater;
+      const candidate = typeof targetTabOrUpdater === 'function' ? targetTabOrUpdater(prev) : targetTabOrUpdater;
+      const nextTab = (isReadOnly && candidate === 'pengaturan') ? 'dashboard' : candidate;
       if (nextTab !== prev) {
         window.history.pushState({ tab: nextTab, isAppNav: true }, '');
         tabHistoryRef.current.push(nextTab);
       }
       return nextTab;
     });
-  }, []);
+  }, [isReadOnly]);
 
   // Listener tombol fisik / gestur Back HP (popstate event)
   useEffect(() => {
@@ -98,7 +109,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
         tabHistoryRef.current.pop(); // buang tab saat ini
         const prevTab = tabHistoryRef.current[tabHistoryRef.current.length - 1];
         if (prevTab) {
-          setActiveTab(prevTab);
+          setActiveTab((isReadOnly && prevTab === 'pengaturan') ? 'dashboard' : prevTab);
           return;
         }
       }
@@ -119,7 +130,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
 
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [isSidebarOpen, isProfileDropdownOpen, activeTab, rootInitialTab]);
+  }, [isSidebarOpen, isProfileDropdownOpen, activeTab, rootInitialTab, isReadOnly]);
 
   // 🪄 FITUR BARU & DIPERBARUI: Mesin Audit Log Cloud & Anti-Spam Ketikan (Debounce)
   const latestTeachersRef = useRef(teachers);
@@ -211,8 +222,10 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
   });
 
   useEffect(() => {
+    if (isReadOnly) return;
     localStorage.setItem('payedu_funding', JSON.stringify(fundingSources));
-  }, [fundingSources]);
+  }, [fundingSources, isReadOnly]);
+  const safeSetFundingSources = isReadOnly ? noop : setFundingSources;
 
   useEffect(() => {
     const handleResize = () => {
@@ -252,7 +265,11 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
     { id: 'portal_saran', label: 'Kritik & Saran', icon: MessageSquare, color: 'text-white', glow: 'shadow-rose-500/50', bg: 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700 border border-rose-300/50 dark:border-rose-600/50' },
   ];
 
-  const navItems = isManagementRole ? adminNav : guruNav;
+  const visibleAdminNav = isReadOnly
+    ? adminNav.filter(item => item.id !== 'pengaturan')
+    : adminNav;
+
+  const navItems = isManagementRole ? visibleAdminNav : guruNav;
 
   const navigateToGaji = (teacherId, subTab = 'masaKerja') => {
     setSelectedGajiId(teacherId);
@@ -264,10 +281,17 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
   const [pengaturanInitialTab, setPengaturanInitialTab] = useState('umum');
 
   const handleOpenAuditLog = (category = 'ALL') => {
+    if (isReadOnly) return;
     setPengaturanInitialTab('audit');
     setAuditInitialCategory(category);
     handleNavigateTab('pengaturan');
   };
+
+  const handlePullPresensiCloud = useCallback((rows) => {
+    if (Array.isArray(rows)) {
+      setPresensiGuru(rows);
+    }
+  }, [setPresensiGuru]);
 
   const renderContent = () => {
     // 🪄 FIX NO 1: Mode Maintenance memblokir total akses Guru saat aktif
@@ -276,15 +300,16 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
     }
 
     switch (activeTab) {
-      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); handleNavigateTab('rekapabsensi'); }} />;
-      case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={setTeachers} user={user} saveAuditLog={saveAuditLog} />;
+      case 'dashboard': return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={safeSetSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); handleNavigateTab('rekapabsensi'); }} isReadOnly={isReadOnly} />;
+      case 'dataguru': return <DataGuruView teachers={teachers} setTeachers={safeSetTeachers} user={user} saveAuditLog={safeSaveAuditLog} isReadOnly={isReadOnly} />;
       case 'presensiguru': 
         return (
           <PresensiGuruView 
             teachers={teachers} 
             presensiGuru={presensiGuru} 
-            setPresensiGuru={setPresensiGuru} 
-            currentUser={{ id: user.id, name: user.name, username: user.username, role: user.role, portal: 'Admin' }} 
+            setPresensiGuru={safeSetPresensiGuru}
+            onPullPresensiCloud={handlePullPresensiCloud}
+            currentUser={{ id: user.id, name: user.name, username: user.username, role: user.role, portal: isReadOnly ? 'Monitoring' : 'Admin' }} 
             schoolProfile={{ 
               nama: settings.schoolName || 'SD IT Qurrata A\'yun', 
               npsn: settings.schoolNpsn || '10404040', 
@@ -292,7 +317,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
               kepsek: settings.kepsekName || 'Kepala Sekolah', 
               presensiGuruSettings: settings.presensiGuruSettings 
             }} 
-            setSchoolProfile={(updater) => { 
+            setSchoolProfile={isReadOnly ? noop : (updater) => { 
               const currentSettings = settings || {};
               const rawUpdated = typeof updater === 'function' ? updater(currentSettings?.presensiGuruSettings ? { presensiGuruSettings: currentSettings.presensiGuruSettings } : currentSettings) : updater; 
               const newPresensiSettings = rawUpdated.presensiGuruSettings || rawUpdated; 
@@ -302,17 +327,19 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
               try { localStorage.setItem('payedu_presensi_guru_settings', JSON.stringify(newPresensiSettings)); } catch(e){} 
               pushToSupabase('SAVE_SETTINGS', newSettings).catch(e => console.warn(e)); 
             }} 
-            addAuditLog={saveAuditLog} 
+            addAuditLog={safeSaveAuditLog} 
             onUpdateTeacher={handleUpdateTeacherPatch}
+            showCsvPreview={isReadOnly ? noop : undefined}
+            triggerPrint={isReadOnly ? noop : undefined}
           />
         );
-      case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={setTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} presensiGuru={presensiGuru} saveAuditLog={saveAuditLog} user={user} />;
-      case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={setTeachers} settings={settings} />;
-      case 'gaji': return <GajiView teachers={teachers} setTeachers={setTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={saveAuditLog} />;
-      case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} />;
-      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={setTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={setSettings} archives={archives} setArchives={setArchives} saveAuditLog={saveAuditLog} onOpenAuditLog={handleOpenAuditLog} />;
-      case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={setFundingSources} settings={settings} archives={archives} />;
-      case 'arsip': return <ArsipView archives={archives} setArchives={setArchives} settings={settings} setSettings={setSettings} saveAuditLog={saveAuditLog} teachers={teachers} />;
+      case 'rekapabsensi': return <RekapAbsensiView teachers={teachers} setTeachers={safeSetTeachers} externalFilter={absensiFilter} setExternalFilter={setAbsensiFilter} settings={settings} presensiGuru={presensiGuru} saveAuditLog={safeSaveAuditLog} user={user} isReadOnly={isReadOnly} />;
+      case 'jadwal': return <JadwalMengajarView teachers={teachers} setTeachers={safeSetTeachers} settings={settings} user={user} isReadOnly={isReadOnly} />;
+      case 'gaji': return <GajiView teachers={teachers} setTeachers={safeSetTeachers} externalSelectedId={selectedGajiId} setExternalSelectedId={setSelectedGajiId} externalSelectedTab={selectedGajiTab} setExternalSelectedTab={setSelectedGajiTab} settings={settings} user={user} saveAuditLog={safeSaveAuditLog} isReadOnly={isReadOnly} />;
+      case 'pinjaman': return <RekapPinjamanView teachers={teachers} setTeachers={safeSetTeachers} onEditGaji={navigateToGaji} settings={settings} user={user} isReadOnly={isReadOnly} />;
+      case 'rekap': return <RekapGajiView teachers={teachers} setTeachers={safeSetTeachers} onEditGaji={navigateToGaji} settings={settings} setSettings={safeSetSettings} archives={archives} setArchives={safeSetArchives} saveAuditLog={safeSaveAuditLog} onOpenAuditLog={handleOpenAuditLog} user={user} isReadOnly={isReadOnly} />;
+      case 'laporan': return <LaporanView teachers={teachers} fundingSources={fundingSources} setFundingSources={safeSetFundingSources} settings={settings} archives={archives} user={user} isReadOnly={isReadOnly} />;
+      case 'arsip': return <ArsipView archives={archives} setArchives={safeSetArchives} settings={settings} setSettings={safeSetSettings} saveAuditLog={safeSaveAuditLog} teachers={teachers} user={user} isReadOnly={isReadOnly} />;
       case 'portal_dashboard': 
       case 'portal_presensi':
       case 'portal_jadwal':
@@ -326,20 +353,23 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
           <PortalGuruView 
             user={user} 
             teachers={teachers} 
-            setTeachers={setTeachers} 
+            setTeachers={safeSetTeachers} 
             settings={settings} 
-            setSettings={setSettings}
+            setSettings={safeSetSettings}
             feedbacks={feedbacks} 
-            setFeedbacks={setFeedbacks} 
+            setFeedbacks={safeSetFeedbacks} 
             activeSection={activeTab} 
             setActiveTab={handleNavigateTab} 
             archives={archives} 
             presensiGuru={presensiGuru} 
-            setPresensiGuru={setPresensiGuru} 
-            saveAuditLog={saveAuditLog}
+            setPresensiGuru={safeSetPresensiGuru} 
+            saveAuditLog={safeSaveAuditLog}
           />
         );
       case 'pengaturan': 
+        if (isReadOnly) {
+          return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={safeSetSettings} archives={archives} setActiveTab={handleNavigateTab} onAbsensiAlertClick={() => { setAbsensiFilter('sering_telat'); handleNavigateTab('rekapabsensi'); }} isReadOnly={isReadOnly} />;
+        }
         return (
           <PengaturanView 
             teachers={teachers} 
@@ -362,9 +392,11 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
             setPresensiGuru={setPresensiGuru}
             initialTab={pengaturanInitialTab}
             initialAuditCategory={auditInitialCategory}
+            user={user}
+            isReadOnly={isReadOnly}
           />
         );
-      default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={setSettings} />;
+      default: return <DashboardView teachers={teachers} user={user} settings={settings} setSettings={safeSetSettings} archives={archives} setActiveTab={handleNavigateTab} isReadOnly={isReadOnly} />;
     }
   };
 
@@ -482,8 +514,8 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
           
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             
-            {/* FITUR BARU: Tombol Sinkronisasi Interaktif ke Cloud */}
-            {isManagementRole && (
+            {/* FITUR BARU: Tombol Sinkronisasi Interaktif ke Cloud (Disembunyikan untuk Yayasan Read-Only) */}
+            {isManagementRole && !isReadOnly && (
               <button 
                 type="button"
                 onClick={async () => {
@@ -523,6 +555,15 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                 </span>
               </button>
             )}
+            {isReadOnly && (
+              <div
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 shrink-0 shadow-xs"
+                title="Akun Yayasan hanya dapat melihat data (tidak dapat menambah, mengubah, menghapus, mencetak, atau mengekspor)"
+              >
+                <Eye size={13} className="text-purple-600 dark:text-purple-400" />
+                <span className="text-[10px] sm:text-[11px] font-extrabold tracking-wide uppercase">Read-Only</span>
+              </div>
+            )}
 
             {/* TAMBAHAN: Jam & Tanggal Real-time di Header */}
             <div className="hidden lg:flex flex-col items-end justify-center border-r border-slate-200 dark:border-slate-700 pr-4 mr-1">
@@ -561,7 +602,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                       <div className="text-xs text-slate-500 dark:text-slate-400 capitalize mt-0.5">{user.role}</div>
                     </div>
                     
-                    {(user.role === 'admin' || user.role === 'Yayasan' || user.role === 'Kepala Sekolah') ? (
+                    {(user.role === 'admin' || user.role === 'Kepala Sekolah') && !isReadOnly ? (
                       <button 
                         onClick={() => {
                            handleNavigateTab('pengaturan');
@@ -572,6 +613,17 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                         <Settings size={16} className="text-slate-400" />
                         Pengaturan &amp; Akun
                       </button>
+                    ) : isReadOnly ? (
+                      <div className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 mx-2 rounded-lg border border-slate-100 dark:border-slate-700/50 my-1">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span>Mode Akses:</span>
+                          <span className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1"><Eye size={12}/> Read-Only</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span>Hak Akses:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300">Akses Yayasan</span>
+                        </div>
+                      </div>
                     ) : (
                       <div className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 mx-2 rounded-lg border border-slate-100 dark:border-slate-700/50 my-1">
                         <div className="flex justify-between items-center mb-1.5">
@@ -581,7 +633,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                         <div className="flex justify-between items-center">
                           <span>Hak Akses:</span>
                           <span className="font-semibold text-slate-700 dark:text-slate-300">
-                            {user.role === 'Yayasan' ? 'Akses Yayasan' : user.role === 'Kepala Sekolah' ? 'Kepala Sekolah' : 'Portal Guru (Read-only)'}
+                            {user.role === 'Kepala Sekolah' ? 'Kepala Sekolah' : 'Portal Guru (Read-only)'}
                           </span>
                         </div>
                       </div>
@@ -610,22 +662,24 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
                    MODE MAINTENANCE (PERBAIKAN) AKTIF: Akses Guru ditutup sementara. Anda masuk sebagai Manajemen/Pimpinan ({user.role}).
                 </span>
              </div>
-             <button 
-               type="button"
-               onClick={() => {
-                 if (onToggleMaintenance) {
-                   onToggleMaintenance(false);
-                 } else {
-                   const updated = { ...settings, maintenanceMode: false, lastModified: Date.now() };
-                   setSettings(updated);
-                   safeStorageSet('payedu_settings', updated);
-                   pushToSupabase('SAVE_SETTINGS', updated);
-                 }
-               }}
-               className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-sm cursor-pointer"
-             >
-               Matikan Mode Maintenance
-             </button>
+             {!isReadOnly && (
+               <button 
+                 type="button"
+                 onClick={() => {
+                   if (onToggleMaintenance) {
+                     onToggleMaintenance(false);
+                   } else {
+                     const updated = { ...settings, maintenanceMode: false, lastModified: Date.now() };
+                     setSettings(updated);
+                     safeStorageSet('payedu_settings', updated);
+                     pushToSupabase('SAVE_SETTINGS', updated);
+                   }
+                 }}
+                 className="bg-slate-900 hover:bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shrink-0 shadow-sm cursor-pointer"
+               >
+                 Matikan Mode Maintenance
+               </button>
+             )}
            </div>
         )}
 
@@ -697,7 +751,7 @@ export default function MainLayout({ user, onLogout, isDarkMode, toggleTheme, te
 
             {/* Scrollable Container dengan Touch Snapping Halus */}
             <div className="relative flex items-center justify-between px-1.5 h-[62px] overflow-x-auto hide-scrollbar snap-x touch-pan-x scroll-smooth pointer-events-auto gap-0.5">
-              {adminNav.map(item => {
+              {visibleAdminNav.map(item => {
                 const isActive = activeTab === item.id;
                 const IconComponent = item.icon;
 

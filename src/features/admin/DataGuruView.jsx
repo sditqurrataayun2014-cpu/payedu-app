@@ -6,7 +6,7 @@ import {
 
 import {
   calculateYearsFromDate, formatDateId, formatToInputDate,
-  generateTeacherId, generateUniqueId, isTeacherActive,
+  generateTeacherId, generateUniqueId, isReadOnlyUser, isTeacherActive,
   safeStorageSet, sanitizeTeacherData
 } from '../../utils/payrollUtils';
 import {
@@ -22,13 +22,14 @@ const sanitizeTeacherList = (list) => {
   return sortTeachersById(deduplicateTeachers(sanitized));
 };
 
-export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog }) {
+export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog, isReadOnly = false }) {
+  const readOnly = isReadOnly || isReadOnlyUser(user);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua'); // TAMBAHAN: Filter Dropdown
   const [filterWorkStatus, setFilterWorkStatus] = useState('Aktif'); // 🪄 FITUR BARU: Filter Keaktifan (Aktif/Tidak Aktif/Resign)
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const fileInputRef = useRef(null);
-  
+
   // FITUR BARU: State untuk Micro-Interaction Tombol Simpan
   const [isSaving, setIsSaving] = useState(false);
 
@@ -37,7 +38,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
   const filtered = sortedTeachers.filter(t => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.nipy.includes(search);
     const matchStatus = filterStatus === 'Semua' ? true : t.status === filterStatus;
-    
+
     // 🪄 FITUR BARU: Logika Pencarian & Filter Keaktifan Pegawai
     const isAct = isTeacherActive(t);
     let matchWorkStatus = true;
@@ -46,14 +47,18 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
     } else if (filterWorkStatus === 'Non-Aktif' || filterWorkStatus === 'Resign' || filterWorkStatus === 'Tidak Aktif') {
       matchWorkStatus = !isAct;
     }
-    
+
     return matchSearch && matchStatus && matchWorkStatus;
   });
 
-  const openModal = (type, data) => setModal({ isOpen: true, type, data });
+  const openModal = (type, data) => {
+    if (readOnly && type !== 'view') return;
+    setModal({ isOpen: true, type, data });
+  };
   const closeModal = () => setModal({ isOpen: false, type: null, data: null });
 
   const handleDelete = async () => {
+    if (readOnly) return;
     if (!modal.data) return;
     const targetId = modal.data.id;
     const targetName = modal.data.name;
@@ -82,6 +87,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
   // 🪄 FITUR BARU: Pembersihan Data Guru Ganda Seketika (1-Klik Anti-Duplikasi)
   const handleCleanDuplicates = async () => {
+    if (readOnly) return;
     const cleanList = deduplicateTeachers(teachers);
     const countRemoved = teachers.length - cleanList.length;
     if (countRemoved <= 0) {
@@ -110,8 +116,9 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
   const handleEditSubmit = (e) => {
     e.preventDefault();
-    setIsSaving(true); 
-    
+    if (readOnly) return;
+    setIsSaving(true);
+
     const formElement = e.target;
     const newData = {
       name: formElement.name.value,
@@ -136,22 +143,22 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
     let updatedTeachers = [];
     if (modal.type === 'add') {
       const newId = generateTeacherId(teachers);
-      const newTeacher = { 
-        ...newData, 
-        id: newId, 
+      const newTeacher = {
+        ...newData,
+        id: newId,
         payroll: {
-           tahunMasaKerja: new Date().getFullYear(),
-           tunjanganMasaKerjaManual: '',
-           jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
-           pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
-           kompetensi: [],
-           disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
-           insentifTambahan: [],
-           potonganLainnya: [],
-           jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
-           isNotified: false,
-           isConfirmed: false
-        } 
+          tahunMasaKerja: new Date().getFullYear(),
+          tunjanganMasaKerjaManual: '',
+          jabatans: [{ kategori: 'Guru', detail: newData.position || '', kinerja: 'Baik', nominal: 0 }],
+          pendidikan: { tingkat: newData.education || 'S1', nominalOverride: '' },
+          kompetensi: [],
+          disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
+          insentifTambahan: [],
+          potonganLainnya: [],
+          jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 },
+          isNotified: false,
+          isConfirmed: false
+        }
       };
       updatedTeachers = [...teachers, newTeacher];
       saveAuditLog?.(
@@ -163,17 +170,17 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       );
     } else {
       updatedTeachers = teachers.map(t => {
-         if (t.id === modal.data.id) {
-           return {
-             ...t,
-             ...newData,
-             family: {
-               ...(t.family || {}),
-               ...newData.family
-             }
-           };
-         }
-         return t;
+        if (t.id === modal.data.id) {
+          return {
+            ...t,
+            ...newData,
+            family: {
+              ...(t.family || {}),
+              ...newData.family
+            }
+          };
+        }
+        return t;
       });
       saveAuditLog?.(
         user?.name || 'Administrator',
@@ -196,43 +203,44 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
 
   const handleExportCSV = () => {
+    if (readOnly) return;
     // TAMBAHAN: Memasukkan No WA dan Keaktifan ke dalam export CSV
     const headers = ['ID', 'Nama Lengkap', 'NIPY', 'L/P', 'Tempat Lahir', 'Tanggal Lahir', 'No WA', 'Pendidikan', 'Status Golongan', 'Keaktifan', 'Jabatan', 'TMT', 'Status Pasangan', 'Jumlah Anak'];
-    
+
     const escapeCSV = (val) => {
       if (val === null || val === undefined) return '';
       let str = String(val);
       if (str.includes(',') || str.includes(';') || str.includes('\n') || str.includes('"')) {
-         return `"${str.replace(/"/g, '""')}"`;
+        return `"${str.replace(/"/g, '""')}"`;
       }
       if (/^[0-9\-]+$/.test(str) && str.length >= 5) {
-         return `'${str}`; 
+        return `'${str}`;
       }
       return str;
     };
 
-    const csvRows = [headers.join(';')]; 
-    
+    const csvRows = [headers.join(';')];
+
     teachers.forEach(t => {
       const row = [
-        t.id, 
-        t.name, 
-        t.nipy, 
-        t.gender, 
-        t.pob, 
-        t.dob, 
+        t.id,
+        t.name,
+        t.nipy,
+        t.gender,
+        t.pob,
+        t.dob,
         (t.phone || '-'), // Data WA
-        t.education, 
-        t.status, 
+        t.education,
+        t.status,
         (t.workStatus || 'Aktif'), // 🪄 FITUR BARU: Export Keaktifan
-        t.position, 
-        t.tmt, 
-        (t.family?.wife || 0), 
+        t.position,
+        t.tmt,
+        (t.family?.wife || 0),
         (t.family?.children || 0)
       ].map(escapeCSV);
       csvRows.push(row.join(';'));
     });
-    
+
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
     const blob = new Blob([bom, csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -245,6 +253,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
   };
 
   const handleImportCSV = (e) => {
+    if (readOnly) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -257,7 +266,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       const regexSlash = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
       const matchSlash = str.match(regexSlash);
       if (matchSlash) {
-         return `${matchSlash[3]}-${matchSlash[2].padStart(2, '0')}-${matchSlash[1].padStart(2, '0')}`;
+        return `${matchSlash[3]}-${matchSlash[2].padStart(2, '0')}-${matchSlash[1].padStart(2, '0')}`;
       }
 
       const bulanMap = { 'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'mei': '05', 'jun': '06', 'jul': '07', 'agu': '08', 'sep': '09', 'okt': '10', 'nov': '11', 'des': '12', 'oct': '10', 'dec': '12' };
@@ -271,7 +280,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
       const parsedDate = new Date(str);
       if (!isNaN(parsedDate.getTime())) return parsedDate.toISOString().split('T')[0];
-      return dateStr; 
+      return dateStr;
     };
 
     // ALGORITMA PARSER CSV SEJATI (Tahan banting dari format Excel)
@@ -280,28 +289,28 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       let current = '';
       let inQuotes = false;
       for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') {
-              if (inQuotes && line[i + 1] === '"') {
-                  current += '"';
-                  i++; // Lewati escaped quote
-              } else {
-                  inQuotes = !inQuotes;
-              }
-          } else if (char === delimiter && !inQuotes) {
-              result.push(current);
-              current = '';
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++; // Lewati escaped quote
           } else {
-              current += char;
+            inQuotes = !inQuotes;
           }
+        } else if (char === delimiter && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
       }
       result.push(current);
       return result.map(val => {
-          let cln = val.trim();
-          // Bersihkan trik Excel sebelumnya yang mungkin tersisa
-          if (cln.startsWith('="') && cln.endsWith('"')) cln = cln.substring(2, cln.length - 1);
-          if (cln.startsWith("'")) cln = cln.substring(1); 
-          return cln;
+        let cln = val.trim();
+        // Bersihkan trik Excel sebelumnya yang mungkin tersisa
+        if (cln.startsWith('="') && cln.endsWith('"')) cln = cln.substring(2, cln.length - 1);
+        if (cln.startsWith("'")) cln = cln.substring(1);
+        return cln;
       });
     };
 
@@ -309,79 +318,79 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
     reader.onload = (evt) => {
       const text = evt.target.result;
       const lines = text.split(/\r?\n/); // Dukung format Windows & Mac
-      if(lines.length < 2) {
-         showAlert("Format file kosong atau tidak valid.");
-         return;
+      if (lines.length < 2) {
+        showAlert("Format file kosong atau tidak valid.");
+        return;
       }
-      
+
       // Deteksi otomatis separator (Koma, Titik Koma, atau Tab)
       let separator = ',';
       if (lines[0].includes(';')) separator = ';';
       else if (lines[0].includes('\t')) separator = '\t';
-      
+
       const importedTeachers = [];
       let successCount = 0;
 
-      for(let i = 1; i < lines.length; i++) {
-        if(!lines[i].trim()) continue; // Abaikan baris kosong
-        
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue; // Abaikan baris kosong
+
         const values = parseCSVLine(lines[i], separator);
-        
+
         // Pastikan kolom Nama (index 1) ada isinya untuk keamanan
         if (values.length >= 10 && values[1] !== "") {
-           const impId = values[0];
-           const impName = values[1];
-           const isNewFormat = values.length >= 13;
-           const impPhone = isNewFormat ? (values[6] || '-') : '-';
-           const impEdu = isNewFormat ? (values[7] || 'S1') : (values[6] || 'S1');
-           const impStatus = isNewFormat ? (values[8] || 'Tetap') : (values[7] || 'Tetap');
-           const impWorkStatus = isNewFormat ? (values[9] || 'Aktif') : 'Aktif';
-           const impPosition = isNewFormat ? (values[10] || 'Guru') : (values[8] || 'Guru');
-           const impTmt = isNewFormat ? parseDateSmart(values[11]) : parseDateSmart(values[9]);
-           const wifeStatus = isNewFormat ? Number(values[12] || 0) : Number(values[10] || 0);
-           const childrenCount = isNewFormat ? Number(values[13] || 0) : Number(values[11] || 0);
+          const impId = values[0];
+          const impName = values[1];
+          const isNewFormat = values.length >= 13;
+          const impPhone = isNewFormat ? (values[6] || '-') : '-';
+          const impEdu = isNewFormat ? (values[7] || 'S1') : (values[6] || 'S1');
+          const impStatus = isNewFormat ? (values[8] || 'Tetap') : (values[7] || 'Tetap');
+          const impWorkStatus = isNewFormat ? (values[9] || 'Aktif') : 'Aktif';
+          const impPosition = isNewFormat ? (values[10] || 'Guru') : (values[8] || 'Guru');
+          const impTmt = isNewFormat ? parseDateSmart(values[11]) : parseDateSmart(values[9]);
+          const wifeStatus = isNewFormat ? Number(values[12] || 0) : Number(values[10] || 0);
+          const childrenCount = isNewFormat ? Number(values[13] || 0) : Number(values[11] || 0);
 
-           const existingId = teachers.find(t => t.id === impId || t.name.toLowerCase() === impName?.toLowerCase());
-           
-           const teacherObj = existingId ? { ...existingId } : { 
-             id: impId && impId !== '' ? impId : generateUniqueId('G-'),
-             family: { wife: wifeStatus, children: childrenCount },
-             payroll: {
-                tahunMasaKerja: new Date().getFullYear(),
-                tunjanganMasaKerjaManual: '',
-                jabatans: [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }],
-                pendidikan: { tingkat: impEdu, nominalOverride: '' },
-                kompetensi: [],
-                disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
-                insentifTambahan: [],
-                potonganLainnya: [],
-                jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 }, 
-                isNotified: false,
-                isConfirmed: false
-             } 
-           };
+          const existingId = teachers.find(t => t.id === impId || t.name.toLowerCase() === impName?.toLowerCase());
 
-           teacherObj.name = impName;
-           teacherObj.nipy = values[2] || '-';
-           teacherObj.gender = values[3] || 'L';
-           teacherObj.pob = values[4] || '-';
-           teacherObj.dob = parseDateSmart(values[5]);
-           teacherObj.phone = impPhone;
-           teacherObj.education = impEdu;
-           teacherObj.status = impStatus;
-           teacherObj.workStatus = impWorkStatus;
-           teacherObj.position = impPosition;
-           teacherObj.tmt = impTmt;
-           teacherObj.family = { wife: wifeStatus, children: childrenCount };
-           if (teacherObj.payroll) {
-              teacherObj.payroll.pendidikan = { tingkat: impEdu, nominalOverride: teacherObj.payroll?.pendidikan?.nominalOverride || '' };
-              if (!teacherObj.payroll.jabatans || teacherObj.payroll.jabatans.length === 0) {
-                 teacherObj.payroll.jabatans = [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }];
-              }
-           }
-           
-           importedTeachers.push(sanitizeTeacherData(teacherObj));
-           successCount++;
+          const teacherObj = existingId ? { ...existingId } : {
+            id: impId && impId !== '' ? impId : generateUniqueId('G-'),
+            family: { wife: wifeStatus, children: childrenCount },
+            payroll: {
+              tahunMasaKerja: new Date().getFullYear(),
+              tunjanganMasaKerjaManual: '',
+              jabatans: [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }],
+              pendidikan: { tingkat: impEdu, nominalOverride: '' },
+              kompetensi: [],
+              disiplin: { hadir: 0, telat: 0, tarifHadir: 1000, tarifTelat: 1000 },
+              insentifTambahan: [],
+              potonganLainnya: [],
+              jamMengajar: { wajib: 0, realisasi: 0, tarifJPL: 10000, jsjm: 0 },
+              isNotified: false,
+              isConfirmed: false
+            }
+          };
+
+          teacherObj.name = impName;
+          teacherObj.nipy = values[2] || '-';
+          teacherObj.gender = values[3] || 'L';
+          teacherObj.pob = values[4] || '-';
+          teacherObj.dob = parseDateSmart(values[5]);
+          teacherObj.phone = impPhone;
+          teacherObj.education = impEdu;
+          teacherObj.status = impStatus;
+          teacherObj.workStatus = impWorkStatus;
+          teacherObj.position = impPosition;
+          teacherObj.tmt = impTmt;
+          teacherObj.family = { wife: wifeStatus, children: childrenCount };
+          if (teacherObj.payroll) {
+            teacherObj.payroll.pendidikan = { tingkat: impEdu, nominalOverride: teacherObj.payroll?.pendidikan?.nominalOverride || '' };
+            if (!teacherObj.payroll.jabatans || teacherObj.payroll.jabatans.length === 0) {
+              teacherObj.payroll.jabatans = [{ kategori: 'Guru', detail: impPosition, kinerja: 'Baik', nominal: 0 }];
+            }
+          }
+
+          importedTeachers.push(sanitizeTeacherData(teacherObj));
+          successCount++;
         }
       }
 
@@ -390,13 +399,13 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
         importedTeachers.forEach(t => map.set(t.id, t));
         return sanitizeTeacherList(Array.from(map.values()));
       });
-      
+
       showAlert(`Berhasil membaca ${successCount} baris data!\n\nPeriksa kembali apakah tampilannya sudah rapi. Data akan otomatis disinkronkan ke Supabase Cloud.`);
       e.target.value = null;
     };
     reader.readAsText(file);
   };
-  
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative">
       <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
@@ -407,12 +416,12 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
               <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
-                {modal.type === 'view' && <Eye className="text-blue-500"/>}
-                {(modal.type === 'edit' || modal.type === 'add') && <Edit className="text-amber-500"/>}
-                {modal.type === 'delete' && <Trash2 className="text-red-500"/>}
+                {modal.type === 'view' && <Eye className="text-blue-500" />}
+                {(modal.type === 'edit' || modal.type === 'add') && <Edit className="text-amber-500" />}
+                {modal.type === 'delete' && <Trash2 className="text-red-500" />}
                 {modal.type === 'view' ? 'Detail Profil Pegawai' : modal.type === 'edit' ? 'Edit Data Pegawai' : modal.type === 'add' ? 'Tambah Data Pegawai' : 'Hapus Data Pegawai'}
               </h3>
-              <button onClick={closeModal} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20}/></button>
+              <button onClick={closeModal} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
             </div>
 
             <div className="overflow-y-auto p-6 flex-1">
@@ -526,36 +535,36 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
                     {/* TAMBAHAN BARU: Kolom Rekening Bank */}
                     <div className="md:col-span-2 pt-3 border-t border-slate-200 dark:border-slate-700 mt-2">
-                       <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Informasi Rekening Bank</h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div>
-                           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nama Bank</label>
-                           <input name="bankName" defaultValue={modal.data?.bankName || ''} placeholder="Cth: BSI / Mandiri / BRI" className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                         </div>
-                         <div>
-                           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nomor Rekening</label>
-                           <input type="text" name="bankAccount" defaultValue={modal.data?.bankAccount || ''} placeholder="Cth: 7123456789" className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
-                         </div>
-                       </div>
+                      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Informasi Rekening Bank</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nama Bank</label>
+                          <input name="bankName" defaultValue={modal.data?.bankName || ''} placeholder="Cth: BSI / Mandiri / BRI" className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nomor Rekening</label>
+                          <input type="text" name="bankAccount" defaultValue={modal.data?.bankAccount || ''} placeholder="Cth: 7123456789" className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                      </div>
                     </div>
-                    
+
                     {/* TAMBAHAN: Kolom Profil Keluarga */}
                     <div className="md:col-span-2 pt-3 border-t border-slate-200 dark:border-slate-700 mt-2">
-                       <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Informasi Profil Keluarga</h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div>
-                           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Status Pasangan</label>
-                           <select name="wife" defaultValue={modal.data?.family?.wife !== undefined ? modal.data.family.wife : 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500">
-                             <option value="1">Menikah</option>
-                             <option value="0">Belum Menikah</option>
-                             <option value="2">Menikah (Ditanggung Suami/Pasangan)</option>
-                           </select>
-                         </div>
-                         <div>
-                           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Jumlah Anak</label>
-                           <input type="number" min="0" name="children" defaultValue={modal.data?.family?.children || 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500" required />
-                         </div>
-                       </div>
+                      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Informasi Profil Keluarga</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Status Pasangan</label>
+                          <select name="wife" defaultValue={modal.data?.family?.wife !== undefined ? modal.data.family.wife : 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500">
+                            <option value="1">Menikah</option>
+                            <option value="0">Belum Menikah</option>
+                            <option value="2">Menikah (Ditanggung Suami/Pasangan)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Jumlah Anak</label>
+                          <input type="number" min="0" name="children" defaultValue={modal.data?.family?.children || 0} className="w-full p-2 border rounded-lg bg-slate-50 dark:bg-slate-900 dark:border-slate-600 dark:text-white outline-none focus:ring-2 focus:ring-pink-500" required />
+                        </div>
+                      </div>
                     </div>
 
                   </div>
@@ -569,7 +578,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                   </div>
                   <h3 className="text-xl font-bold dark:text-white mb-2">Hapus Data Pegawai?</h3>
                   <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                    Apakah Anda yakin ingin menghapus data <span className="font-bold text-slate-700 dark:text-slate-200">{modal.data.name}</span>? 
+                    Apakah Anda yakin ingin menghapus data <span className="font-bold text-slate-700 dark:text-slate-200">{modal.data.name}</span>?
                     Tindakan ini permanen dan akan menghapus seluruh riwayat pengaturan gajinya.
                   </p>
                 </div>
@@ -581,9 +590,9 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                 {modal.type === 'view' ? 'Tutup' : 'Batal'}
               </button>
               {(modal.type === 'edit' || modal.type === 'add') && (
-                <button 
-                  type="submit" 
-                  form="editForm" 
+                <button
+                  type="submit"
+                  form="editForm"
                   disabled={isSaving}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
@@ -603,8 +612,8 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
       <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 text-white shadow-lg relative overflow-hidden flex items-center justify-between shrink-0 mb-3 sm:mb-5">
         <div className="relative z-10">
-          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><Users className="text-blue-200" size={22} /> Manajemen Data Pegawai</h1>
-          <p className="text-blue-100 text-xs sm:text-sm">Kelola profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.</p>
+          <h1 className="text-lg sm:text-2xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-3"><Users className="text-blue-200" size={22} /> {readOnly ? 'Data Pegawai (Read-Only)' : 'Manajemen Data Pegawai'}</h1>
+          <p className="text-blue-100 text-xs sm:text-sm">{readOnly ? 'Pantau profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.' : 'Kelola profil, jabatan, dan informasi kontak seluruh guru dan staff sekolah.'}</p>
         </div>
         <Users size={100} className="absolute -right-6 -top-6 text-white/10 transform -rotate-12 pointer-events-none hidden sm:block" />
       </div>
@@ -612,12 +621,12 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col h-full">
         <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 bg-slate-50 dark:bg-slate-900/50 shrink-0">
           <h3 className="text-sm sm:text-base font-bold dark:text-white flex items-center gap-2 shrink-0">Daftar Lengkap Pegawai</h3>
-          
+
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full xl:w-auto items-stretch sm:items-center">
-            
+
             {/* Filter Dropdown Status Golongan & Keaktifan (2 Kolom Rapi di Mobile) */}
             <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-              <select 
+              <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
@@ -627,7 +636,7 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                 <option value="Tidak Tetap">Guru Tidak Tetap</option>
               </select>
 
-              <select 
+              <select
                 value={filterWorkStatus}
                 onChange={(e) => setFilterWorkStatus(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-slate-700 dark:text-slate-300 shadow-sm"
@@ -641,36 +650,38 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
             <div className="relative w-full sm:w-56 md:w-64 flex-grow sm:flex-grow-0">
               <Search className="absolute left-2.5 top-2 text-slate-400" size={15} />
-              <input 
-                type="text" 
-                placeholder="Cari Nama / NIPY..." 
+              <input
+                type="text"
+                placeholder="Cari Nama / NIPY..."
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-8 pr-2.5 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
               />
             </div>
-            
-            <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
-              <button 
-                type="button"
-                onClick={handleCleanDuplicates}
-                className="justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
-                title="Pindai dan bersihkan data ganda / duplikat"
-              >
-                 <Sparkles size={14} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan</span><span className="sm:hidden">Bersih</span>
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                 <Upload size={14} /> <span>Impor</span>
-              </button>
-              <button onClick={handleExportCSV} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                 <Download size={14} /> <span>Ekspor</span>
-              </button>
-              <button onClick={() => openModal('add', null)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
-                 <PlusCircle size={14} /> <span>Tambah</span>
-              </button>
-            </div>
+
+            {!readOnly && (
+              <div className="grid grid-cols-4 gap-1.5 w-full sm:flex sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleCleanDuplicates}
+                  className="justify-center bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
+                  title="Pindai dan bersihkan data ganda / duplikat"
+                >
+                  <Sparkles size={14} className="text-amber-600 dark:text-amber-400" /> <span className="hidden sm:inline">Bersihkan</span><span className="sm:hidden">Bersih</span>
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                  <Upload size={14} /> <span>Impor</span>
+                </button>
+                <button onClick={handleExportCSV} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                  <Download size={14} /> <span>Ekspor</span>
+                </button>
+                <button onClick={() => openModal('add', null)} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm">
+                  <PlusCircle size={14} /> <span>Tambah</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        
+
         {/* FITUR BARU: Tampilan Kartu Responsif Khusus Layar HP (< md) */}
         <div className="md:hidden space-y-2.5 p-2.5 sm:p-4">
           {filtered.map((t, idx) => (
@@ -697,19 +708,23 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
 
               <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/50">
                 <button onClick={() => openModal('view', t)} className="px-2.5 py-1 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Eye size={13}/> Detail
+                  <Eye size={13} /> Detail
                 </button>
-                <button onClick={() => openModal('edit', t)} className="px-2.5 py-1 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Edit size={13}/> Edit
-                </button>
-                <button onClick={() => openModal('delete', t)} className="px-2.5 py-1 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
-                  <Trash2 size={13}/> Hapus
-                </button>
+                {!readOnly && (
+                  <>
+                    <button onClick={() => openModal('edit', t)} className="px-2.5 py-1 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                      <Edit size={13} /> Edit
+                    </button>
+                    <button onClick={() => openModal('delete', t)} className="px-2.5 py-1 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-lg text-xs font-bold flex items-center gap-1">
+                      <Trash2 size={13} /> Hapus
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
-        
+
         <div className="hidden md:block overflow-x-auto flex-1 scrollbar-thin">
           <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
             <thead className="bg-slate-100 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 sticky top-0 z-10 shadow-sm">
@@ -766,12 +781,16 @@ export default function DataGuruView({ teachers, setTeachers, user, saveAuditLog
                       <button onClick={() => openModal('view', t)} className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded-lg transition-colors shadow-sm" title="Lihat Detail">
                         <Eye size={16} />
                       </button>
-                      <button onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors shadow-sm" title="Edit Data">
-                        <Edit size={16} />
-                      </button>
-                      <button onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors shadow-sm" title="Hapus Data">
-                        <Trash2 size={16} />
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button onClick={() => openModal('edit', t)} className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50 rounded-lg transition-colors shadow-sm" title="Edit Data">
+                            <Edit size={16} />
+                          </button>
+                          <button onClick={() => openModal('delete', t)} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors shadow-sm" title="Hapus Data">
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

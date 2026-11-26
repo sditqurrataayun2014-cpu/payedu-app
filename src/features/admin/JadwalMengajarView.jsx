@@ -8,14 +8,17 @@ import {
 import {
   generateUniqueId, getFormattedPeriod, isTeacherActive, safeStorageSet,
   DEFAULT_MAPEL_KBM, DEFAULT_KELAS_KBM, DEFAULT_JAM_KBM, calculateJurnalSummary,
-  syncTeacherJurnalKbm, formatDateId, formatRp, getLocalIsoDate
+  syncTeacherJurnalKbm, formatDateId, formatRp, getLocalIsoDate, isReadOnlyUser
 } from '../../utils/payrollUtils';
 import { pushCloudData as pushToSupabase } from '../../services/dbService';
 import { exportJurnalKbmToExcel } from '../../services/excelExportService';
 import { showAlert, showConfirm } from '../../utils/dialogService';
 
-export default function JadwalMengajarView({ teachers, setTeachers, settings }) {
-  const [activeTab, setActiveTab] = useState('roster');
+export default function JadwalMengajarView({ teachers, setTeachers, settings, user, isReadOnly = false }) {
+  const readOnly = isReadOnly || isReadOnlyUser(user);
+  const [rawActiveTab, setRawActiveTab] = useState('roster');
+  const activeTab = (readOnly && rawActiveTab === 'insidental') ? 'roster' : rawActiveTab;
+  const setActiveTab = (tab) => setRawActiveTab((readOnly && tab === 'insidental') ? 'roster' : tab);
   const [search, setSearch] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
@@ -221,6 +224,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // Handler Saldo Awal (Transisi Google Form s/d 17 Nov)
   const handleOpenSaldoAwalModal = (teacher) => {
+    if (readOnly) return;
     setSaldoAwalModalTeacher(teacher);
     const currentSaldo = teacher.payroll?.jamMengajar?.saldoAwalJam || 0;
     const currentKet = teacher.payroll?.jamMengajar?.saldoAwalKet || 'Rekap Google Form s/d 17 Nov';
@@ -229,6 +233,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   };
 
   const handleSaveSaldoAwal = async () => {
+    if (readOnly) return;
     if (!saldoAwalModalTeacher) return;
     setIsSavingSaldo(true);
     try {
@@ -282,6 +287,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   };
 
   const handleStartEditAdminEntry = (entry) => {
+    if (readOnly) return;
     setEditingAdminEntry(entry);
     const rawMapel = entry.mapel;
     const mapelArr = Array.isArray(rawMapel)
@@ -321,6 +327,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   };
 
   const handleAdminSaveJournalEntry = async () => {
+    if (readOnly) return;
     if (!selectedTeacherForLog) return;
     const tglNum = Number(adminEntryForm.tgl);
     if (!tglNum || tglNum < 1 || tglNum > 31) {
@@ -401,6 +408,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   };
 
   const handleAdminDeleteJournalEntry = async (entryId) => {
+    if (readOnly) return;
     if (!selectedTeacherForLog) return;
     if (!(await showConfirm("Apakah Anda yakin ingin menghapus catatan jurnal ini? Jam mengajar guru akan dihitung ulang secara otomatis."))) {
       return;
@@ -429,6 +437,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // Handler Ekspor Excel Jurnal KBM
   const handleExportJurnalExcel = () => {
+    if (readOnly) return;
     try {
       exportJurnalKbmToExcel({
         teachers,
@@ -443,6 +452,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // Handler Roster (Jadwal Rutin)
   const handleInlineRosterChange = (id, day, val) => {
+     if (readOnly) return;
      const num = val === '' ? '' : Math.max(0, Number(val));
      setTeachers(prev => prev.map(t => {
         if(t.id === id) {
@@ -460,6 +470,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // 🪄 FUNGSI BARU: Ekspor Template Roster ke CSV/Excel
   const handleExportRosterCSV = () => {
+    if (readOnly) return;
     const headers = ['ID Pegawai', 'Nama Lengkap', 'NIPY', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     const csvRows = [headers.join(';')];
 
@@ -494,6 +505,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // 🪄 FUNGSI BARU: Impor Roster dari CSV/Excel dengan Smart Parser
   const handleImportRosterCSV = (e) => {
+    if (readOnly) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -615,6 +627,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   };
 
   const executeGenerateBulanIni = () => {
+     if (readOnly) return;
      setIsSaving(true);
      setConfirmGenerate(false);
 
@@ -660,6 +673,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // 🪄 FUNGSI BARU: Eksekusi Publikasi ke Portal Guru & Real-Time Cloud Sync
   const executePublish = async () => {
+     if (readOnly) return;
      setIsSaving(true);
      setConfirmPublish(false);
      
@@ -721,6 +735,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   const handleSaveInsidental = (e) => {
      e.preventDefault();
+     if (readOnly) return;
      if(selectedTeachers.length === 0) return showAlert('Silakan centang minimal 1 pegawai dari tabel di bawah!');
      
      setIsSaving(true);
@@ -768,6 +783,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
   // 🪄 FUNGSI BARU: Edit Kegiatan Massal (Merambat ke seluruh kalender guru terkait)
   const handleSaveEditActivity = (e) => {
       e.preventDefault();
+      if (readOnly) return;
       setIsSaving(true);
       setTimeout(() => {
           setTeachers(prev => prev.map(t => {
@@ -820,6 +836,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
   // 🪄 FUNGSI BARU: Hapus Kegiatan Massal (Menarik kembali jam dari seluruh kalender guru terkait)
   const confirmDeleteActivity = () => {
+      if (readOnly) return;
       setIsSaving(true);
       setTimeout(() => {
           setTeachers(prev => prev.map(t => {
@@ -868,7 +885,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
     <div className="flex flex-col gap-6 animate-in fade-in h-full relative pb-4 min-h-0">
       
       {/* MODAL KONFIRMASI GENERATE */}
-      {confirmGenerate && (
+      {!readOnly && confirmGenerate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
@@ -891,7 +908,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       )}
 
       {/* MODAL KONFIRMASI PUBLIKASI ROSTER KE PORTAL GURU */}
-      {confirmPublish && (
+      {!readOnly && confirmPublish && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
@@ -914,7 +931,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       )}
 
       {/* MODAL 1: INPUT SALDO AWAL TRANSISI GOOGLE FORM */}
-      {saldoAwalModalTeacher && (
+      {!readOnly && saldoAwalModalTeacher && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-200 dark:border-slate-700">
             <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
@@ -1066,7 +1083,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
 
             {/* Body: Form Entri Admin atau List */}
             <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
-              {isAdminAddingEntry ? (
+              {!readOnly && isAdminAddingEntry ? (
                 /* Form Tambah / Edit Entri Jurnal oleh Admin */
                 <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-3 animate-in fade-in">
                   <div className="flex items-center justify-between pb-2 border-b border-indigo-200/60 dark:border-indigo-800/40">
@@ -1219,26 +1236,28 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     Riwayat Entri Bulan Ini ({(selectedTeacherForLog.payroll?.jurnalKbm || []).length} entri):
                   </span>
-                  <button
-                    onClick={() => {
-                      setEditingAdminEntry(null);
-                      setAdminEntryForm({
-                        tgl: new Date().getDate(),
-                        mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
-                        kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
-                        jamKbm: 2,
-                        jamPiket: 0,
-                        jamRapat: 0,
-                        jamEskul: 0,
-                        catatan: ''
-                      });
-                      setIsAdminAddingEntry(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl text-xs hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
-                  >
-                    <Plus size={14} />
-                    <span>Tambah Entri Manual</span>
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => {
+                        setEditingAdminEntry(null);
+                        setAdminEntryForm({
+                          tgl: new Date().getDate(),
+                          mapel: DEFAULT_MAPEL_KBM[0] || 'TAHSIN',
+                          kelas: DEFAULT_KELAS_KBM[0] || 'I A Putra',
+                          jamKbm: 2,
+                          jamPiket: 0,
+                          jamRapat: 0,
+                          jamEskul: 0,
+                          catatan: ''
+                        });
+                        setIsAdminAddingEntry(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl text-xs hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Tambah Entri Manual</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1325,20 +1344,24 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                             </span>
                             <span className="text-[9px] text-slate-400">{entri.tanggalStr || `Tgl ${entri.tgl}`}</span>
                           </div>
-                          <button
-                            onClick={() => handleStartEditAdminEntry(entri)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
-                            title="Edit Catatan"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleAdminDeleteJournalEntry(entri.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
-                            title="Hapus Catatan"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {!readOnly && (
+                            <>
+                              <button
+                                onClick={() => handleStartEditAdminEntry(entri)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Catatan"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleAdminDeleteJournalEntry(entri.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus Catatan"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     );
@@ -1394,7 +1417,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       )}
 
       {/* MODAL EDIT CERDAS KEGIATAN MASSAL */}
-      {editActivity && (
+      {!readOnly && editActivity && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
@@ -1433,7 +1456,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
       )}
 
       {/* MODAL HAPUS CERDAS KEGIATAN MASSAL */}
-      {deleteActivity && (
+      {!readOnly && deleteActivity && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center flex flex-col">
                 <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-slate-800 shadow-sm">
@@ -1474,13 +1497,15 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><CalendarDays size={16}/> Pemetaan Roster</div>
                <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Atur jadwal rutin mingguan guru (Senin - Minggu).</p>
             </button>
-            <button 
-               onClick={() => setActiveTab('insidental')}
-               className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'insidental' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-500 xl:border-l-indigo-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-            >
-               <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><ListPlus size={16}/> Input Massal</div>
-               <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Tambahkan jam kegiatan non-rutin ke banyak guru sekaligus.</p>
-            </button>
+            {!readOnly && (
+              <button 
+                 onClick={() => setActiveTab('insidental')}
+                 className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'insidental' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-500 xl:border-l-indigo-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+              >
+                 <div className="flex items-center gap-1.5 sm:gap-2 whitespace-nowrap text-xs sm:text-sm"><ListPlus size={16}/> Input Massal</div>
+                 <p className="text-[10px] font-normal mt-1 opacity-80 hidden xl:block">Tambahkan jam kegiatan non-rutin ke banyak guru sekaligus.</p>
+              </button>
+            )}
             <button 
                onClick={() => setActiveTab('monitoring_jurnal')}
                className={`flex-1 xl:flex-none p-2.5 sm:p-4 text-left font-bold transition-all border-b-4 xl:border-b-0 xl:border-l-4 ${activeTab === 'monitoring_jurnal' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-500 xl:border-l-emerald-500' : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
@@ -1511,26 +1536,28 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-pink-500 outline-none dark:text-white"
                        />
                      </div>
-                     <div className="grid grid-cols-2 sm:flex sm:w-auto gap-1.5 w-full justify-end">
-                       
-                       {/* 🪄 TAMBALAN CERDAS: Tombol Impor & Ekspor Roster */}
-                       <input type="file" accept=".csv, .xlsx, .xls" ref={rosterFileInputRef} onChange={handleImportRosterCSV} className="hidden" />
-                       <button onClick={() => rosterFileInputRef.current?.click()} disabled={isSaving} className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 border border-slate-300 dark:border-slate-600 disabled:opacity-70">
-                         <Upload size={14} /> <span>Impor</span>
-                       </button>
-                       <button onClick={handleExportRosterCSV} disabled={isSaving} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
-                         <Download size={14} /> <span>Ekspor</span>
-                       </button>
+                     {!readOnly && (
+                       <div className="grid grid-cols-2 sm:flex sm:w-auto gap-1.5 w-full justify-end">
+                         
+                         {/* 🪄 TAMBALAN CERDAS: Tombol Impor & Ekspor Roster */}
+                         <input type="file" accept=".csv, .xlsx, .xls" ref={rosterFileInputRef} onChange={handleImportRosterCSV} className="hidden" />
+                         <button onClick={() => rosterFileInputRef.current?.click()} disabled={isSaving} className="justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 border border-slate-300 dark:border-slate-600 disabled:opacity-70">
+                           <Upload size={14} /> <span>Impor</span>
+                         </button>
+                         <button onClick={handleExportRosterCSV} disabled={isSaving} className="justify-center bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                           <Download size={14} /> <span>Ekspor</span>
+                         </button>
 
-                       <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
-                         {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={14} />}
-                         <span>Ke Portal</span>
-                       </button>
-                       <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="justify-center bg-pink-600 hover:bg-pink-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
-                         {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={14} />}
-                         <span>Ke Absen</span>
-                       </button>
-                     </div>
+                         <button onClick={() => setConfirmPublish(true)} disabled={isSaving} className="justify-center bg-blue-600 hover:bg-blue-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                           {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={14} />}
+                           <span>Ke Portal</span>
+                         </button>
+                         <button onClick={() => setConfirmGenerate(true)} disabled={isSaving} className="justify-center bg-pink-600 hover:bg-pink-700 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1 disabled:opacity-70">
+                           {isSaving ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <CheckSquare size={14} />}
+                           <span>Ke Absen</span>
+                         </button>
+                       </div>
+                     )}
                   </div>
                   
                   {/* FITUR BARU: Tampilan Kartu Mobile Pemetaan Roster (< md) */}
@@ -1556,9 +1583,11 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                        <span className="text-[9px] uppercase font-bold text-slate-400">{day.substring(0,3)}</span>
                                        <input 
                                           type="number" min="0" 
+                                          disabled={readOnly}
+                                          readOnly={readOnly}
                                           value={r[day] !== undefined ? r[day] : ''} 
                                           onChange={e => handleInlineRosterChange(t.id, day, e.target.value)}
-                                          className="w-full text-center bg-transparent text-xs font-bold text-slate-800 dark:text-white outline-none"
+                                          className="w-full text-center bg-transparent text-xs font-bold text-slate-800 dark:text-white outline-none disabled:opacity-80"
                                           placeholder="0"
                                        />
                                     </div>
@@ -1602,9 +1631,11 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                        <td key={day} className={`p-1.5 border-r border-slate-200 dark:border-slate-700 ${day === 'minggu' ? 'bg-rose-50/30 dark:bg-rose-900/10' : ''}`}>
                                           <input 
                                              type="number" min="0" 
+                                             disabled={readOnly}
+                                             readOnly={readOnly}
                                              value={r[day] !== undefined ? r[day] : ''} 
                                              onChange={e => handleInlineRosterChange(t.id, day, e.target.value)}
-                                             className="w-14 p-1.5 text-center rounded bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none text-sm font-bold dark:text-white m-auto block"
+                                             className="w-14 p-1.5 text-center rounded bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none text-sm font-bold dark:text-white m-auto block disabled:opacity-80"
                                              placeholder="-"
                                           />
                                        </td>
@@ -1623,7 +1654,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
             )}
 
             {/* DIPERBARUI: Struktur Form Insidental dan Tabel Riwayat */}
-            {activeTab === 'insidental' && (
+            {!readOnly && activeTab === 'insidental' && (
                <div className="flex flex-col lg:flex-row h-full overflow-y-auto relative hide-scrollbar">
                      {/* FORM KIRI */}
                      <div className="w-full lg:w-1/3 bg-indigo-50/50 dark:bg-indigo-900/10 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 p-5 shrink-0 flex flex-col">
@@ -1806,14 +1837,16 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                         </div>
 
                         {/* Ekspor Excel Button */}
-                        <button
-                           onClick={handleExportJurnalExcel}
-                           className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                           title="Unduh laporan excel jurnal KBM resmi"
-                        >
-                           <FileSpreadsheet size={15} />
-                           <span>Ekspor Excel (.xlsx)</span>
-                        </button>
+                        {!readOnly && (
+                          <button
+                             onClick={handleExportJurnalExcel}
+                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                             title="Unduh laporan excel jurnal KBM resmi"
+                          >
+                             <FileSpreadsheet size={15} />
+                             <span>Ekspor Excel (.xlsx)</span>
+                          </button>
+                        )}
                      </div>
 
                      {/* Filter Tambahan: Mapel, Kelas, dan Jam */}
@@ -1955,17 +1988,19 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                  </td>
                                  <td className="p-3 text-center">
                                     <div className="flex items-center justify-center gap-1.5">
-                                       <button
-                                          onClick={() => handleOpenSaldoAwalModal(item.teacher)}
-                                          className="p-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer"
-                                          title="Set Saldo Awal Google Form"
-                                       >
-                                          <BookOpen size={14} />
-                                       </button>
+                                       {!readOnly && (
+                                         <button
+                                            onClick={() => handleOpenSaldoAwalModal(item.teacher)}
+                                            className="p-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                            title="Set Saldo Awal Google Form"
+                                         >
+                                            <BookOpen size={14} />
+                                         </button>
+                                       )}
                                        <button
                                           onClick={() => handleOpenLogModal(item.teacher)}
                                           className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 dark:border-indigo-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                                          title="Lihat &amp; Kelola Rincian Entri Jurnal"
+                                          title={readOnly ? 'Lihat Rincian Entri Jurnal' : 'Lihat & Kelola Rincian Entri Jurnal'}
                                        >
                                           <Eye size={13} />
                                           <span>Log ({item.entriesCount})</span>
@@ -2039,12 +2074,14 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                  </span>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                 <button
-                                    onClick={() => handleOpenSaldoAwalModal(item.teacher)}
-                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 cursor-pointer"
-                                 >
-                                    Saldo Awal
-                                 </button>
+                                 {!readOnly && (
+                                   <button
+                                      onClick={() => handleOpenSaldoAwalModal(item.teacher)}
+                                      className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                   >
+                                      Saldo Awal
+                                   </button>
+                                 )}
                                  <button
                                     onClick={() => handleOpenLogModal(item.teacher)}
                                     className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer"
@@ -2096,14 +2133,16 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                   <button onClick={() => setPreviewActivity(act)} className="text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center gap-1 shadow-xs">
                                      <Eye size={13} className="text-indigo-500"/> {act.teacherNames.length} Peserta
                                   </button>
-                                  <div className="flex items-center gap-1.5">
-                                     <button onClick={() => setEditActivity(act)} className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 dark:border-blue-800" title="Edit Kegiatan">
-                                        <Edit size={14}/>
-                                     </button>
-                                     <button onClick={() => setDeleteActivity(act)} className="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 rounded-lg transition-colors border border-red-200 dark:border-red-800" title="Batalkan/Hapus Kegiatan">
-                                        <Trash2 size={14}/>
-                                     </button>
-                                  </div>
+                                  {!readOnly && (
+                                    <div className="flex items-center gap-1.5">
+                                       <button onClick={() => setEditActivity(act)} className="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 dark:border-blue-800" title="Edit Kegiatan">
+                                          <Edit size={14}/>
+                                       </button>
+                                       <button onClick={() => setDeleteActivity(act)} className="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 rounded-lg transition-colors border border-red-200 dark:border-red-800" title="Batalkan/Hapus Kegiatan">
+                                          <Trash2 size={14}/>
+                                       </button>
+                                    </div>
+                                  )}
                                </div>
                             </div>
                          ))}
@@ -2124,7 +2163,7 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                   <th className="p-3 font-bold">Nama Kegiatan Massal</th>
                                   <th className="p-3 font-bold text-center w-28">Bobot JPL</th>
                                   <th className="p-3 font-bold text-center w-32">Peserta Hadir</th>
-                                  <th className="p-3 font-bold text-center w-32">Aksi Manajemen</th>
+                                  {!readOnly && <th className="p-3 font-bold text-center w-32">Aksi Manajemen</th>}
                                 </tr>
                              </thead>
                              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -2141,16 +2180,18 @@ export default function JadwalMengajarView({ teachers, setTeachers, settings }) 
                                              <Eye size={14}/> {act.teacherNames.length} Guru
                                           </button>
                                        </td>
-                                       <td className="p-3 text-center">
-                                          <div className="flex items-center justify-center gap-2">
-                                             <button onClick={() => setEditActivity(act)} className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 dark:border-blue-800/50 shadow-sm" title="Edit Kegiatan"><Edit size={16}/></button>
-                                             <button onClick={() => setDeleteActivity(act)} className="p-2 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 rounded-lg transition-colors border border-red-200 dark:border-red-800/50 shadow-sm" title="Batalkan/Hapus Kegiatan"><Trash2 size={16}/></button>
-                                          </div>
-                                       </td>
+                                       {!readOnly && (
+                                         <td className="p-3 text-center">
+                                            <div className="flex items-center justify-center gap-2">
+                                               <button onClick={() => setEditActivity(act)} className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 dark:border-blue-800/50 shadow-sm" title="Edit Kegiatan"><Edit size={16}/></button>
+                                               <button onClick={() => setDeleteActivity(act)} className="p-2 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 rounded-lg transition-colors border border-red-200 dark:border-red-800/50 shadow-sm" title="Batalkan/Hapus Kegiatan"><Trash2 size={16}/></button>
+                                            </div>
+                                         </td>
+                                       )}
                                     </tr>
                                 ))}
                                 {massActivities.length === 0 && (
-                                    <tr><td colSpan="6" className="p-10 text-center text-slate-500 bg-white dark:bg-slate-800 italic m-2 rounded-xl">Belum ada kegiatan massal yang dicatat bulan ini.</td></tr>
+                                    <tr><td colSpan={readOnly ? 5 : 6} className="p-10 text-center text-slate-500 bg-white dark:bg-slate-800 italic m-2 rounded-xl">Belum ada kegiatan massal yang dicatat bulan ini.</td></tr>
                                 )}
                              </tbody>
                           </table>
