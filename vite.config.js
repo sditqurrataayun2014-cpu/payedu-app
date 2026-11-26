@@ -11,8 +11,26 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}'],
+        navigateFallback: null,
+        globPatterns: ['**/*.{js,css,ico,png,svg,webmanifest,woff,woff2}'],
         runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) =>
+              url.origin === self.location.origin &&
+              (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-navigation-cache',
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60 * 24 * 7
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
