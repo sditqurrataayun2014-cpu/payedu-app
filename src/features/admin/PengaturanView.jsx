@@ -749,10 +749,12 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           if (rawAccounts && Array.isArray(rawAccounts)) {
             setAccounts(rawAccounts);
             const adminAccs = rawAccounts.filter(a => a.role !== 'Guru');
-            localStorage.setItem('payedu_admin_accounts', JSON.stringify(adminAccs));
-            cleanSettings = { ...cleanSettings, adminAccounts: adminAccs, lastModified: Date.now() };
-            setSettings(cleanSettings);
-            safeStorageSet('payedu_settings', cleanSettings);
+            if (adminAccs.length > 0) {
+              localStorage.setItem('payedu_admin_accounts', JSON.stringify(adminAccs));
+              cleanSettings = { ...cleanSettings, adminAccounts: adminAccs, lastModified: Date.now() };
+              setSettings(cleanSettings);
+              safeStorageSet('payedu_settings', cleanSettings);
+            }
           }
 
           // Ekstraksi Arsip Gaji
@@ -1114,8 +1116,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                 type="button"
                 onClick={() => setActiveTabSetting(tab.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 ${activeTabSetting === tab.id
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                   }`}
               >
                 <tab.icon size={13} />
@@ -1132,8 +1134,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                   key={tab.id}
                   onClick={() => setActiveTabSetting(tab.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${activeTabSetting === tab.id
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-xs'
-                      : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-xs'
+                    : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
                     }`}
                 >
                   <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
@@ -1626,8 +1628,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
               <div className="mx-3 sm:mx-5 mt-2 sm:mt-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-900/40 dark:to-slate-800/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 shadow-xs">
                 <div className="flex items-center gap-3">
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${isGlobalDeviceLockActive
-                      ? 'bg-teal-600 text-white shadow-teal-500/20'
-                      : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                    ? 'bg-teal-600 text-white shadow-teal-500/20'
+                    : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
                     }`}>
                     <Smartphone size={22} />
                   </div>
@@ -1637,8 +1639,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                         Pengaturan Kunci 1 Akun 1 HP Guru
                       </h4>
                       <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${isGlobalDeviceLockActive
-                          ? 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800'
-                          : 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                        ? 'bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800'
+                        : 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                         }`}>
                         {isGlobalDeviceLockActive ? 'AKTIF (Terkunci)' : 'NONAKTIF (Bebas HP)'}
                       </span>
@@ -1655,8 +1657,8 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                     type="button"
                     onClick={handleToggleGlobalDeviceLock}
                     className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ${isGlobalDeviceLockActive
-                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-500/25'
+                      ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                      : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-500/25'
                       }`}
                   >
                     {isGlobalDeviceLockActive ? 'Nonaktifkan Kunci HP' : 'Aktifkan Kunci HP'}

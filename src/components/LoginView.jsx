@@ -54,6 +54,15 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
     });
   }, []);
 
+  const normalizeAccountRole = (role) => {
+    const low = String(role || '').trim().toLowerCase();
+    if (low === 'admin') return 'admin';
+    if (low === 'guru' || low === 'staff') return 'guru';
+    if (low === 'kepala sekolah') return 'Kepala Sekolah';
+    if (low === 'yayasan') return 'Yayasan';
+    return role;
+  };
+
   const handleBiometricLogin = async () => {
     setIsBioLoading(true);
     setError('');
@@ -67,10 +76,11 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
           return;
         }
 
-        const bioRoleLabel = result.user.role === 'admin' ? 'Admin' : result.user.role === 'guru' ? 'Guru' : result.user.role;
+        const normBioRole = normalizeAccountRole(result.user.role);
+        const bioRoleLabel = normBioRole === 'admin' ? 'Admin' : normBioRole === 'guru' ? 'Guru' : normBioRole;
         recordLogin(result.user.name, bioRoleLabel, 'Sukses (Biometrik WebAuthn)');
         onLogin({
-          role: result.user.role === 'admin' ? 'admin' : result.user.role,
+          role: normBioRole,
           id: result.user.id,
           name: result.user.name,
           username: result.user.username,
@@ -113,42 +123,56 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
     const inputLower = inputUser.toLowerCase();
     const hashedInputPassword = simpleHash(inputPass);
     const hashedTrimmedPassword = simpleHash(inputPass.trim());
-    const matchesPassword = (storedPwd) => storedPwd === hashedInputPassword || storedPwd === hashedTrimmedPassword;
+    const matchesPassword = (storedPwd) => {
+      if (!storedPwd) return false;
+      const s = String(storedPwd);
+      return s === hashedInputPassword || s === hashedTrimmedPassword || (!s.startsWith('qa_') && (s === inputPass || s.trim() === inputPass.trim()));
+    };
 
     const cloudAccounts = Array.isArray(settings?.adminAccounts) ? settings.adminAccounts : [];
     const rawAdminAccounts = safeStorageGet('payedu_admin_accounts', []);
     const rawAccounts = safeStorageGet('payedu_accounts', []);
 
+    const isYayasanEntry = (acc) => String(acc?.role || '').trim().toLowerCase() === 'yayasan';
     const findByUsername = (list) =>
       (Array.isArray(list) ? list : []).filter(a => String(a?.username || '').trim().toLowerCase() === inputLower);
 
-    // Prioritaskan akun Cloud (settings.adminAccounts), lalu cache Admin lokal, lalu legacy accounts
     const cloudMatches = findByUsername(cloudAccounts);
     const localAdminMatches = findByUsername(rawAdminAccounts);
-    const legacyMatches = findByUsername(rawAccounts);
+    const legacyMatches = findByUsername(rawAccounts).filter(a => String(a?.role || '').trim().toLowerCase() !== 'guru');
 
-    const authoritativeMatches =
-      cloudMatches.length > 0 ? cloudMatches :
-      localAdminMatches.length > 0 ? localAdminMatches :
-      legacyMatches;
-
-    const matchedAcc = authoritativeMatches.find(a => matchesPassword(a.password));
-    if (matchedAcc) {
+    // Prioritaskan Cloud (settings.adminAccounts) agar login Yayasan sinkron lintas perangkat.
+    // Untuk Admin/Kepsek (non-Yayasan), tetap cek seluruh sumber lokal & fallback agar tidak terkunci jika entri Cloud/lokal berbeda.
+    const matchedCloudAcc = cloudMatches.find(a => matchesPassword(a.password));
+    if (matchedCloudAcc) {
       return {
         success: true,
         user: {
-          role: matchedAcc.role === 'Admin' ? 'admin' : matchedAcc.role,
-          name: matchedAcc.name,
-          id: matchedAcc.id || inputUser,
-          username: matchedAcc.username || inputUser
+          role: normalizeAccountRole(matchedCloudAcc.role),
+          name: matchedCloudAcc.name,
+          id: matchedCloudAcc.id || inputUser,
+          username: matchedCloudAcc.username || inputUser
         }
       };
     }
 
-    // Jika username terdaftar eksplisit di Cloud/Admin lokal tetapi password tidak cocok, hentikan agar password baru tidak dibypass fallback default
-    if (cloudMatches.length > 0 || localAdminMatches.length > 0) {
-      return { success: false, message: 'Username atau password salah! Periksa kembali data login Anda.' };
+    const isExplicitCloudYayasan = cloudMatches.some(isYayasanEntry);
+    if (!isExplicitCloudYayasan) {
+      const matchedLocalAcc = [...localAdminMatches, ...legacyMatches].find(a => matchesPassword(a.password));
+      if (matchedLocalAcc) {
+        return {
+          success: true,
+          user: {
+            role: normalizeAccountRole(matchedLocalAcc.role),
+            name: matchedLocalAcc.name,
+            id: matchedLocalAcc.id || inputUser,
+            username: matchedLocalAcc.username || inputUser
+          }
+        };
+      }
     }
+
+    const hasExplicitYayasan = isExplicitCloudYayasan || localAdminMatches.some(isYayasanEntry);
 
     const teacherData = (teachers || []).find(t => 
       String(t.id).toLowerCase() === inputLower ||
@@ -185,12 +209,12 @@ export default function LoginView({ onLogin, isDarkMode, toggleTheme, settings, 
       }
     }
 
-    // Fallback Hardcoded
-    if (inputUser === 'Akbar' && inputPass === 'Boy2014') {
+    // Fallback Hardcoded (Admin/Kepsek tetap berfungsi meski cache/cloud tidak sinkron; Yayasan hanya jika belum ada akun Yayasan kustom)
+    if (inputLower === 'akbar' && inputPass === 'Boy2014') {
       return { success: true, user: { role: 'admin', name: 'Administrator System', username: 'Akbar', id: 'admin-akbar' } };
-    } else if (inputUser === 'kepsek' && inputPass === 'Ilwani2010') {
+    } else if (inputLower === 'kepsek' && inputPass === 'Ilwani2010') {
       return { success: true, user: { role: 'Kepala Sekolah', name: 'Kepala Sekolah', username: 'kepsek', id: 'kepsek' } };
-    } else if (inputLower === 'yayasan' && (inputPass === 'Yayasan2014' || inputPass === 'Yayasan123')) {
+    } else if (!hasExplicitYayasan && inputLower === 'yayasan' && (inputPass === 'Yayasan2014' || inputPass === 'Yayasan123')) {
       return { success: true, user: { role: 'Yayasan', name: 'Pengurus Yayasan', username: 'yayasan', id: 'yayasan' } };
     }
 
