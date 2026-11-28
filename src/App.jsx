@@ -15,6 +15,7 @@ import {
   fetchSettingsOnly,
   fetchTeachersOnly,
   fetchArchivesOnly,
+  fetchFeedbacksOnly,
   syncPendingTeacherAttendance,
   flushPendingPresensi,
   registerOfflineSyncListeners,
@@ -292,6 +293,13 @@ export default function App() {
               lastSavedLogsRef.current = JSON.stringify(mergedLogs);
               safeStorageSet('payedu_loginHistory', mergedLogs);
             }
+            // Sinkronkan feedback terbaru dari Portal Pegawai meski settings.lastModified belum berubah
+            const serverFbStr = JSON.stringify(serverFeedbacks);
+            if (!isPushingDataRef.current && serverFeedbacks.length > 0 && lastSavedFeedbacksRef.current !== serverFbStr) {
+              lastSavedFeedbacksRef.current = serverFbStr;
+              setFeedbacks(serverFeedbacks);
+              safeStorageSet('payedu_feedbacks', serverFeedbacks);
+            }
             // Selama Admin tidak sedang mem-push perubahan, terapkan update cloud secara halus
             if (serverSettings.lastModified > (generalSettings.lastModified + 3000) && !isPushingDataRef.current) {
               lastSavedSettingsRef.current = JSON.stringify({ ...serverSettings, lastModified: 0 });
@@ -509,6 +517,7 @@ export default function App() {
     let teachersTimer = null;
     let archivesTimer = null;
     let logsTimer = null;
+    let feedbacksTimer = null;
 
     const unsubscribeAll = subscribeAllChanges(
       // 1. Settings berubah -> fetch HANYA settings (~1-2 KB)
@@ -573,6 +582,22 @@ export default function App() {
             }
           });
         }, 2500);
+      } : undefined,
+      // 5. Feedbacks berubah (Masuk aspirasi/saran baru dari Portal Pegawai atau ditandai selesai)
+      isManagementUser ? () => {
+        if (feedbacksTimer) return;
+        feedbacksTimer = setTimeout(() => {
+          feedbacksTimer = null;
+          if (!isPushingDataRef.current) {
+            fetchFeedbacksOnly().then(newFeedbacks => {
+              if (Array.isArray(newFeedbacks)) {
+                lastSavedFeedbacksRef.current = JSON.stringify(newFeedbacks);
+                setFeedbacks(newFeedbacks);
+                safeStorageSet('payedu_feedbacks', newFeedbacks);
+              }
+            });
+          }
+        }, 1200);
       } : undefined
     );
     return () => {
@@ -580,6 +605,7 @@ export default function App() {
       if (teachersTimer) clearTimeout(teachersTimer);
       if (archivesTimer) clearTimeout(archivesTimer);
       if (logsTimer) clearTimeout(logsTimer);
+      if (feedbacksTimer) clearTimeout(feedbacksTimer);
       unsubscribeAll();
     };
   }, [isManagementUser]);
@@ -637,6 +663,16 @@ export default function App() {
 
       if (includePresensiCatchup && isManagementUser) {
         syncLatestPresensi();
+        fetchFeedbacksOnly().then(newFeedbacks => {
+          if (Array.isArray(newFeedbacks)) {
+            const nextStr = JSON.stringify(newFeedbacks);
+            if (lastSavedFeedbacksRef.current !== nextStr) {
+              lastSavedFeedbacksRef.current = nextStr;
+              setFeedbacks(newFeedbacks);
+              safeStorageSet('payedu_feedbacks', newFeedbacks);
+            }
+          }
+        }).catch(() => { });
       }
 
       try {

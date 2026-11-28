@@ -17,7 +17,7 @@ import {
 import {
   pushCloudData as pushToSupabase,
   pushPresensiGuru, sortTeachersById, deduplicateTeachers,
-  fetchLoginLogsOnly
+  fetchLoginLogsOnly, fetchFeedbacksOnly
 } from '../../services/dbService';
 import { showAlert, showConfirm } from '../../utils/dialogService';
 
@@ -78,6 +78,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   const [logDateFilter, setLogDateFilter] = useState('ALL'); // ALL, TODAY, CUSTOM
   const [logCustomDate, setLogCustomDate] = useState(() => getWibDateString());
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+  const [isRefreshingFeedbacks, setIsRefreshingFeedbacks] = useState(false);
 
   const handleRefreshLoginLogs = async (silent = false) => {
     setIsRefreshingLogs(true);
@@ -93,9 +94,26 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
     }
   };
 
+  const handleRefreshFeedbacks = async (silent = false) => {
+    setIsRefreshingFeedbacks(true);
+    try {
+      const latestFeedbacks = await fetchFeedbacksOnly();
+      if (Array.isArray(latestFeedbacks) && setFeedbacks) {
+        setFeedbacks(latestFeedbacks);
+        safeStorageSet('payedu_feedbacks', latestFeedbacks);
+      }
+    } catch (err) {
+      if (!silent) console.warn('Gagal menyegarkan kritik & saran:', err);
+    } finally {
+      setIsRefreshingFeedbacks(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTabSetting === 'riwayat') {
       handleRefreshLoginLogs(true);
+    } else if (activeTabSetting === 'saran') {
+      handleRefreshFeedbacks(true);
     }
   }, [activeTabSetting]);
 
@@ -639,7 +657,13 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
   };
 
   const handleMarkFeedbackDone = (id) => {
-    setFeedbacks(feedbacks.map(fb => fb.id === id ? { ...fb, status: 'Selesai' } : fb));
+    if (isReadOnly || isReadOnlyUser(user)) return;
+    const updated = (feedbacks || []).map(fb =>
+      fb.id === id ? { ...fb, status: 'Selesai', completedAt: new Date().toISOString() } : fb
+    );
+    setFeedbacks(updated);
+    safeStorageSet('payedu_feedbacks', updated);
+    pushToSupabase('SAVE_FEEDBACKS', updated).catch(e => console.warn('Gagal sync status saran ke cloud:', e));
   };
 
   const openModal = (type, data = null) => setModal({ isOpen: true, type, data });
@@ -868,7 +892,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         await Promise.allSettled([
           pushToSupabase('SAVE_TEACHERS', []),
           pushToSupabase('SAVE_ARCHIVES', []),
-          pushToSupabase('SAVE_FEEDBACKS', []),
+          pushToSupabase('CLEAR_FEEDBACKS', true),
           pushToSupabase('SAVE_LOGS', [])
         ]);
         setIsSaving(false);
@@ -1110,43 +1134,61 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
         <div className="w-full md:w-64 xl:w-72 shrink-0">
           {/* Tab Bar Horizontal Mobile */}
           <div className="flex md:hidden overflow-x-auto hide-scrollbar gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl mb-1">
-            {settingTabs.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTabSetting(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 ${activeTabSetting === tab.id
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                  }`}
-              >
-                <tab.icon size={13} />
-                <span>{tab.label}</span>
-              </button>
-            ))}
+            {settingTabs.map(tab => {
+              const pendingSaranCount = tab.id === 'saran' ? (feedbacks || []).filter(fb => fb.status !== 'Selesai').length : 0;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTabSetting(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 ${activeTabSetting === tab.id
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                    }`}
+                >
+                  <tab.icon size={13} />
+                  <span>{tab.label}</span>
+                  {pendingSaranCount > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeTabSetting === tab.id ? 'bg-white/25 text-white' : 'bg-rose-500 text-white'}`}>
+                      {pendingSaranCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div className="hidden md:block bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-slate-200 dark:border-slate-700 p-2 sm:p-3 md:sticky md:top-0">
             {/* Sidebar Desktop */}
             <nav className="flex flex-col gap-1.5">
-              {settingTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTabSetting(tab.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${activeTabSetting === tab.id
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-xs'
-                    : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    }`}
-                >
-                  <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
-                    <tab.icon size={18} />
-                  </div>
-                  <div>
-                    <div className={`font-bold text-sm ${activeTabSetting === tab.id ? 'text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white'}`}>{tab.label}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{tab.desc}</div>
-                  </div>
-                </button>
-              ))}
+              {settingTabs.map(tab => {
+                const pendingSaranCount = tab.id === 'saran' ? (feedbacks || []).filter(fb => fb.status !== 'Selesai').length : 0;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTabSetting(tab.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group ${activeTabSetting === tab.id
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 shadow-xs'
+                      : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      }`}
+                  >
+                    <div className={`p-2 rounded-lg shrink-0 transition-colors ${activeTabSetting === tab.id ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:text-slate-600'}`}>
+                      <tab.icon size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`font-bold text-sm truncate ${activeTabSetting === tab.id ? 'text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white'}`}>{tab.label}</div>
+                        {pendingSaranCount > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white shrink-0">
+                            {pendingSaranCount}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium truncate">{tab.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </nav>
           </div>
         </div>
@@ -2302,10 +2344,24 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
           {/* TAB: KRITIK & SARAN */}
           {activeTabSetting === 'saran' && (
             <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2">
-              <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  <MessageSquare className="text-rose-500" size={18} /> Aspirasi, Kritik & Saran Masuk
-                </h3>
+              <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 shrink-0 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <MessageSquare className="text-rose-500" size={18} /> Aspirasi, Kritik & Saran Masuk
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    {(feedbacks || []).filter(fb => fb.status !== 'Selesai').length} Menunggu
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRefreshFeedbacks(false)}
+                  disabled={isRefreshingFeedbacks}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw size={13} className={isRefreshingFeedbacks ? 'animate-spin' : ''} />
+                  <span>{isRefreshingFeedbacks ? 'Memuat...' : 'Muat Ulang'}</span>
+                </button>
               </div>
               <div className="overflow-y-auto flex-1 p-6 bg-slate-50/50 dark:bg-slate-900/20">
                 <div className="space-y-4 max-w-4xl mx-auto">
@@ -2316,7 +2372,10 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                         <div>
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">{fb.date}</span>
                           <h4 className="font-bold text-slate-800 dark:text-slate-200">{fb.subject}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">Dari: <span className="font-semibold">{fb.name}</span></p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Dari: <span className="font-semibold">{fb.name}</span>
+                            {fb.nipy ? <span className="ml-1.5 font-mono text-[10px] text-slate-400">({fb.nipy})</span> : null}
+                          </p>
                         </div>
                         <span className={`px-2.5 py-1 text-[10px] font-bold rounded-md border ${fb.status === 'Selesai' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800' : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800'}`}>
                           {fb.status}
@@ -2325,7 +2384,7 @@ Jika terdapat ketidaksesuaian data (seperti jumlah kehadiran atau masa kerja), h
                       <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium whitespace-pre-wrap">{fb.message}</p>
                       {fb.status !== 'Selesai' && (
                         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-end">
-                          <button onClick={() => handleMarkFeedbackDone(fb.id)} className="text-xs bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1.5">
+                          <button onClick={() => handleMarkFeedbackDone(fb.id)} className="text-xs bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1.5 cursor-pointer">
                             <CheckCircle size={14} /> Tandai Selesai
                           </button>
                         </div>

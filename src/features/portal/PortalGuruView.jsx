@@ -32,6 +32,8 @@ import { getSesiTheme } from '../../utils/sesiTheme';
 
 import {
   createTeacherPatchHandler,
+  fetchMyFeedbacks,
+  pushSingleFeedback,
   pushSinglePresensiRecord,
   pushCloudData as pushToSupabase
 } from '../../services/dbService';
@@ -71,6 +73,52 @@ const PortalCard = ({ icon: Icon, title, colorClass, children }) => {
 export default function PortalGuruView({ user, teachers, setTeachers, settings, setSettings, feedbacks, setFeedbacks, activeSection, setActiveTab, archives, presensiGuru = [], setPresensiGuru, saveAuditLog }) {
   const handleUpdateTeacherPatch = useMemo(() => createTeacherPatchHandler(setTeachers), [setTeachers]);
   const myData = teachers.find(t => t.id === user.id);
+
+  const [myCloudFeedbacks, setMyCloudFeedbacks] = useState(null);
+  const [isLoadingMyFeedbacks, setIsLoadingMyFeedbacks] = useState(false);
+
+  const myTeacherId = myData?.id;
+  const myTeacherName = myData?.name;
+
+  const syncMyFeedbacks = useCallback(async () => {
+    if (!myTeacherId && !myTeacherName) return;
+    setIsLoadingMyFeedbacks(true);
+    try {
+      const list = await fetchMyFeedbacks(myTeacherId, myTeacherName);
+      if (Array.isArray(list)) {
+        setMyCloudFeedbacks(list);
+      }
+    } finally {
+      setIsLoadingMyFeedbacks(false);
+    }
+  }, [myTeacherId, myTeacherName]);
+
+  useEffect(() => {
+    if (activeSection === 'portal_saran' && (myTeacherId || myTeacherName)) {
+      syncMyFeedbacks();
+    }
+  }, [activeSection, myTeacherId, myTeacherName, syncMyFeedbacks]);
+
+  const mySubmittedFeedbacks = useMemo(() => {
+    const cleanMyName = String(myTeacherName || '').trim().toLowerCase();
+    const isMine = (fb) => {
+      if (!fb) return false;
+      if (fb.teacherId && myTeacherId) return String(fb.teacherId) === String(myTeacherId);
+      return cleanMyName && String(fb.name || '').trim().toLowerCase() === cleanMyName;
+    };
+    const byId = new Map();
+    (feedbacks || []).filter(isMine).forEach(fb => byId.set(fb.id, fb));
+    if (Array.isArray(myCloudFeedbacks)) {
+      myCloudFeedbacks.forEach(fb => {
+        if (fb?.id) byId.set(fb.id, fb);
+      });
+    }
+    return Array.from(byId.values()).sort((a, b) => {
+      const tA = Date.parse(a?.createdAt || '') || 0;
+      const tB = Date.parse(b?.createdAt || '') || 0;
+      return tB - tA;
+    });
+  }, [feedbacks, myCloudFeedbacks, myTeacherId, myTeacherName]);
 
   if (!myData) {
     const isExecutive = user?.role === 'Yayasan' || user?.role === 'Kepala Sekolah' || String(user?.role || '').toLowerCase() === 'admin';
@@ -786,7 +834,7 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
     else if (!isNaN(v) && Number(v) > 0) autoHadir++;
   });
 
-  // 🪄 PERBAIKAN UX: Push Mutlak Saran ke Server
+  // 🪄 PERBAIKAN UX: Push Mutlak Saran ke Server (single upsert aman tanpa menimpa status item lain)
   const handleSendFeedback = async (e) => {
     e.preventDefault();
     if (!feedbackMsg.trim()) return;
@@ -794,26 +842,30 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
     const newFeedback = {
       id: generateUniqueId('fb-'),
+      teacherId: myData.id,
+      nipy: myData.nipy || '',
       name: myData.name,
       date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+      createdAt: new Date().toISOString(),
       subject: feedbackSubject,
-      message: feedbackMsg,
+      message: feedbackMsg.trim(),
       status: 'Menunggu'
     };
 
-    const updatedFeedbacks = [newFeedback, ...(feedbacks || [])];
-    setFeedbacks(updatedFeedbacks);
-
     try {
-      // Tembak langsung ke awan tanpa menunggu debounce App.jsx
-      safeStorageSet('payedu_feedbacks', updatedFeedbacks);
-      await pushToSupabase('SAVE_FEEDBACKS', updatedFeedbacks);
+      const savedItem = await pushSingleFeedback(newFeedback);
+      const updatedMyList = [savedItem, ...(myCloudFeedbacks || mySubmittedFeedbacks)];
+      const updatedAll = [savedItem, ...(feedbacks || []).filter(fb => fb?.id !== savedItem.id)];
+      setMyCloudFeedbacks(updatedMyList);
+      setFeedbacks(updatedAll);
+      safeStorageSet('payedu_feedbacks', updatedAll);
 
       showAlert('Terima kasih! Kritik dan saran Anda telah berhasil dikirim ke pihak manajemen sekolah.');
       setFeedbackMsg('');
       setFeedbackSubject('Saran & Masukan Umum');
     } catch (err) {
-      showAlert('Gagal mengirim ke server. Periksa koneksi internet Anda.');
+      console.warn('[Feedback] Gagal kirim ke Cloud:', err);
+      showAlert('Gagal mengirim ke server. Pastikan koneksi internet aktif lalu coba kirim kembali.');
     } finally {
       setIsSendingFeedback(false);
     }
@@ -3312,49 +3364,91 @@ export default function PortalGuruView({ user, teachers, setTeachers, settings, 
 
           {/* 7. Kritik & Saran */}
           {activeSection === 'portal_saran' && (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <form onSubmit={handleSendFeedback} className="space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Kami sangat menghargai masukan Anda untuk pengembangan sekolah dan kesejahteraan bersama. Kritik dan saran akan dikirim secara aman kepada manajemen.
-                </p>
+            <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6">
+                <form onSubmit={handleSendFeedback} className="space-y-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Kami sangat menghargai masukan Anda untuk pengembangan sekolah dan kesejahteraan bersama. Kritik dan saran akan dikirim secara aman kepada manajemen.
+                  </p>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Topik / Subjek Masukan</label>
-                  <select
-                    value={feedbackSubject}
-                    onChange={(e) => setFeedbackSubject(e.target.value)}
-                    className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm font-semibold focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all cursor-pointer shadow-sm"
-                  >
-                    <option value="Saran & Masukan Umum">Saran & Masukan Umum</option>
-                    <option value="Koreksi Data / Profil Pegawai">Koreksi Data / Profil Pegawai</option>
-                    <option value="Pertanyaan Gaji & Potongan">Pertanyaan Seputar Gaji / Potongan</option>
-                    <option value="Laporan Kendala Sistem">Laporan Kendala Sistem</option>
-                  </select>
-                </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Topik / Subjek Masukan</label>
+                    <select
+                      value={feedbackSubject}
+                      onChange={(e) => setFeedbackSubject(e.target.value)}
+                      className="w-full p-3.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 text-sm font-semibold focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all cursor-pointer shadow-sm"
+                    >
+                      <option value="Saran & Masukan Umum">Saran & Masukan Umum</option>
+                      <option value="Koreksi Data / Profil Pegawai">Koreksi Data / Profil Pegawai</option>
+                      <option value="Pertanyaan Gaji & Potongan">Pertanyaan Seputar Gaji / Potongan</option>
+                      <option value="Laporan Kendala Sistem">Laporan Kendala Sistem</option>
+                    </select>
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detail Pesan / Keterangan</label>
-                  <textarea
-                    rows="5"
-                    value={feedbackMsg}
-                    onChange={(e) => setFeedbackMsg(e.target.value)}
-                    placeholder="Tuliskan masukan, kendala, atau rincian permohonan koreksi data Anda di sini..."
-                    className="w-full p-4 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 text-sm focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all shadow-inner resize-y min-h-[120px]"
-                    required
-                  ></textarea>
-                </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Detail Pesan / Keterangan</label>
+                    <textarea
+                      rows="5"
+                      value={feedbackMsg}
+                      onChange={(e) => setFeedbackMsg(e.target.value)}
+                      placeholder="Tuliskan masukan, kendala, atau rincian permohonan koreksi data Anda di sini..."
+                      className="w-full p-4 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 text-sm focus:ring-2 focus:ring-rose-500 focus:bg-white dark:focus:bg-slate-800 outline-none transition-all shadow-inner resize-y min-h-[120px]"
+                      required
+                    ></textarea>
+                  </div>
 
-                <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/50">
+                  <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/50">
+                    <button
+                      type="submit"
+                      disabled={isSendingFeedback}
+                      className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={18} />}
+                      {isSendingFeedback ? 'Mengirim...' : 'Kirim Masukan Sekarang'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 md:p-6">
+                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+                  <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white flex items-center gap-2">
+                    <History size={16} className="text-rose-500" />
+                    <span>Riwayat Masukan Saya ({mySubmittedFeedbacks.length})</span>
+                  </h3>
                   <button
-                    type="submit"
-                    disabled={isSendingFeedback}
-                    className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                    type="button"
+                    onClick={syncMyFeedbacks}
+                    disabled={isLoadingMyFeedbacks}
+                    className="px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
                   >
-                    {isSendingFeedback ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Send size={18} />}
-                    {isSendingFeedback ? 'Mengirim...' : 'Kirim Masukan Sekarang'}
+                    {isLoadingMyFeedbacks ? 'Memuat...' : 'Segarkan'}
                   </button>
                 </div>
-              </form>
+
+                {mySubmittedFeedbacks.length > 0 ? (
+                  <div className="space-y-3">
+                    {mySubmittedFeedbacks.map(fb => (
+                      <div key={fb.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{fb.date}</span>
+                            <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">{fb.subject}</h4>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 border ${fb.status === 'Selesai' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'}`}>
+                            {fb.status === 'Selesai' ? 'Selesai Ditindaklanjuti' : (fb.status || 'Menunggu')}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{fb.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs sm:text-sm text-slate-400 italic text-center py-4">
+                    {isLoadingMyFeedbacks ? 'Memuat riwayat masukan...' : 'Belum ada aspirasi/saran yang Anda kirimkan.'}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

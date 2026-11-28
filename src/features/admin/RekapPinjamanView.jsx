@@ -1087,7 +1087,7 @@ export default function RekapPinjamanView({ teachers, setTeachers, onEditGaji, s
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-center gap-1.5 opacity-100">
                       <button
                         disabled={readOnly}
                         onClick={() => !readOnly && setSelectedReceiptLoan(loan)}

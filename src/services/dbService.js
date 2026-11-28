@@ -1162,12 +1162,25 @@ export const pushCloudData = async (action, payload) => {
       }
     }
 
-    // 4. Simpan Feedbacks
-    if (Array.isArray(targetFeedbacks) && targetFeedbacks.length > 0) {
+    // 4. Simpan Feedbacks (gunakan timestamp ISO valid agar tidak ditolak TIMESTAMPTZ Postgres saat nama bulan lokal seperti Januari/Oktober/Desember)
+    const toValidFeedbackIsoTimestamp = (fb, fallbackIso) => {
+      const candidate = fb?.createdAt;
+      if (candidate) {
+        const parsed = Date.parse(candidate);
+        if (!isNaN(parsed)) return new Date(parsed).toISOString();
+      }
+      return fallbackIso;
+    };
+
+    if (action === 'CLEAR_FEEDBACKS') {
+      const { error: delErr } = await supabase.from('feedbacks').delete().neq('id', '000_dummy_keep');
+      if (delErr) console.error('Supabase feedbacks clear error:', delErr);
+      try { localStorage.removeItem('payedu_feedbacks'); } catch (e) {}
+    } else if (Array.isArray(targetFeedbacks) && targetFeedbacks.length > 0) {
       const feedbackRecords = targetFeedbacks.map(f => ({
         id: String(f.id || Date.now() + Math.random()),
         data: f,
-        created_at: f.date || now
+        created_at: toValidFeedbackIsoTimestamp(f, now)
       }));
       const { error } = await supabase.from('feedbacks').upsert(feedbackRecords, { onConflict: 'id' });
       if (error) console.error('Supabase feedbacks upsert error:', error);
@@ -1325,15 +1338,23 @@ export const fetchCloudData = async (options = {}) => {
     }
 
     // 4. 🔋 OPTIMASI: Feedbacks (Kotak Saran)
-    // Akun Guru tidak pernah melihat list feedback seluruh sekolah, lewati unduhan untuk guru!
+    // Akun Guru tidak mengunduh list feedback seluruh sekolah demi privasi; Admin/Kepsek/Yayasan mengunduh terurut terbaru.
     let serverFeedbacks = localFeedbacks;
     if (!isGuru) {
       const { data: feedbackRows, error: feedbackErr } = await supabase
         .from('feedbacks')
-        .select('id, data')
-        .limit(50);
+        .select('id, data, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (!feedbackErr && Array.isArray(feedbackRows)) {
-        serverFeedbacks = feedbackRows.map(r => (typeof r.data === 'string' ? JSON.parse(r.data) : r.data));
+        serverFeedbacks = feedbackRows.map(r => {
+          const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+          return {
+            ...parsed,
+            id: parsed.id || r.id,
+            createdAt: parsed.createdAt || r.created_at
+          };
+        });
       }
     }
 
@@ -1481,7 +1502,7 @@ export const checkCloudTimestamp = async () => {
  * Menggantikan polling agresif — zero bandwidth untuk mendeteksi perubahan.
  * Callback dipanggil saat data di server berubah.
  */
-export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchivesChange, onLogsChange) => {
+export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchivesChange, onLogsChange, onFeedbacksChange) => {
   if (!isSupabaseConfigured() || !supabase) {
     return () => {}; // noop unsubscribe
   }
@@ -1521,11 +1542,133 @@ export const subscribeAllChanges = (onSettingsChange, onTeachersChange, onArchiv
     });
   }
 
+  if (typeof onFeedbacksChange === 'function') {
+    channel = channel.on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'feedbacks'
+    }, () => {
+      onFeedbacksChange();
+    });
+  }
+
   channel.subscribe();
 
   return () => {
     supabase.removeChannel(channel);
   };
+};
+
+/**
+ * Mengambil daftar lengkap Aspirasi, Kritik & Saran untuk Admin/Manajemen (terurut terbaru).
+ */
+export const fetchFeedbacksOnly = async () => {
+  if (!isSupabaseConfigured() || !navigator.onLine) return null;
+  try {
+    const { data: rows, error } = await supabase
+      .from('feedbacks')
+      .select('id, data, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error || !Array.isArray(rows)) return null;
+    const list = rows.map(r => {
+      const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+      return {
+        ...parsed,
+        id: parsed.id || r.id,
+        createdAt: parsed.createdAt || r.created_at
+      };
+    });
+    safeStorageSet('payedu_feedbacks', list);
+    return list;
+  } catch (e) {
+    console.warn('Gagal fetch feedbacks only:', e);
+    return null;
+  }
+};
+
+/**
+ * Mengambil hanya riwayat Kritik & Saran milik guru terkait dari Cloud Supabase.
+ */
+export const fetchMyFeedbacks = async (teacherId, teacherName = '') => {
+  if (!isSupabaseConfigured() || !navigator.onLine || (!teacherId && !teacherName)) return null;
+  try {
+    const queries = [];
+    if (teacherId) {
+      queries.push(
+        supabase
+          .from('feedbacks')
+          .select('id, data, created_at')
+          .eq('data->>teacherId', String(teacherId))
+          .order('created_at', { ascending: false })
+          .limit(30)
+      );
+    }
+    const cleanName = String(teacherName || '').trim();
+    if (cleanName) {
+      queries.push(
+        supabase
+          .from('feedbacks')
+          .select('id, data, created_at')
+          .eq('data->>name', cleanName)
+          .order('created_at', { ascending: false })
+          .limit(30)
+      );
+    }
+    const results = await Promise.all(queries);
+    const byId = new Map();
+    results.forEach(({ data: rows, error }) => {
+      if (error || !Array.isArray(rows)) return;
+      rows.forEach(r => {
+        const parsed = typeof r.data === 'string' ? JSON.parse(r.data) : (r.data || {});
+        const id = parsed.id || r.id;
+        if (!id || byId.has(id)) return;
+        byId.set(id, {
+          ...parsed,
+          id,
+          createdAt: parsed.createdAt || r.created_at
+        });
+      });
+    });
+    return Array.from(byId.values()).sort((a, b) => {
+      const tA = Date.parse(a.createdAt || '') || 0;
+      const tB = Date.parse(b.createdAt || '') || 0;
+      return tB - tA;
+    });
+  } catch (e) {
+    console.warn('Gagal fetch feedbacks guru:', e);
+    return null;
+  }
+};
+
+/**
+ * Mengirim satu masukan/kritik & saran baru ke Cloud Supabase tanpa menimpa status baris lain.
+ */
+export const pushSingleFeedback = async (feedback) => {
+  if (!feedback || !feedback.id) {
+    throw new Error('Data masukan tidak valid.');
+  }
+  if (!isSupabaseConfigured() || !navigator.onLine) {
+    throw new Error('Perangkat sedang offline atau Cloud belum terkonfigurasi.');
+  }
+  const nowIso = new Date().toISOString();
+  const parsedCreatedAt = feedback.createdAt ? Date.parse(feedback.createdAt) : NaN;
+  const createdAt = !isNaN(parsedCreatedAt) ? new Date(parsedCreatedAt).toISOString() : nowIso;
+  const payloadData = { ...feedback, createdAt };
+
+  const { error } = await supabase
+    .from('feedbacks')
+    .upsert({
+      id: String(feedback.id),
+      data: payloadData,
+      created_at: createdAt
+    }, { onConflict: 'id' });
+
+  if (error) {
+    console.error('Supabase single feedback upsert error:', error);
+    throw error;
+  }
+  return payloadData;
 };
 
 /**

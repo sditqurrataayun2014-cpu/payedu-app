@@ -19,6 +19,9 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
   const [isEduModalOpen, setIsEduModalOpen] = useState(false);
   const [activeEduTab, setActiveEduTab] = useState('S1');
 
+  const [isOpsModalOpen, setIsOpsModalOpen] = useState(false);
+  const [activeOpsTab, setActiveOpsTab] = useState('Semua');
+
   // TAMBAHAN: State Modal & Notifikasi Custom untuk Kepala Sekolah
   const [isConfirmApproveOpen, setIsConfirmApproveOpen] = useState(false);
   const [notification, setNotification] = useState({ isOpen: false, type: '', message: '' });
@@ -33,6 +36,31 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
       }
     });
     return grouped;
+  }, [activeTeachers]);
+
+  const opsDetails = useMemo(() => {
+    const grouped = { Security: [], Kebersihan: [], Pengabdian: [] };
+    const allMap = new Map();
+    activeTeachers.forEach(t => {
+      const roleStr = `${t.position || ''} ${t.payroll?.jabatans?.[0]?.detail || ''}`.toLowerCase();
+      const categories = [];
+      if (roleStr.includes('security') || roleStr.includes('satpam')) {
+        grouped.Security.push(t);
+        categories.push('Security');
+      }
+      if (roleStr.includes('kebersihan')) {
+        grouped.Kebersihan.push(t);
+        categories.push('Kebersihan');
+      }
+      if (roleStr.includes('pengabdian')) {
+        grouped.Pengabdian.push(t);
+        categories.push('Pengabdian');
+      }
+      if (categories.length > 0 && !allMap.has(t.id)) {
+        allMap.set(t.id, { teacher: t, categories });
+      }
+    });
+    return { ...grouped, Semua: Array.from(allMap.values()) };
   }, [activeTeachers]);
 
   const stats = useMemo(() => {
@@ -56,7 +84,7 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
 
       if (eduCount[t.education] !== undefined) eduCount[t.education]++;
 
-      const roleStr = `${t.position} ${t.payroll.jabatans?.[0]?.detail || ''}`.toLowerCase();
+      const roleStr = `${t.position || ''} ${t.payroll?.jabatans?.[0]?.detail || ''}`.toLowerCase();
       if (roleStr.includes('kebersihan')) opsCount.kebersihan++;
       if (roleStr.includes('security') || roleStr.includes('satpam')) opsCount.security++;
       if (roleStr.includes('pengabdian')) opsCount.pengabdian++;
@@ -376,6 +404,86 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
         </div>
       )}
 
+      {isOpsModalOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setIsOpsModalOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                <HeartHandshake className="text-orange-500" /> Detail Staff Operasional
+              </h3>
+              <button onClick={() => setIsOpsModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto hide-scrollbar">
+              {[
+                { key: 'Semua', label: 'Semua', count: opsDetails.Semua.length },
+                { key: 'Security', label: 'Security', count: opsDetails.Security.length },
+                { key: 'Kebersihan', label: 'Kebersihan', count: opsDetails.Kebersihan.length },
+                { key: 'Pengabdian', label: 'Pengabdian', count: opsDetails.Pengabdian.length }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveOpsTab(tab.key)}
+                  className={`flex-1 py-3 px-4 min-w-[100px] text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${activeOpsTab === tab.key ? 'text-orange-600 border-b-2 border-orange-600 bg-orange-50/50 dark:bg-orange-900/10' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="p-2 h-80 overflow-y-auto">
+              <div className="space-y-1">
+                {(() => {
+                  const rows = activeOpsTab === 'Semua'
+                    ? opsDetails.Semua
+                    : (opsDetails[activeOpsTab] || []).map(t => ({ teacher: t, categories: [activeOpsTab] }));
+                  if (rows.length === 0) {
+                    return <p className="p-6 text-center text-slate-500">Belum ada data staff operasional pada kategori ini.</p>;
+                  }
+                  return rows.map(({ teacher: t, categories }) => {
+                    const jabDetail = t.payroll?.jabatans?.[0]?.detail;
+                    return (
+                      <div key={t.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg flex justify-between items-center gap-3 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition-colors">
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-800 dark:text-slate-200 text-sm truncate">{t.name}</div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {t.nipy || '-'} • {t.position || '-'}{jabDetail ? ` (${jabDetail})` : ''}{t.phone ? ` • ${t.phone}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                          {categories.map(cat => (
+                            <span key={cat} className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                              {cat}
+                            </span>
+                          ))}
+                          <span className="text-[10px] px-2 py-1 rounded-full font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                            {t.status || 'Aktif'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-right">
+              <button onClick={() => setIsOpsModalOpen(false)} className="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors cursor-pointer">
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PANEL JALAN PINTAS (QUICK ACTIONS) - DIPERBARUI: Tampil juga untuk Kepsek & Yayasan */}
       {(user?.role === 'admin' || user?.role === 'Kepala Sekolah' || user?.role === 'Yayasan') && (
         <div className="grid grid-cols-4 gap-1.5 sm:gap-3 mb-2.5">
@@ -551,11 +659,11 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
 
         {/* Card 4: Staff Operasional (Desain Berwarna Premium) */}
         <div
-          onClick={() => setActiveTab('dataguru')}
+          onClick={() => { setActiveOpsTab('Semua'); setIsOpsModalOpen(true); }}
           className="bg-gradient-to-br from-orange-500 to-rose-500 p-2.5 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-md border-0 transition-all duration-300 flex flex-col group cursor-pointer hover:shadow-lg hover:-translate-y-1 relative overflow-hidden text-white"
         >
           <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-bl-full pointer-events-none transition-transform group-hover:scale-110"></div>
-          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-orange-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">{readOnly ? 'Lihat' : 'Kelola'}</div>
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] sm:text-[10px] font-bold text-orange-700 bg-white/90 px-1.5 py-0.5 rounded z-20 shadow-sm">Detail</div>
           <div className="flex justify-between items-start mb-2 sm:mb-4 md:mb-6 relative z-10">
             <div>
               <p className="text-[9px] sm:text-xs font-semibold text-orange-100 uppercase tracking-wider mb-0.5 sm:mb-1.5">Staff Operasional</p>
@@ -572,15 +680,24 @@ export default function DashboardView({ teachers, user, settings, setSettings, a
             </div>
           </div>
           <div className="mt-auto space-y-1 sm:space-y-2 pt-2 sm:pt-4 border-t border-white/20 relative z-10 text-xs sm:text-sm">
-            <div className="flex items-center justify-between">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveOpsTab('Security'); setIsOpsModalOpen(true); }}
+              className="flex items-center justify-between hover:bg-black/15 rounded-lg px-1.5 py-0.5 -mx-1.5 transition-colors"
+            >
               <span className="text-[10px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1 sm:gap-2"><Shield size={11} className="sm:hidden opacity-70" /><Shield size={14} className="hidden sm:inline opacity-70" /> Security</span>
               <span className="text-[11px] sm:text-sm font-bold">{stats.opsCount.security}</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveOpsTab('Kebersihan'); setIsOpsModalOpen(true); }}
+              className="flex items-center justify-between hover:bg-black/15 rounded-lg px-1.5 py-0.5 -mx-1.5 transition-colors"
+            >
               <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Trash2 size={12} className="sm:hidden opacity-70" /><Trash2 size={14} className="hidden sm:inline opacity-70" /> Kebersihan</span>
               <span className="font-bold">{stats.opsCount.kebersihan}</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div
+              onClick={(e) => { e.stopPropagation(); setActiveOpsTab('Pengabdian'); setIsOpsModalOpen(true); }}
+              className="flex items-center justify-between hover:bg-black/15 rounded-lg px-1.5 py-0.5 -mx-1.5 transition-colors"
+            >
               <span className="text-[11px] sm:text-xs font-semibold text-orange-100 flex items-center gap-1.5 sm:gap-2"><Sparkles size={12} className="sm:hidden opacity-70" /><Sparkles size={14} className="hidden sm:inline opacity-70" /> Pengabdian</span>
               <span className="font-bold">{stats.opsCount.pengabdian}</span>
             </div>
